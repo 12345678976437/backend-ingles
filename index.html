@@ -52,7 +52,7 @@
         .markdown-body ul { padding-left: 20px; margin-bottom: 10px; }
         .markdown-body blockquote { background: #161b22; border-left: 4px solid #00e676; padding: 8px 12px; margin: 10px 0; }
 
-        /* PASO 2: Estilos para colores de pronunciación de palabras */
+        /* Estilos para colores de pronunciación de palabras */
         .words-container {
             display: flex;
             flex-wrap: wrap;
@@ -115,7 +115,7 @@
 
         <button id="btn-grabar" class="record-btn" onclick="alternarGrabacion()">Empezar a Grabar Voz</button>
 
-        <!-- PASO 4: Estructura HTML recomendada (Contenedor de palabras agregado) -->
+        <!-- Contenedor de resultado con el área de palabras formateadas -->
         <div id="resultado-pron" class="result-box">
             <div class="score-badge" id="calificacion-pron">0 / 10</div>
             <div id="palabras-pron" class="words-container"></div>
@@ -397,7 +397,6 @@ async function alternarGrabacion() {
     }
 }
 
-// PASO 3: Lógica JavaScript para pintar las palabras
 function renderizarRespuestaPronunciacion(data) {
     const contenedor = document.getElementById('palabras-pron');
     contenedor.innerHTML = '';
@@ -444,7 +443,6 @@ async function enviarAudioServidor() {
         document.getElementById('resultado-pron').style.display = 'block';
         document.getElementById('calificacion-pron').innerText = `${data.calificacion} / 10`;
         
-        // Llamada a la función del Paso 3
         renderizarRespuestaPronunciacion(data);
 
         document.getElementById('analisis-pron').innerHTML = marked.parse(data.analisis);
