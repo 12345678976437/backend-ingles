@@ -1,0 +1,8 @@
+flask
+flask-cors
+pydub
+azure-cognitiveservices-speech
+google-genai
+supabase
+python-dotenv
+gunicorn
