@@ -1,215 +1,465 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>English Academy AI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background-color: #0d1117; color: #f0f6fc; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
-        h1 { font-size: 2.2rem; margin-bottom: 10px; text-shadow: 0 0 10px rgba(0, 210, 255, 0.3); }
-        .user-bar { width: 100%; max-width: 800px; display: flex; justify-content: space-between; align-items: center; background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 12px 20px; margin-bottom: 20px; }
-        .user-info { font-size: 0.95rem; color: #00e676; font-weight: 600; }
-        .tabs { display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; justify-content: center; }
-        .tab-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 10px 18px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-        .tab-btn.active { background: #00d2ff; color: #0d1117; border-color: #00d2ff; box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); }
-        .container { width: 100%; max-width: 800px; background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; }
-        .content-section { display: none; }
-        .content-section.active { display: block; }
-        .card { background: #0d1117; border: 1px solid #30363d; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px; }
-        .phrase-title { font-size: 1.4rem; color: #00e676; font-weight: 700; margin-bottom: 5px; }
-        .phrase-sub { color: #8b949e; font-style: italic; margin-bottom: 15px; }
-        .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px; }
-        .btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
-        .btn:hover { background: #30363d; color: #fff; }
-        .btn-accent { background: #ff9800; color: #000; border: none; }
-        .btn-accent:hover { background: #e68a00; }
-        .btn-danger { background: #ff5252; color: #fff; border: none; }
-        .btn-submit { background: #00d2ff; color: #0d1117; border: none; font-weight: 700; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
-        input[type="text"], input[type="email"], input[type="password"], textarea { width: 100%; background: #0d1117; border: 1px solid #30363d; color: #fff; padding: 12px; border-radius: 8px; font-size: 1rem; margin-bottom: 10px; }
-        textarea { height: 120px; resize: vertical; }
-        .custom-input { display: flex; gap: 10px; }
-        .record-btn { background: #00d2ff; color: #0d1117; border: none; font-weight: 700; border-radius: 30px; padding: 14px 28px; font-size: 1.1rem; cursor: pointer; width: 100%; margin: 15px 0; transition: all 0.3s; box-shadow: 0 0 15px rgba(0, 210, 255, 0.3); }
-        .record-btn.recording { background: #ff5252; color: #fff; animation: pulse 1.5s infinite; }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(255, 82, 82, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
-        }
-        .result-box { display: none; background: #0d1117; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-top: 20px; text-align: left; }
-        .score-badge { font-size: 2.2rem; font-weight: 700; color: #00e676; text-align: center; margin-bottom: 10px; }
-        .history-card { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 15px; margin-bottom: 12px; text-align: left; }
-        .history-header { display: flex; justify-content: space-between; font-weight: 700; color: #00d2ff; margin-bottom: 6px; }
-        .history-scores { display: flex; gap: 15px; font-size: 0.9rem; color: #8b949e; margin-top: 8px; }
-        .quiz-option { display: block; width: 100%; background: #21262d; border: 1px solid #30363d; text-align: left; color: #fff; padding: 10px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
-        .quiz-option:hover { background: #30363d; }
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-card { background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 30px; width: 90%; max-width: 420px; text-align: center; }
-        .markdown-body h3 { color: #00d2ff; margin-top: 15px; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 4px; }
-        .markdown-body ul { padding-left: 20px; margin-bottom: 10px; }
-        .markdown-body blockquote { background: #161b22; border-left: 4px solid #00e676; padding: 8px 12px; margin: 10px 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Academy AI</title>
+<link href="https://fonts.googleapis.com/css?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #0b0d11;
+  --surface: #12151b;
+  --surface-2: #181c23;
+  --surface-3: #1d222b;
+  --border: #292f39;
+  --border-hover: #3a424f;
+  --text: #f5f7fa;
+  --text-secondary: #9aa2af;
+  --text-tertiary: #697180;
+  --primary: #7180ff;
+  --primary-hover: #8190ff;
+  --primary-soft: rgba(113, 128, 255, .12);
+  --success: #3dcc91;
+  --warning: #e7ad52;
+  --danger: #ef6b73;
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+}
+html { background: var(--bg); }
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+.app-shell { min-height: 100vh; display: flex; }
 
-        /* Estilos para colores de pronunciación de palabras */
-        .words-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-            margin: 15px 0;
-            padding: 12px;
-            background: #161b22;
-            border-radius: 8px;
-            border: 1px solid #30363d;
-        }
-        .word-tag {
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 1rem;
-            display: inline-block;
-        }
-        .word-good { background: rgba(0, 230, 118, 0.15); color: #00e676; border: 1px solid #00e676; }
-        .word-medium { background: rgba(255, 152, 0, 0.15); color: #ff9800; border: 1px solid #ff9800; }
-        .word-bad { background: rgba(255, 82, 82, 0.15); color: #ff5252; border: 1px solid #ff5252; }
-    </style>
+/* SIDEBAR */
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 244px;
+  padding: 26px 14px;
+  background: #0f1217;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+.brand { padding: 2px 12px 30px; }
+.brand-name {
+  font-size: 18px; line-height: 1.1; font-weight: 700; letter-spacing: -.035em;
+}
+.brand-name span { color: var(--primary); }
+.brand-subtitle {
+  margin-top: 6px; color: var(--text-tertiary); font-size: 11px;
+  font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+}
+.nav-section { margin-bottom: 24px; }
+.nav-label {
+  padding: 0 12px; margin-bottom: 7px; color: #626b79; font-size: 10px;
+  font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+}
+.tabs { display: flex; flex-direction: column; gap: 3px; margin: 0; }
+.tab-btn {
+  width: 100%; min-height: 40px; padding: 0 12px; display: flex;
+  align-items: center; gap: 11px; background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  color: var(--text-secondary); font-size: 13px; font-weight: 500;
+  text-align: left; transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.tab-btn:hover { background: var(--surface); color: var(--text); }
+.tab-btn.active {
+  background: var(--primary-soft); color: #fff;
+  border-color: rgba(113, 128, 255, .18); box-shadow: none;
+}
+.nav-icon { width: 18px; color: #687180; text-align: center; font-size: 14px; }
+.tab-btn.active .nav-icon { color: var(--primary); }
+.sidebar-footer { margin-top: auto; padding: 14px 10px 4px; }
+.account-mini {
+  display: flex; align-items: center; gap: 10px; padding: 11px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: rgba(255,255,255,.015);
+}
+.avatar {
+  width: 32px; height: 32px; flex: 0 0 32px; display: grid;
+  place-items: center; border-radius: 50%; background: var(--primary-soft);
+  color: var(--primary); font-size: 12px; font-weight: 700;
+}
+.account-copy { min-width: 0; }
+.account-name {
+  overflow: hidden; color: var(--text); font-size: 12px;
+  font-weight: 600; text-overflow: ellipsis; white-space: nowrap;
+}
+.account-status { margin-top: 2px; color: var(--success); font-size: 10px; }
+
+/* MAIN */
+.main-area { width: calc(100% - 244px); margin-left: 244px; min-width: 0; }
+.topbar {
+  height: 68px; padding: 0 42px; display: flex; align-items: center;
+  justify-content: flex-end; border-bottom: 1px solid var(--border);
+  background: rgba(11,13,17,.92);
+}
+.user-bar {
+  width: auto; max-width: none; margin: 0; padding: 0; display: flex;
+  align-items: center; gap: 12px; background: transparent; border: 0; border-radius: 0;
+}
+.user-info {
+  max-width: 290px; overflow: hidden; color: var(--text-secondary);
+  font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap;
+}
+.topbar .btn { min-height: 34px; padding: 0 12px; font-size: 12px; }
+.page { width: min(1080px, calc(100% - 80px)); margin: 0 auto; padding: 42px 0 72px; }
+.page-heading { margin-bottom: 28px; }
+.eyebrow {
+  margin-bottom: 8px; color: var(--primary); font-size: 11px;
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.page-title { font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -.035em; }
+.page-description {
+  margin-top: 8px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;
+}
+.container {
+  width: 100%; max-width: none; padding: 0; background: transparent;
+  border: 0; border-radius: 0; box-shadow: none;
+}
+.content-section { display: none; }
+.content-section.active { display: block; }
+
+/* CARDS */
+.card, .result-box, .history-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: 0 12px 34px rgba(0,0,0,.14);
+}
+.card { padding: 28px; text-align: left; margin-bottom: 18px; }
+.result-box { display: none; padding: 24px; margin-top: 18px; text-align: left; }
+.card h3, .card h2 { letter-spacing: -.02em; }
+.phrase-title {
+  max-width: 760px; margin: 0 auto; color: var(--text);
+  font-size: clamp(24px, 3vw, 34px); line-height: 1.3; font-weight: 650;
+  letter-spacing: -.035em; text-align: center;
+}
+.phrase-sub {
+  margin: 9px 0 22px; color: var(--text-secondary);
+  font-size: 13px; line-height: 1.6; text-align: center;
+}
+.btn-group {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;
+}
+.btn {
+  min-height: 38px; padding: 0 14px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-secondary); font-size: 12px; font-weight: 600;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.btn:hover { background: var(--surface-3); border-color: var(--border-hover); color: var(--text); }
+.btn-accent { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-accent:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
+.btn-danger { background: transparent; border: 1px solid rgba(239,107,115,.28); color: #f08b92; }
+.btn-danger:hover {
+  background: rgba(239,107,115,.08); border-color: rgba(239,107,115,.45); color: #ff9da3;
+}
+.btn-submit {
+  width: 100%; min-height: 44px; margin-top: 8px; padding: 0 18px;
+  background: var(--primary); border: 1px solid var(--primary);
+  border-radius: var(--radius-sm); color: #fff; font-size: 13px;
+  font-weight: 650; cursor: pointer; transition: background .15s ease, border-color .15s ease;
+}
+.btn-submit:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+.custom-input { display: flex; gap: 8px; max-width: 720px; margin: 0 auto; }
+input[type="text"], input[type="email"], input[type="password"], textarea {
+  width: 100%; background: #0d1015; border: 1px solid var(--border);
+  color: var(--text); padding: 12px 13px; border-radius: var(--radius-sm);
+  font-size: 13px; margin-bottom: 10px; outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, textarea:focus {
+  border-color: rgba(113,128,255,.65); box-shadow: 0 0 0 3px rgba(113,128,255,.08);
+}
+textarea { height: 150px; resize: vertical; line-height: 1.6; }
+
+.record-btn {
+  width: 100%; min-height: 50px; margin: 14px 0; padding: 0 20px;
+  background: var(--primary); border: 1px solid var(--primary);
+  border-radius: var(--radius-md); color: #fff; font-size: 14px; font-weight: 650;
+  cursor: pointer; transition: background .15s ease, border-color .15s ease;
+}
+.record-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.record-btn.recording {
+  background: var(--danger); border-color: var(--danger);
+  color: #fff; animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239,107,115,.35); }
+  70% { box-shadow: 0 0 0 12px rgba(239,107,115,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,107,115,0); }
+}
+
+.score-badge {
+  margin-bottom: 18px; color: var(--success); font-size: 30px;
+  line-height: 1; font-weight: 700; text-align: center; letter-spacing: -.04em;
+}
+.words-container {
+  display: flex; flex-wrap: wrap; gap: 7px; justify-content: center;
+  margin: 15px 0; padding: 14px; background: #0f1217;
+  border-radius: var(--radius-md); border: 1px solid var(--border);
+}
+.word-tag {
+  padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 12px; display: inline-block;
+}
+.word-good { background: rgba(61,204,145,.10); color: #63d9aa; border: 1px solid rgba(61,204,145,.28); }
+.word-medium { background: rgba(231,173,82,.10); color: #edbd6b; border: 1px solid rgba(231,173,82,.28); }
+.word-bad { background: rgba(239,107,115,.10); color: #f38a91; border: 1px solid rgba(239,107,115,.28); }
+
+/* HISTORY */
+.history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.history-toolbar h2 { font-size: 20px; }
+.history-card { padding: 18px 20px; margin-bottom: 10px; text-align: left; transition: border-color .15s ease, background .15s ease; }
+.history-card:hover { background: var(--surface-2); border-color: var(--border-hover); }
+.history-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; font-weight: 600; color: var(--text); margin-bottom: 7px; }
+.history-header span:first-child { color: #dfe3e9; }
+.history-header span:last-child { flex-shrink: 0; color: var(--success) !important; font-weight: 700; }
+.history-scores { display: flex; gap: 18px; flex-wrap: wrap; font-size: 11px; color: var(--text-secondary); }
+
+/* QUIZ & MARKDOWN */
+.quiz-option {
+  display: block; width: 100%; margin-bottom: 8px; padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); text-align: left;
+  font-size: 13px; cursor: pointer; transition: background .15s ease, border-color .15s ease;
+}
+.quiz-option:hover { background: var(--surface-3); border-color: var(--border-hover); }
+.markdown-body { color: #cbd1da; font-size: 13px; line-height: 1.75; }
+.markdown-body h3 { margin-top: 15px; margin-bottom: 8px; padding-bottom: 6px; color: var(--text); border-bottom: 1px solid var(--border); }
+.markdown-body ul { padding-left: 20px; margin-bottom: 10px; }
+.markdown-body blockquote { background: var(--surface-2); border-left: 3px solid var(--primary); padding: 9px 13px; margin: 10px 0; }
+
+/* MODALS */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; width: 100%; height: 100%;
+  padding: 20px; background: rgba(4,6,9,.78); backdrop-filter: blur(8px);
+  justify-content: center; align-items: center; z-index: 1000;
+}
+.modal-card {
+  width: 90%; max-width: 440px; padding: 28px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px rgba(0,0,0,.42); text-align: center;
+}
+.modal-card h2 { margin-bottom: 18px; color: var(--text) !important; letter-spacing: -.025em; }
+
+/* MOBILE */
+@media (max-width: 820px) {
+  .sidebar { position: static; width: 100%; min-height: auto; padding: 16px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .app-shell { display: block; }
+  .brand { padding: 4px 8px 16px; }
+  .sidebar .nav-section { margin-bottom: 8px; }
+  .sidebar .nav-label, .sidebar-footer { display: none; }
+  .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .tab-btn { min-height: 38px; }
+  .main-area { width: 100%; margin-left: 0; }
+  .topbar { height: 58px; padding: 0 18px; }
+  .page { width: min(100% - 32px, 720px); padding: 28px 0 48px; }
+  .custom-input { flex-direction: column; }
+  .custom-input .btn { width: 100%; }
+  .history-header { flex-direction: column; gap: 7px; }
+}
+@media (max-width: 480px) {
+  .tabs { grid-template-columns: 1fr; }
+  .page-title { font-size: 24px; }
+  .card { padding: 20px; }
+  .phrase-title { font-size: 23px; }
+  .history-scores { gap: 8px 14px; }
+}
+</style>
 </head>
 <body>
-
-<h1>English Academy AI</h1>
-
-<div class="user-bar">
-    <div id="user-display" class="user-info">Cargando sesión...</div>
-    <div>
-        <button id="btn-login-modal" class="btn btn-accent" onclick="abrirModalAuth()">Iniciar Sesión</button>
-        <button id="btn-logout" class="btn btn-danger" style="display:none;" onclick="cerrarSesion()">Cerrar Sesión</button>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">English <span>Academy</span></div>
+      <div class="brand-subtitle">AI Learning Platform</div>
     </div>
-</div>
+    <div class="nav-section">
+      <div class="nav-label">Learn</div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="cambiarPestana('pronunciacion', this)">
+          <span class="nav-icon">🗣️</span><span>Pronunciation</span>
+        </button>
+        <button class="tab-btn" onclick="cambiarPestana('escritura', this)">
+          <span class="nav-icon">Aa</span><span>Writing</span>
+        </button>
+        <button class="tab-btn" onclick="cambiarPestana('lectura', this)">
+          <span class="nav-icon">📖</span><span>Reading & Grammar</span>
+        </button>
+        <button class="tab-btn" onclick="cambiarPestana('escucha', this)">
+          <span class="nav-icon">🎧</span><span>Listening</span>
+        </button>
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Progress</div>
+      <div class="tabs">
+        <button class="tab-btn" onclick="cambiarPestana('historial', this)">
+          <span class="nav-icon">📈</span><span>My Progress</span>
+        </button>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="account-mini">
+        <div class="avatar">EA</div>
+        <div class="account-copy">
+          <div class="account-name" id="sidebar-user-name">English Academy</div>
+          <div class="account-status">Account active</div>
+        </div>
+      </div>
+    </div>
+  </aside>
 
-<div class="tabs">
-    <button class="tab-btn active" onclick="cambiarPestana('pronunciacion', this)">Pronunciación</button>
-    <button class="tab-btn" onclick="cambiarPestana('escritura', this)">Escritura</button>
-    <button class="tab-btn" onclick="cambiarPestana('lectura', this)">Lectura & Gramática</button>
-    <button class="tab-btn" onclick="cambiarPestana('escucha', this)">Escucha</button>
-    <button class="tab-btn" onclick="cambiarPestana('historial', this)">Mi Historial</button>
-</div>
+  <main class="main-area">
+    <header class="topbar">
+      <div class="user-bar">
+        <div id="user-display" class="user-info">Cargando sesión...</div>
+        <div>
+          <button id="btn-login-modal" class="btn btn-accent" onclick="abrirModalAuth()">Iniciar Sesión</button>
+          <button id="btn-logout" class="btn btn-danger" style="display:none;" onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+      </div>
+    </header>
 
-<div class="container" id="main-container">
-    <!-- 1. PRONUNCIACIÓN -->
-    <div id="sec-pronunciacion" class="content-section active">
-        <div class="card">
+    <div class="page">
+      <div class="page-heading">
+        <div class="eyebrow">English Academy</div>
+        <h1 class="page-title">Build confidence in English</h1>
+        <p class="page-description">Practice pronunciation, writing, reading and listening with AI-powered feedback.</p>
+      </div>
+
+      <div class="container" id="main-container">
+        
+        <!-- 1. PRONUNCIACIÓN -->
+        <div id="sec-pronunciacion" class="content-section active">
+          <div class="card">
             <div id="frase-esperada" class="phrase-title">"Can I check out late today?"</div>
             <div id="frase-traduccion" class="phrase-sub">¿Puedo salir más tarde hoy?</div>
             <div class="btn-group">
-                <button class="btn" onclick="hablarNativo(1)">Escuchar Nativo</button>
-                <button class="btn" onclick="hablarNativo(0.7)">Lento</button>
-                <button class="btn btn-accent" onclick="obtenerNuevaFrase()">Cambiar Frase</button>
+              <button class="btn" onclick="hablarNativo(1)">Escuchar Nativo</button>
+              <button class="btn" onclick="hablarNativo(0.7)">Lento</button>
+              <button class="btn btn-accent" onclick="obtenerNuevaFrase()">Nueva frase</button>
             </div>
             <div class="custom-input">
-                <input type="text" id="input-personalizado" placeholder="Escribe tu propia frase aquí...">
-                <button class="btn" onclick="usarFrasePersonalizada()">Usar Frase</button>
+              <input type="text" id="input-personalizado" placeholder="Escribe tu propia frase aquí...">
+              <button class="btn" onclick="usarFrasePersonalizada()">Usar frase</button>
             </div>
-        </div>
-
-        <button id="btn-grabar" class="record-btn" onclick="alternarGrabacion()">Empezar a Grabar Voz</button>
-
-        <!-- Contenedor de resultado con el área de palabras formateadas -->
-        <div id="resultado-pron" class="result-box">
-            <div class="score-badge" id="calificacion-pron">0 / 10</div>
+          </div>
+          <button id="btn-grabar" class="record-btn" onclick="alternarGrabacion()">Start recording</button>
+          <div id="resultado-pron" class="result-box">
+            <div class="score-badge" id="calificacion-pron">0/10</div>
             <div id="palabras-pron" class="words-container"></div>
             <div id="analisis-pron" class="markdown-body"></div>
+          </div>
         </div>
-    </div>
 
-    <!-- 2. ESCRITURA -->
-    <div id="sec-escritura" class="content-section">
-        <div class="card">
-            <h3 style="margin-bottom:10px;">Práctica de Redacción</h3>
+        <!-- 2. ESCRITURA -->
+        <div id="sec-escritura" class="content-section">
+          <div class="card">
+            <h3 style="margin-bottom:10px;">Writing practice</h3>
             <p class="phrase-sub">Tema: Describe tu rutina diaria o qué hiciste hoy.</p>
             <textarea id="texto-escritura" placeholder="Write your paragraph here in English..."></textarea>
             <button class="btn-submit" onclick="evaluarEscritura()">Enviar y Evaluar Redacción</button>
-        </div>
-        <div id="resultado-escritura" class="result-box">
-            <div class="score-badge" id="calificacion-escritura">0 / 10</div>
+          </div>
+          <div id="resultado-escritura" class="result-box">
+            <div class="score-badge" id="calificacion-escritura">0/10</div>
             <div id="analisis-escritura" class="markdown-body"></div>
+          </div>
         </div>
-    </div>
 
-    <!-- 3. LECTURA -->
-    <div id="sec-lectura" class="content-section">
-        <div class="card">
-            <h3 id="lectura-titulo" style="color:#00d2ff; margin-bottom:10px;">Cargando Lectura...</h3>
+        <!-- 3. LECTURA -->
+        <div id="sec-lectura" class="content-section">
+          <div class="card">
+            <h3 id="lectura-titulo" style="margin-bottom: 10px;">Cargando Lectura...</h3>
             <p id="lectura-texto" style="font-size: 1.1rem; line-height: 1.6; margin-bottom: 15px;"></p>
             <p id="lectura-traduccion" class="phrase-sub"></p>
             <button class="btn btn-accent" onclick="cargarLectura()">Nueva Lectura</button>
+          </div>
+          <div id="lectura-preguntas" class="card"></div>
         </div>
-        <div id="lectura-preguntas" class="card"></div>
-    </div>
 
-    <!-- 4. ESCUCHA -->
-    <div id="sec-escucha" class="content-section">
-        <div class="card">
-            <h3>Práctica de Dictado</h3>
+        <!-- 4. ESCUCHA -->
+        <div id="sec-escucha" class="content-section">
+          <div class="card">
+            <h3>Listening practice</h3>
             <p class="phrase-sub">Escucha atentamente el audio y escribe exactamente lo que oigas.</p>
             <div class="btn-group" style="margin: 15px 0;">
-                <button class="btn" onclick="reproducirDictado(1)">Escuchar Audio</button>
-                <button class="btn" onclick="reproducirDictado(0.7)">Escuchar Lento</button>
-                <button class="btn btn-accent" onclick="cargarDictado()">Nuevo Dictado</button>
+              <button class="btn" onclick="reproducirDictado(1)">Escuchar Audio</button>
+              <button class="btn" onclick="reproducirDictado(0.7)">Escuchar Lento</button>
+              <button class="btn btn-accent" onclick="cargarDictado()">Nuevo Dictado</button>
             </div>
             <input type="text" id="input-dictado" placeholder="Escribe lo que escuchaste aquí...">
             <button class="btn-submit" onclick="evaluarDictado()">Verificar Dictado</button>
-        </div>
-        <div id="resultado-dictado" class="result-box">
-            <div class="score-badge" id="calificacion-dictado">0 / 10</div>
+          </div>
+          <div id="resultado-dictado" class="result-box">
+            <div class="score-badge" id="calificacion-dictado">0/10</div>
             <div id="analisis-dictado" class="markdown-body"></div>
+          </div>
         </div>
-    </div>
 
-    <!-- 5. HISTORIAL -->
-    <div id="sec-historial" class="content-section">
-        <div class="btn-group" style="justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h2>Historial de Pronunciación</h2>
-            <button class="btn" onclick="cargarHistorial()">Actualizar</button>
-        </div>
-        <div id="contenedor-historial">
+        <!-- 5. HISTORIAL -->
+        <div id="sec-historial" class="content-section">
+          <div class="btn-group" style="justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2>Practice history</h2>
+            <button class="btn" onclick="cargarHistorial()">Refresh</button>
+          </div>
+          <div id="contenedor-historial">
             <p style="text-align: center; color: #8b949e;">Cargando registros desde Supabase...</p>
+          </div>
         </div>
+
+      </div>
     </div>
+  </main>
 </div>
 
-<!-- MODAL AUTH -->
+<!-- MODALES (AUTH Y PAGO) -->
 <div id="modal-auth" class="modal-overlay">
-    <div class="modal-card">
-        <h2 id="auth-title" style="margin-bottom:15px; color:#00d2ff;">Iniciar Sesión</h2>
-        <input type="email" id="auth-email" placeholder="Correo electrónico">
-        <input type="password" id="auth-password" placeholder="Contraseña">
-        <button class="btn-submit" onclick="procesarAuth()">Ingresar</button>
-        <button class="btn" style="width: 100%; margin-top:10px;" onclick="alternarModoAuth()" id="btn-toggle-auth">¿No tienes cuenta? Regístrate</button>
-        <button class="btn btn-danger" style="width:100%; margin-top:10px;" onclick="cerrarModalAuth()">Cancelar</button>
-    </div>
+  <div class="modal-card">
+    <h2 id="auth-title" style="margin-bottom: 15px; color:#00d2ff;">Iniciar Sesión</h2>
+    <input type="email" id="auth-email" placeholder="Correo electrónico">
+    <input type="password" id="auth-password" placeholder="Contraseña">
+    <button class="btn-submit" onclick="procesarAuth()">Ingresar</button>
+    <button class="btn" style="width: 100%; margin-top:10px;" onclick="alternarModoAuth()" id="btn-toggle-auth">¿No tienes cuenta? Regístrate</button>
+    <button class="btn btn-danger" style="width: 100%; margin-top:10px;" onclick="cerrarModalAuth()">Cancelar</button>
+  </div>
 </div>
 
-<!-- MODAL PAGO -->
 <div id="modal-pago" class="modal-overlay">
-    <div class="modal-card">
-        <h2 style="color:#00d2ff; margin-bottom:10px;">¡Activa tu Plan VIP!</h2>
-        <p style="color:#8b949e; font-size:0.9rem; margin-bottom:15px;">
-            Para acceder a las funciones ilimitadas de Inteligencia Artificial, realiza tu transferencia y envíanos tu comprobante.
-        </p>
-        <div style="background: #0d1117; padding:15px; border-radius:8px; text-align:left; margin-bottom:15px; font-size:0.9rem; border:1px solid #30363d;">
-            <p style="color: #00e676; font-weight:700; margin-bottom:8px;">Datos para Transferencia / Depósito:</p>
-            <p style="margin-bottom:4px;"><strong>Banco:</strong> Banco Azteca</p>
-            <p style="margin-bottom:4px;"><strong>Titular:</strong> Lucero Nava</p>
-            <p style="margin-bottom:4px;"><strong>No. de Cuenta / Tarjeta:</strong> 4027 6658 8177 6406</p>
-            <p style="margin-top:8px; font-weight:700; color:#00d2ff;">Monto Suscripción: $199 MXN / mes</p>
-        </div>
-        <a id="link-whatsapp" href="https://wa.me/529911093870?text=Hola,%20realic%C3%A9%20el%20pago%20de%20mi%20suscripci%C3%B3n%20VIP%20para%20English%20Academy%20AI.%20Adjunto%20mi%20comprobante:" target="_blank" class="btn btn-accent" style="display:block; text-decoration: none; padding:12px; font-weight:700; margin-bottom:10px;">
-            Enviar Comprobante por WhatsApp
-        </a>
-        <button class="btn btn-danger" onclick="cerrarSesion()" style="width:100%;">Cerrar Sesión</button>
+  <div class="modal-card">
+    <h2 style="margin-bottom: 10px;">¡Activa tu Plan VIP!</h2>
+    <p style="color:#8b949e; font-size:0.9rem; margin-bottom:15px;">
+      Para acceder a las funciones ilimitadas de Inteligencia Artificial, realiza tu transferencia y envíanos tu comprobante.
+    </p>
+    <div style="background: #0d1117; padding: 15px; border-radius:8px; text-align:left; margin-bottom: 15px; font-size:0.9rem; border:1px solid #30363d;">
+      <p style="color: #00e676; font-weight:700; margin-bottom:8px;">Datos para Transferencia / Depósito:</p>
+      <p style="margin-bottom:4px;"><strong>Banco:</strong> Banco Azteca</p>
+      <p style="margin-bottom:4px;"><strong>Titular:</strong> Lucero Nava</p>
+      <p style="margin-bottom:4px;"><strong>No. de Cuenta:</strong> 4027 6658 8177 6406</p>
+      <p style="margin-top:8px; font-weight:700; color:#00d2ff;">Monto Suscripción: $129 MXN/mes</p>
     </div>
+    <a id="link-whatsapp" href="https://wa.me/529911093870?text=Hola,%20realic%C3%A9%20el%20pago%20de%20mi%20suscripci%C3%B3n%20VIP%20para%20English%20Academy%20AI.%20Adjunto%20mi%20comprobante:" target="_blank" class="btn btn-accent" style="display:block; text-decoration: none; padding: 12px; font-weight:700; margin-bottom: 10px;">
+      Enviar Comprobante por WhatsApp
+    </a>
+    <button class="btn btn-danger" onclick="cerrarSesion()" style="width: 100%;">Cerrar Sesión</button>
+  </div>
 </div>
 
 <script>
@@ -228,343 +478,328 @@ let timerInterval;
 let segundosGrabacion = 0;
 
 function iniciarCronometro() {
-    segundosGrabacion = 0;
-    const btn = document.getElementById('btn-grabar');
-    btn.innerText = `Grabando... (${segundosGrabacion}s) - Clic para Detener`;
-    timerInterval = setInterval(() => {
-        segundosGrabacion++;
-        btn.innerText = `Grabando... (${segundosGrabacion}s) - Clic para Detener`;
-    }, 1000);
+  segundosGrabacion = 0;
+  const btn = document.getElementById('btn-grabar');
+  btn.innerText = `Recording... (${segundosGrabacion}s) - Clic para Detener`;
+  timerInterval = setInterval(() => {
+    segundosGrabacion++;
+    btn.innerText = `Recording... (${segundosGrabacion}s) - Clic para Detener`;
+  }, 1000);
 }
 
 function detenerCronometro() {
-    clearInterval(timerInterval);
+  clearInterval(timerInterval);
 }
 
 async function fetchAutenticado(url, options = {}) {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) {
-        alert("Debes iniciar sesión para continuar.");
-        abrirModalAuth();
-        throw new Error("Sin sesión");
-    }
-    options.headers = {
-        ...(options.headers || {}),
-        'Authorization': `Bearer ${session.access_token}`
-    };
-    return await fetch(url, options);
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) {
+    alert("Debes iniciar sesión para continuar.");
+    abrirModalAuth();
+    throw new Error("Sin sesión");
+  }
+  options.headers = {
+    ...(options.headers || {}),
+    'Authorization': `Bearer ${session.access_token}`
+  };
+  return await fetch(url, options);
 }
 
 async function verificarSesion() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  await actualizarEstadoUsuario(session ? session.user : null);
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
     await actualizarEstadoUsuario(session ? session.user : null);
-
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        await actualizarEstadoUsuario(session ? session.user : null);
-    });
+  });
 }
 
 async function actualizarEstadoUsuario(user) {
-    usuarioActual = user;
-    const userDisplay = document.getElementById('user-display');
-    const btnLoginModal = document.getElementById('btn-login-modal');
-    const btnLogout = document.getElementById('btn-logout');
-    const mainContainer = document.getElementById('main-container');
-    const modalPago = document.getElementById('modal-pago');
+  usuarioActual = user;
+  const userDisplay = document.getElementById('user-display');
+  const sidebarUserName = document.getElementById('sidebar-user-name');
+  
+  if (sidebarUserName) {
+    sidebarUserName.innerText = user ? (user.email || 'Usuario') : 'English Academy';
+  }
+  
+  const btnLoginModal = document.getElementById('btn-login-modal');
+  const btnLogout = document.getElementById('btn-logout');
+  const mainContainer = document.getElementById('main-container');
+  const modalPago = document.getElementById('modal-pago');
 
-    if (user) {
-        try {
-            const { data } = await supabaseClient
-                .from('profiles')
-                .select('is_subscribed')
-                .eq('id', user.id)
-                .maybeSingle();
-
-            const estaSuscrito = data ? data.is_subscribed : false;
-
-            if (estaSuscrito) {
-                userDisplay.innerText = `${user.email} (VIP)`;
-                btnLoginModal.style.display = 'none';
-                btnLogout.style.display = 'inline-block';
-                mainContainer.style.display = 'block';
-                modalPago.style.display = 'none';
-                cerrarModalAuth();
-            } else {
-                userDisplay.innerText = `${user.email} (Inactivo)`;
-                btnLoginModal.style.display = 'none';
-                btnLogout.style.display = 'inline-block';
-                mainContainer.style.display = 'none';
-                modalPago.style.display = 'flex';
-                cerrarModalAuth();
-            }
-        } catch (err) {
-            console.error("Error consultando perfil:", err);
-        }
-    } else {
-        userDisplay.innerText = "Acceso Restringido";
-        btnLoginModal.style.display = 'inline-block';
-        btnLogout.style.display = 'none';
-        mainContainer.style.display = 'none';
+  if (user) {
+    try {
+      const { data } = await supabaseClient.from('profiles').select('is_subscribed').eq('id', user.id).maybeSingle();
+      const estaSuscrito = data ? data.is_subscribed : false;
+      if (estaSuscrito) {
+        userDisplay.innerText = `${user.email} (VIP)`;
+        btnLoginModal.style.display = 'none';
+        btnLogout.style.display = 'inline-block';
+        mainContainer.style.display = 'block';
         modalPago.style.display = 'none';
-        abrirModalAuth();
-    }
+        cerrarModalAuth();
+      } else {
+        userDisplay.innerText = `${user.email} (Inactivo)`;
+        btnLoginModal.style.display = 'none';
+        btnLogout.style.display = 'inline-block';
+        mainContainer.style.display = 'none';
+        modalPago.style.display = 'flex';
+        cerrarModalAuth();
+      }
+    } catch (err) { console.error("Error consultando perfil:", err); }
+  } else {
+    userDisplay.innerText = "Acceso Restringido";
+    btnLoginModal.style.display = 'inline-block';
+    btnLogout.style.display = 'none';
+    mainContainer.style.display = 'none';
+    modalPago.style.display = 'none';
+    abrirModalAuth();
+  }
 }
 
 function abrirModalAuth() { document.getElementById('modal-auth').style.display = 'flex'; }
 function cerrarModalAuth() { document.getElementById('modal-auth').style.display = 'none'; }
-
 function alternarModoAuth() {
-    modoRegistro = !modoRegistro;
-    document.getElementById('auth-title').innerText = modoRegistro ? "Crear Cuenta" : "Iniciar Sesión";
-    document.getElementById('btn-toggle-auth').innerText = modoRegistro ? "¿Ya tienes cuenta? Inicia Sesión" : "¿No tienes cuenta? Regístrate";
+  modoRegistro = !modoRegistro;
+  document.getElementById('auth-title').innerText = modoRegistro ? "Crear Cuenta" : "Iniciar Sesión";
+  document.getElementById('btn-toggle-auth').innerText = modoRegistro ? "¿Ya tienes cuenta? Inicia Sesión" : "¿No tienes cuenta? Regístrate";
 }
 
 async function procesarAuth() {
-    const email = document.getElementById('auth-email').value.trim();
-    const password = document.getElementById('auth-password').value.trim();
-    if (!email || !password) { alert("Ingresa correo y contraseña."); return; }
-
-    if (modoRegistro) {
-        const { error } = await supabaseClient.auth.signUp({ email, password });
-        if (error) alert("Error al registrar: " + error.message);
-        else { alert("Cuenta registrada con éxito. Ya puedes ingresar."); cerrarModalAuth(); }
-    } else {
-        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) alert("Error de ingreso: " + error.message);
-        else cerrarModalAuth();
-    }
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value.trim();
+  if (!email || !password) { alert("Ingresa correo y contraseña."); return; }
+  
+  if (modoRegistro) {
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) alert("Error al registrar: " + error.message);
+    else { alert("Cuenta registrada con éxito. Ya puedes ingresar."); cerrarModalAuth(); }
+  } else {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) alert("Error de ingreso: " + error.message);
+    else cerrarModalAuth();
+  }
 }
 
 async function cerrarSesion() { await supabaseClient.auth.signOut(); }
 
 function cambiarPestana(nombre, btnElement) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-    btnElement.classList.add('active');
-    document.getElementById(`sec-${nombre}`).classList.add('active');
-
-    if (nombre === 'lectura') cargarLectura();
-    if (nombre === 'escucha') cargarDictado();
-    if (nombre === 'historial') cargarHistorial();
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+  btnElement.classList.add('active');
+  document.getElementById(`sec-${nombre}`).classList.add('active');
+  
+  if (nombre === 'lectura') cargarLectura();
+  if (nombre === 'escucha') cargarDictado();
+  if (nombre === 'historial') cargarHistorial();
 }
 
 function hablarNativo(velocidad) {
-    const texto = document.getElementById('frase-esperada').innerText.replace(/"/g, '');
-    const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'en-US';
-    utterance.rate = velocidad;
-    window.speechSynthesis.speak(utterance);
+  const texto = document.getElementById('frase-esperada').innerText.replace(/"/g, "");
+  const utterance = new SpeechSynthesisUtterance(texto);
+  utterance.lang = 'en-US';
+  utterance.rate = velocidad;
+  window.speechSynthesis.speak(utterance);
 }
 
 async function obtenerNuevaFrase() {
-    try {
-        const res = await fetch(`${API_URL}/nueva-frase`);
-        const data = await res.json();
-        document.getElementById('frase-esperada').innerText = `"${data.frase}"`;
-        document.getElementById('frase-traduccion').innerText = data.traduccion;
-    } catch (e) { alert("Error conectando con el servidor"); }
+  try {
+    const res = await fetch(`${API_URL}/nueva-frase`);
+    const data = await res.json();
+    document.getElementById('frase-esperada').innerText = `"${data.frase}"`;
+    document.getElementById('frase-traduccion').innerText = data.traduccion;
+  } catch (e) { alert("Error conectando con el servidor"); }
 }
 
 function usarFrasePersonalizada() {
-    const texto = document.getElementById('input-personalizado').value.trim();
-    if (texto) {
-        document.getElementById('frase-esperada').innerText = `"${texto}"`;
-        document.getElementById('frase-traduccion').innerText = "Frase personalizada";
-        document.getElementById('input-personalizado').value = "";
-    }
+  const texto = document.getElementById('input-personalizado').value.trim();
+  if (texto) {
+    document.getElementById('frase-esperada').innerText = `"${texto}"`;
+    document.getElementById('frase-traduccion').innerText = "Frase personalizada";
+    document.getElementById('input-personalizado').value = "";
+  }
 }
 
 async function alternarGrabacion() {
-    const btn = document.getElementById('btn-grabar');
-    if (!grabando) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstop = enviarAudioServidor;
-            mediaRecorder.start();
-            grabando = true;
-            btn.classList.add('recording');
-            iniciarCronometro();
-        } catch (err) { alert("Error al acceder al micrófono: " + err.message); }
-    } else {
-        detenerCronometro();
-        mediaRecorder.stop();
-        grabando = false;
-        btn.innerText = "Procesando Audio con Azure e IA...";
-        btn.classList.remove('recording');
-    }
+  const btn = document.getElementById('btn-grabar');
+  if (!grabando) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = enviarAudioServidor;
+      mediaRecorder.start();
+      grabando = true;
+      btn.classList.add('recording');
+      iniciarCronometro();
+    } catch (err) { alert("Error al acceder al micrófono: " + err.message); }
+  } else {
+    detenerCronometro();
+    mediaRecorder.stop();
+    grabando = false;
+    btn.innerText = "Analyzing your recording...";
+    btn.classList.remove('recording');
+  }
 }
 
 function renderizarRespuestaPronunciacion(data) {
-    const contenedor = document.getElementById('palabras-pron');
-    contenedor.innerHTML = '';
-
-    if (data.palabras && Array.isArray(data.palabras) && data.palabras.length > 0) {
-        data.palabras.forEach(item => {
-            const span = document.createElement('span');
-            span.classList.add('word-tag');
-            span.innerText = item.palabra || item.word;
-
-            const score = item.puntuacion || item.score || 0;
-            if (score >= 80) {
-                span.classList.add('word-good');
-            } else if (score >= 60) {
-                span.classList.add('word-medium');
-            } else {
-                span.classList.add('word-bad');
-            }
-
-            contenedor.appendChild(span);
-        });
-        contenedor.style.display = 'flex';
-    } else {
-        contenedor.style.display = 'none';
-    }
+  const contenedor = document.getElementById('palabras-pron');
+  contenedor.innerHTML = "";
+  if (data.palabras && Array.isArray(data.palabras) && data.palabras.length > 0) {
+    data.palabras.forEach(item => {
+      const span = document.createElement('span');
+      span.classList.add('word-tag');
+      span.innerText = item.palabra || item.word;
+      const score = item.puntuacion || item.score || 0;
+      if (score >= 80) span.classList.add('word-good');
+      else if (score >= 60) span.classList.add('word-medium');
+      else span.classList.add('word-bad');
+      contenedor.appendChild(span);
+    });
+    contenedor.style.display = 'flex';
+  } else {
+    contenedor.style.display = 'none';
+  }
 }
 
 async function enviarAudioServidor() {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-    const formData = new FormData();
-    const frase = document.getElementById('frase-esperada').innerText.replace(/"/g, '');
-    formData.append('audio', audioBlob);
-    formData.append('frase_esperada', frase);
-
-    try {
-        const res = await fetchAutenticado(`${API_URL}/analizar-audio-real`, {
-            method: 'POST',
-            body: formData
-        });
-        const data = await res.json();
-        
-        if (!res.ok) { alert(data.error || "Error al analizar el audio."); return; }
-
-        document.getElementById('resultado-pron').style.display = 'block';
-        document.getElementById('calificacion-pron').innerText = `${data.calificacion} / 10`;
-        
-        renderizarRespuestaPronunciacion(data);
-
-        document.getElementById('analisis-pron').innerHTML = marked.parse(data.analisis);
-    } catch (e) {
-        console.error(e);
-    } finally {
-        document.getElementById('btn-grabar').innerText = "Empezar a Grabar Voz";
-    }
+  const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+  const formData = new FormData();
+  const frase = document.getElementById('frase-esperada').innerText.replace(/"/g, "");
+  formData.append('audio', audioBlob);
+  formData.append('frase_esperada', frase);
+  
+  try {
+    const res = await fetchAutenticado(`${API_URL}/analizar-audio-real`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Error al analizar el audio."); return; }
+    
+    document.getElementById('resultado-pron').style.display = 'block';
+    document.getElementById('calificacion-pron').innerText = `${data.calificacion} / 10`;
+    renderizarRespuestaPronunciacion(data);
+    document.getElementById('analisis-pron').innerHTML = marked.parse(data.analisis || '');
+  } catch (e) {
+    console.error(e);
+  } finally {
+    document.getElementById('btn-grabar').innerText = "Start recording";
+  }
 }
 
 async function evaluarEscritura() {
-    const texto = document.getElementById('texto-escritura').value.trim();
-    if (!texto) { alert("Escribe un párrafo primero."); return; }
-
-    try {
-        const res = await fetchAutenticado(`${API_URL}/analizar-escritura`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ texto })
-        });
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || "Error al analizar."); return; }
-
-        document.getElementById('resultado-escritura').style.display = 'block';
-        document.getElementById('calificacion-escritura').innerText = `${data.calificacion} / 10`;
-        document.getElementById('analisis-escritura').innerHTML = marked.parse(data.analisis);
-    } catch (e) { alert("Error de conexión."); }
+  const texto = document.getElementById('texto-escritura').value.trim();
+  if (!texto) { alert("Escribe un párrafo primero."); return; }
+  try {
+    const res = await fetchAutenticado(`${API_URL}/analizar-escritura`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Error al analizar."); return; }
+    
+    document.getElementById('resultado-escritura').style.display = 'block';
+    document.getElementById('calificacion-escritura').innerText = `${data.calificacion} / 10`;
+    document.getElementById('analisis-escritura').innerHTML = marked.parse(data.analisis);
+  } catch (e) { alert("Error de conexión."); }
 }
 
 async function cargarLectura() {
-    try {
-        const res = await fetchAutenticado(`${API_URL}/nuevo-texto-lectura`);
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || "Error al obtener lectura."); return; }
-
-        document.getElementById('lectura-titulo').innerText = data.titulo;
-        document.getElementById('lectura-texto').innerText = data.texto;
-        document.getElementById('lectura-traduccion').innerText = data.traduccion;
-
-        const cont = document.getElementById('lectura-preguntas');
-        cont.innerHTML = data.preguntas.map(p => `
-            <h4 style="margin-bottom:10px;">${p.pregunta}</h4>
-            ${p.opciones.map((opc, idx) => `
-                <button class="quiz-option" onclick="verificarRespuestaLectura(${idx}, ${p.correcta}, '${p.explicacion.replace(/'/g, "\\'")}')">${opc}</button>
-            `).join('')}
-        `).join('');
-    } catch (e) { console.error(e); }
+  try {
+    const res = await fetchAutenticado(`${API_URL}/nuevo-texto-lectura`);
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Error al obtener lectura."); return; }
+    
+    document.getElementById('lectura-titulo').innerText = data.titulo;
+    document.getElementById('lectura-texto').innerText = data.texto;
+    document.getElementById('lectura-traduccion').innerText = data.traduccion;
+    
+    const cont = document.getElementById('lectura-preguntas');
+    cont.innerHTML = data.preguntas.map(p => `
+      <h4 style="margin-bottom: 10px;">${p.pregunta}</h4>
+      ${p.opciones.map((opc, idx) => `
+        <button class="quiz-option" onclick="verificarRespuestaLectura(${idx}, ${p.correcta}, '${p.explicacion.replace(/'/g, "\\'")}')">${opc}</button>
+      `).join('')}
+    `).join('');
+  } catch (e) { console.error(e); }
 }
 
 function verificarRespuestaLectura(seleccion, correcta, explicacion) {
-    alert(seleccion === correcta ? `¡Correcto!\n\n${explicacion}` : `Incorrecto. Inténtalo de nuevo.\n\n${explicacion}`);
+  alert(seleccion === correcta ? `¡Correcto!\n\n${explicacion}` : `Incorrecto. Inténtalo de nuevo.\n\n${explicacion}`);
 }
 
 async function cargarDictado() {
-    try {
-        const res = await fetchAutenticado(`${API_URL}/nuevo-dictado`);
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || "Error al cargar dictado."); return; }
-
-        fraseDictadoActual = data.frase;
-        document.getElementById('input-dictado').value = "";
-        document.getElementById('resultado-dictado').style.display = "none";
-    } catch (e) { console.error(e); }
+  try {
+    const res = await fetchAutenticado(`${API_URL}/nuevo-dictado`);
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Error al cargar dictado."); return; }
+    
+    fraseDictadoActual = data.frase;
+    document.getElementById('input-dictado').value = "";
+    document.getElementById('resultado-dictado').style.display = "none";
+  } catch (e) { console.error(e); }
 }
 
 function reproducirDictado(velocidad) {
-    if (!fraseDictadoActual) return;
-    const utterance = new SpeechSynthesisUtterance(fraseDictadoActual);
-    utterance.lang = 'en-US';
-    utterance.rate = velocidad;
-    window.speechSynthesis.speak(utterance);
+  if (!fraseDictadoActual) return;
+  const utterance = new SpeechSynthesisUtterance(fraseDictadoActual);
+  utterance.lang = 'en-US';
+  utterance.rate = velocidad;
+  window.speechSynthesis.speak(utterance);
 }
 
 async function evaluarDictado() {
-    const usrText = document.getElementById('input-dictado').value.trim();
-    if (!usrText) { alert("Escribe lo que escuchaste."); return; }
-
-    try {
-        const res = await fetchAutenticado(`${API_URL}/evaluar-dictado`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ original: fraseDictadoActual, usuario: usrText })
-        });
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || "Error evaluando dictado."); return; }
-
-        document.getElementById('resultado-dictado').style.display = 'block';
-        document.getElementById('calificacion-dictado').innerText = `${data.calificacion} / 10`;
-        document.getElementById('analisis-dictado').innerHTML = marked.parse(data.analisis);
-    } catch (e) { alert("Error evaluando dictado."); }
+  const usrText = document.getElementById('input-dictado').value.trim();
+  if (!usrText) { alert("Escribe lo que escuchaste."); return; }
+  try {
+    const res = await fetchAutenticado(`${API_URL}/evaluar-dictado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ original: fraseDictadoActual, usuario: usrText })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Error evaluando dictado."); return; }
+    
+    document.getElementById('resultado-dictado').style.display = 'block';
+    document.getElementById('calificacion-dictado').innerText = `${data.calificacion} / 10`;
+    document.getElementById('analisis-dictado').innerHTML = marked.parse(data.analisis);
+  } catch (e) { alert("Error evaluando dictado."); }
 }
 
 async function cargarHistorial() {
-    const cont = document.getElementById('contenedor-historial');
-    cont.innerHTML = "<p style='text-align:center;'>Cargando registros...</p>";
-    try {
-        const res = await fetchAutenticado(`${API_URL}/obtener-historial`);
-        const registros = await res.json();
-        if (!res.ok) {
-            cont.innerHTML = `<p style='text-align:center; color:#ff5252;'>${registros.error || "Error al cargar historial."}</p>`;
-            return;
-        }
-        if (!registros || registros.length === 0) {
-            cont.innerHTML = "<p style='text-align:center;'>Aún no hay prácticas guardadas.</p>";
-            return;
-        }
-        cont.innerHTML = registros.map(item => `
-            <div class="history-card">
-                <div class="history-header">
-                    <span>"${item.frase_esperada}"</span>
-                    <span style="color:#00e676;">${item.puntuacion_global} / 100 pts</span>
-                </div>
-                <div class="history-scores">
-                    <span>Precisión: ${item.precision_fonemas}%</span>
-                    <span>Fluidez: ${item.fluidez}%</span>
-                    <span>Completitud: ${item.completitud}%</span>
-                </div>
-            </div>
-        `).join('');
-    } catch (e) {
-        cont.innerHTML = "<p style='text-align:center; color:#ff5252;'>Asegúrate de que app.py esté corriendo.</p>";
+  const cont = document.getElementById('contenedor-historial');
+  cont.innerHTML = "<p style='text-align:center;'>Cargando registros...</p>";
+  try {
+    const res = await fetchAutenticado(`${API_URL}/obtener-historial`);
+    const registros = await res.json();
+    
+    if (!res.ok) {
+      cont.innerHTML = `<p style='text-align:center; color:#ff5252;'>${registros.error || "Error al cargar historial."}</p>`;
+      return;
     }
+    if (!registros || registros.length === 0) {
+      cont.innerHTML = "<p style='text-align:center;'>Aún no hay prácticas guardadas.</p>";
+      return;
+    }
+    cont.innerHTML = registros.map(item => `
+      <div class="history-card">
+        <div class="history-header">
+          <span>"${item.frase_esperada}"</span>
+          <span style="color:#00e676;">${item.puntuacion_global} / 100 pts</span>
+        </div>
+        <div class="history-scores">
+          <span>Precisión: ${item.precision_fonemas}%</span>
+          <span>Fluidez: ${item.fluidez}%</span>
+          <span>Completitud: ${item.completitud}%</span>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    cont.innerHTML = "<p style='text-align:center; color:#ff5252;'>Asegúrate de que app.py esté corriendo.</p>";
+  }
 }
 
 verificarSesion();
