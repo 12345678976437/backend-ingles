@@ -41,7 +41,7 @@ if GEMINI_KEY:
         print(f"Error al configurar cliente de Gemini: {e}")
 
 MODELOS_GEMINI = [
-    'gemini-2.5-flash',
+    'gemini-1.5-flash',
     'gemini-2.0-flash'
 ]
 
