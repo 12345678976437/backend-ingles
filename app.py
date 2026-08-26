@@ -42,19 +42,30 @@ if GEMINI_KEY:
 
 MODELOS_GEMINI = [
     'gemini-1.5-flash',
-    'gemini-2.0-flash'
+    'gemini-2.0-flash',
+    'gemini-2.5-flash'
 ]
 
 def generar_contenido_gemini(prompt):
-    if not client:
+    if not GEMINI_KEY:
+        print("[ERROR GEMINI] GEMINI_API_KEY está vacía o no existe en el entorno.")
         return None
+
+    if not client:
+        print("[ERROR GEMINI] El cliente de Gemini no se pudo inicializar.")
+        return None
+
     for model_name in MODELOS_GEMINI:
         try:
+            print(f"[GEMINI] Intentando con el modelo: {model_name}")
             response = client.models.generate_content(model=model_name, contents=prompt)
             if response and response.text:
+                print(f"[GEMINI] Respuesta exitosa con {model_name}")
                 return response.text
-        except Exception:
+        except Exception as e:
+            print(f"[ERROR GEMINI - {model_name}]: {str(e)}")
             continue
+
     return None
 
 FRASES_BASE = [
@@ -81,20 +92,32 @@ LECTURA_RESPALDO = {
 def obtener_usuario_autenticado_y_suscrito():
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
+        print("[AUTH ERROR] Petición rechazada: Falta el encabezado Authorization / Token Bearer en el Frontend.")
         return None, "Acceso denegado: Token no proporcionado."
+    
     token = auth_header.split(" ")[1]
     if not supabase:
+        print("[AUTH ERROR] Supabase no está configurado en las variables de entorno.")
         return None, "Error: Supabase no está configurado."
+        
     try:
         user_res = supabase.auth.get_user(token)
         if not user_res or not user_res.user:
+            print("[AUTH ERROR] El token enviado por el navegador es inválido o caducó.")
             return None, "Sesión inválida o expirada."
+            
         user_id = user_res.user.id
         res = supabase.table('profiles').select('is_subscribed').eq('id', user_id).execute()
+        
         if res.data and len(res.data) > 0 and res.data[0].get('is_subscribed', False):
+            print(f"[AUTH OK] Usuario autenticado y VIP activo: {user_id}")
             return user_id, None
+            
+        print(f"[AUTH ERROR] El usuario {user_id} NO tiene suscripción VIP (is_subscribed = false).")
         return None, "Acceso restringido: Tu cuenta no tiene una suscripción VIP activa."
+        
     except Exception as e:
+        print(f"[AUTH EXCEPTION] Error validando con Supabase: {str(e)}")
         return None, f"Error de autenticación: {str(e)}"
 
 @app.route('/nueva-frase', methods=['GET'])
