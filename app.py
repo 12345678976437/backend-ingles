@@ -42,15 +42,14 @@ if GEMINI_KEY:
 
 # Nombres correctos (ortografía oficial de Google)
 MODELOS_GEMINI = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-3.6-flash',
+    'gemini-3.1-pro-preview'
 ]
 
 def generar_contenido_gemini(prompt):
     """Genera respuesta de Gemini usando la lista de modelos configurados."""
     if not GEMINI_KEY or not client:
-        print("Error: Clave de Gemini no configurada o cliente no inicializado.")
+        print("Falta la API Key de Gemini o el cliente no está inicializado.")
         return None
         
     for model_name in MODELOS_GEMINI:
@@ -59,8 +58,8 @@ def generar_contenido_gemini(prompt):
             if response and response.text:
                 return response.text
         except Exception as e:
-            # Ahora el error se imprimirá en los logs de tu servidor en lugar de fallar en silencio
-            print(f"[ADVERTENCIA] Falló el modelo {model_name}: {str(e)}")
+            # ESTA LÍNEA ES VITAL: Nos dirá por qué el modelo 3.6 falla en Render
+            print(f"[ERROR REAL GEMINI] Falló el modelo {model_name}: {str(e)}")
             continue
             
     return None
