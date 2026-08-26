@@ -40,47 +40,29 @@ if GEMINI_KEY:
     except Exception as e:
         print(f"Error al configurar cliente de Gemini: {e}")
 
+# Nombres correctos (ortografía oficial de Google)
 MODELOS_GEMINI = [
-
-    'gemini-3.6-flash',
-
-    'gemini-3.1-pro-preview'
-
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
 ]
-
-# Frases y lecturas de respaldo en caso de desconexión con Gemini
-FRASES_BASE = [
-    {"frase": "Can I check out late today?", "traduccion": "¿Puedo salir más tarde hoy?"},
-    {"frase": "Where is the nearest train station?", "traduccion": "¿Dónde está la estación de tren más cercana?"},
-    {"frase": "Could you please bring me the check?", "traduccion": "¿Me trae la cuenta, por favor?"},
-    {"frase": "I would like to order a cup of coffee.", "traduccion": "Me gustaría pedir una taza de café."}
-]
-
-LECTURA_RESPALDO = {
-    "titulo": "The Importance of Routine",
-    "texto": "Establishing a morning routine helps clear your mind and boosts productivity. Successful people often spend their first hour reading or planning their daily goals.",
-    "traduccion": "Establecer una rutina matutina ayuda a despejar la mente y aumenta la productividad. Las personas exitosas suelen pasar su primera hora leyendo o planificando sus metas diarias.",
-    "preguntas": [
-        {
-            "pregunta": "¿Qué beneficio aporta la rutina matutina según el texto?",
-            "opciones": ["Ganar dinero rápido", "Despejar la mente y aumentar la productividad", "Dormir más tiempo", "Evitar hacer ejercicio"],
-            "correcta": 1,
-            "explicacion": "El texto menciona 'helps clear your mind and boosts productivity'."
-        }
-    ]
-}
 
 def generar_contenido_gemini(prompt):
     """Genera respuesta de Gemini usando la lista de modelos configurados."""
     if not GEMINI_KEY or not client:
+        print("Error: Clave de Gemini no configurada o cliente no inicializado.")
         return None
+        
     for model_name in MODELOS_GEMINI:
         try:
             response = client.models.generate_content(model=model_name, contents=prompt)
             if response and response.text:
                 return response.text
-        except Exception:
+        except Exception as e:
+            # Ahora el error se imprimirá en los logs de tu servidor en lugar de fallar en silencio
+            print(f"[ADVERTENCIA] Falló el modelo {model_name}: {str(e)}")
             continue
+            
     return None
 
 def obtener_usuario_autenticado_y_suscrito():
