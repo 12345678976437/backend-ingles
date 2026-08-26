@@ -40,10 +40,10 @@ if GEMINI_KEY:
     except Exception as e:
         print(f"Error al configurar cliente de Gemini: {e}")
 
-# Lista de modelos vigentes ordenados por prioridad
+# Lista de modelos actualizados según el registro de Google
 MODELOS_GEMINI = [
-    'gemini-2.5-flash',
-    'gemini-2.5-pro'
+    'gemini-3.6-flash',
+    'gemini-3.1-pro-preview'
 ]
 
 def generar_contenido_gemini(prompt):
