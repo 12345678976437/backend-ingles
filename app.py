@@ -40,7 +40,13 @@ if GEMINI_KEY:
     except Exception as e:
         print(f"Error al configurar cliente de Gemini: {e}")
 
-MODELOS_GEMINI = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+MODELOS_GEMINI = [
+
+    'gemini-3.6-flash',
+
+    'gemini-3.1-pro-preview'
+
+]
 
 # Frases y lecturas de respaldo en caso de desconexión con Gemini
 FRASES_BASE = [
