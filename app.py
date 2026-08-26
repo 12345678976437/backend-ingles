@@ -42,30 +42,33 @@ if GEMINI_KEY:
 
 MODELOS_GEMINI = [
     'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.5-flash'
+    'gemini-2.0-flash'
 ]
 
 def generar_contenido_gemini(prompt):
     if not GEMINI_KEY:
-        print("[ERROR GEMINI] GEMINI_API_KEY está vacía o no existe en el entorno.")
+        print("[ERROR GEMINI] La variable GEMINI_API_KEY no está configurada.", flush=True)
         return None
 
     if not client:
-        print("[ERROR GEMINI] El cliente de Gemini no se pudo inicializar.")
+        print("[ERROR GEMINI] El cliente de Gemini no se inicializó correctamente.", flush=True)
         return None
 
     for model_name in MODELOS_GEMINI:
         try:
-            print(f"[GEMINI] Intentando con el modelo: {model_name}")
-            response = client.models.generate_content(model=model_name, contents=prompt)
+            print(f"[GEMINI] Probando modelo: {model_name}...", flush=True)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
             if response and response.text:
-                print(f"[GEMINI] Respuesta exitosa con {model_name}")
+                print(f"[GEMINI SUCCESS] Respuesta obtenida con {model_name}", flush=True)
                 return response.text
         except Exception as e:
-            print(f"[ERROR GEMINI - {model_name}]: {str(e)}")
+            print(f"[ERROR GEMINI FALÓ EN {model_name}]: {type(e).__name__} - {str(e)}", flush=True)
             continue
 
+    print("[ERROR GEMINI] Todos los modelos de la lista fallaron.", flush=True)
     return None
 
 FRASES_BASE = [
