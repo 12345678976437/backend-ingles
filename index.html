@@ -666,6 +666,32 @@ async function sendTutor(){
 }
 function startTutorVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert("Tu navegador no permite reconocimiento de voz aquí.");const rec=new SR();rec.lang="en-US";rec.interimResults=false;rec.maxAlternatives=1;rec.onresult=e=>{document.getElementById("tutor-input").value=e.results[0][0].transcript;sendTutor()};rec.onerror=()=>alert("No pude captar tu voz.");rec.start()}
 async function loadHistory(){const box=document.getElementById("history");box.innerHTML="<div class='empty'>Cargando...</div>";try{const r=await authFetch(API_URL+"/obtener-historial");const d=await r.json();if(!r.ok)throw new Error(d.error);if(!d.length){box.innerHTML="<div class='empty'>Todavía no hay prácticas guardadas.</div>";return}box.innerHTML=d.map(x=>`<div class="history"><div class="history-head"><span>${esc(x.frase_esperada)}</span><span class="history-score">${x.puntuacion_global}/100</span></div><div class="history-meta"><span>Precisión ${x.precision_fonemas}%</span><span>Fluidez ${x.fluidez}%</span><span>Completitud ${x.completitud}%</span></div></div>`).join("")}catch(e){box.innerHTML="<div class='empty'>No fue posible cargar el progreso.</div>"}}
+
+
+// Expose UI functions explicitly for the HTML onclick handlers.
+window.tab=tab;
+window.pronMode=pronMode;
+window.speakText=speakText;
+window.newPhrase=newPhrase;
+window.useCustomPhrase=useCustomPhrase;
+window.newTopic=newTopic;
+window.newTwister=newTwister;
+window.toggleRecord=toggleRecord;
+window.evaluateWriting=evaluateWriting;
+window.evaluateReading=evaluateReading;
+window.loadReading=loadReading;
+window.evaluateDictation=evaluateDictation;
+window.loadDictation=loadDictation;
+window.playDictation=playDictation;
+window.loadHistory=loadHistory;
+window.openAuth=openAuth;
+window.closeAuth=closeAuth;
+window.toggleAuth=toggleAuth;
+window.processAuth=processAuth;
+window.logout=logout;
+window.sendTutor=sendTutor;
+window.startTutorVoice=startTutorVoice;
+
 </script>
 </body>
 </html>
