@@ -1,959 +1,288 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>English Academy AI</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    :root {
-      --bg: #0b0d11;
-      --surface: #12151b;
-      --surface-2: #1a1e27;
-      --surface-3: #242a37;
-      --border: #292f39;
-      --border-hover: #3a424f;
-      --text: #f5f7fa;
-      --text-secondary: #9aa2af;
-      --text-tertiary: #626b79;
-      --primary: #7180ff;
-      --primary-hover: #5d6eff;
-      --primary-soft: rgba(113, 128, 255, 0.12);
-      --success: #3dcc91;
-      --warning: #e7ad52;
-      --danger: #ef6b73;
-      --radius-sm: 7px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
-      
-      /* Azure Speech Studio Inspection Palette */
-      --azure-omision: #606060;
-      --azure-incoherente: #d8a000;
-      --azure-insercion: #a80000;
-      --azure-interrupcion: #e2a9a9;
-      --azure-descanso: #8a8a8a;
-      --azure-monotona: #881798;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Inter', sans-serif;
-    }
-
-    html, body {
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    button, input, textarea { font: inherit; }
-    button { cursor: pointer; }
-
-    .app-shell { min-height: 100vh; display: flex; }
-
-    /* SIDEBAR */
-    .sidebar {
-      position: fixed;
-      inset: 0 auto 0 0;
-      width: 244px;
-      padding: 26px 14px;
-      background: #0f1217;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      z-index: 50;
-    }
-
-    .brand { padding: 2px 12px 30px; }
-    .brand-name { font-size: 18px; line-height: 1.1; font-weight: 700; letter-spacing: .035em; }
-    .brand-name span { color: var(--primary); }
-    .brand-subtitle { margin-top: 6px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
-
-    .nav-section { margin-bottom: 24px; }
-    .nav-label { padding: 0 12px; margin-bottom: 7px; color: #626b79; font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-    .tabs { display: flex; flex-direction: column; gap: 3px; margin: 0; }
-    .tab-btn {
-      width: 100%; min-height: 40px; padding: 0 12px; display: flex;
-      align-items: center; gap: 11px; background: transparent;
-      border: 1px solid transparent; border-radius: var(--radius-sm);
-      color: var(--text-secondary); font-size: 13px; font-weight: 500;
-      text-align: left; transition: all .15s ease;
-    }
-    .tab-btn:hover { background: var(--surface); color: var(--text); }
-    .tab-btn.active { background: var(--primary-soft); color: #fff; border-color: rgba(113, 128, 255, 0.18); }
-    .nav-icon { width: 18px; color: #687180; text-align: center; font-size: 14px; }
-    .tab-btn.active .nav-icon { color: var(--primary); }
-
-    .sidebar-footer { margin-top: auto; padding: 14px 10px 4px; }
-    .account-mini { display: flex; align-items: center; gap: 10px; padding: 11px; border: 1px solid var(--border); border-radius: var(--radius-md); background: rgba(255, 255, 255, .015); }
-    .avatar { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 700; }
-    .account-copy { min-width: 0; }
-    .account-name { overflow: hidden; color: var(--text); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-    .account-status { margin-top: 2px; color: var(--success); font-size: 10px; }
-
-    /* MAIN */
-    .main-area { width: calc(100% - 244px); margin-left: 244px; min-width: 0; }
-    .topbar { height: 68px; padding: 0 42px; display: flex; align-items: center; justify-content: flex-end; border-bottom: 1px solid var(--border); background: rgba(11,13,17,.92); }
-    .user-bar { display: flex; align-items: center; gap: 12px; }
-    .user-info { max-width: 290px; overflow: hidden; color: var(--text-secondary); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-    .topbar .btn { min-height: 34px; padding: 0 12px; font-size: 12px; }
-
-    .page { width: min(1080px, calc(100% - 80px)); margin: 0 auto; padding: 42px 0 72px; }
-    .page-heading { margin-bottom: 28px; }
-    .eyebrow { margin-bottom: 8px; color: var(--primary); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .page-title { font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: .035em; }
-    .page-description { margin-top: 8px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
-
-    .container { width: 100%; }
-    .content-section { display: none; }
-    .content-section.active { display: block; }
-
-    /* CARDS & BUTTONS */
-    .card, .result-box, .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 12px 34px rgba(0,0,0,.14); }
-    .card { padding: 28px; text-align: left; margin-bottom: 18px; }
-    .result-box { display: none; padding: 24px; margin-top: 18px; text-align: left; }
-
-    /* SELECTOR DE MODOS AZURE SPEECH */
-    .mode-selector { display: flex; gap: 8px; margin-bottom: 20px; background: #0f1217; padding: 6px; border-radius: var(--radius-md); border: 1px solid var(--border); }
-    .mode-btn { flex: 1; padding: 10px; border: none; background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 13px; border-radius: var(--radius-sm); transition: all 0.2s; text-align: center; }
-    .mode-btn.active { background: var(--primary); color: #fff; }
-
-    .phrase-title { max-width: 760px; margin: 0 auto; color: var(--text); font-size: clamp(20px, 2.5vw, 30px); line-height: 1.3; font-weight: 650; text-align: center; }
-    .phrase-sub { margin: 9px 0 22px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; text-align: center; }
-    .btn-group { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
-    .btn { min-height: 38px; padding: 0 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 12px; font-weight: 600; transition: all .15s ease; }
-    .btn:hover { background: var(--surface-3); border-color: var(--border-hover); color: var(--text); }
-    .btn-accent { background: var(--primary); border-color: var(--primary); color: #fff; }
-    .btn-accent:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
-    .btn-danger { background: transparent; border: 1px solid rgba(239,107,115,.28); color: #f08b92; }
-    .btn-danger:hover { background: rgba(239,107,115,.08); border-color: rgba(239,107,115,.45); color: #ff9da3; }
-
-    .btn-submit { width: 100%; min-height: 44px; margin-top: 8px; padding: 0 18px; background: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-sm); color: #fff; font-size: 13px; font-weight: 650; cursor: pointer; transition: all .15s ease; }
-    .btn-submit:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-
-    .custom-input { display: flex; gap: 8px; max-width: 720px; margin: 0 auto; }
-    input[type="text"], input[type="email"], input[type="password"], textarea {
-      width: 100%; background: #0d1015; border: 1px solid var(--border); color: var(--text); padding: 12px 13px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 10px; outline: none; transition: all .15s ease;
-    }
-    input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, textarea:focus {
-      border-color: rgba(113,128,255,.65); box-shadow: 0 0 0 3px rgba(113,128,255,.08);
-    }
-    textarea { height: 150px; resize: vertical; line-height: 1.6; }
-
-    .record-btn {
-      width: 100%; min-height: 50px; margin: 14px 0; padding: 0 20px; background: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-md); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer; transition: all .15s ease;
-    }
-    .record-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-    .record-btn.recording { background: var(--danger); border-color: var(--danger); animation: pulse 1.5s infinite; }
-    
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(239,107,115,.35); }
-      70% { box-shadow: 0 0 0 12px rgba(239,107,115,0); }
-      100% { box-shadow: 0 0 0 0 rgba(239,107,115,0); }
-    }
-
-    /* BADGES HABLA LIBRE */
-    .targets-row { display: flex; justify-content: center; gap: 15px; margin-top: 15px; font-size: 12px; color: var(--text-secondary); }
-    .target-badge { background: #0d1015; border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 6px; }
-
-    /* AZURE SPEECH STUDIO INSPECTION COMPONENTES */
-    .azure-inspection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 24px; }
-    .azure-inspection-card { background: #0f1217; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 10px; text-align: center; position: relative; overflow: hidden; }
-    .azure-inspection-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
-    .card-omision::before { background: var(--azure-omision); }
-    .card-incoherente::before { background: var(--azure-incoherente); }
-    .card-insercion::before { background: var(--azure-insercion); }
-    .card-interrupcion::before { background: var(--azure-interrupcion); }
-    .card-descanso::before { background: var(--azure-descanso); }
-    .card-monotona::before { background: var(--azure-monotona); }
-
-    .azure-inspection-val { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 4px; }
-    .azure-inspection-lbl { font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
-
-    .azure-dashboard { display: grid; grid-template-columns: 220px 1fr; gap: 20px; margin-bottom: 24px; background: #0d1015; padding: 20px; border-radius: var(--radius-md); border: 1px solid var(--border); }
-    .azure-score-main { display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); padding-right: 15px; }
-    .azure-score-circle { width: 100px; height: 100px; border-radius: 50%; border: 6px solid var(--primary); display: grid; place-items: center; font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-    .azure-score-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-
-    .azure-metrics-list { display: flex; flex-direction: column; gap: 12px; justify-content: center; }
-    .azure-metric-item { display: flex; flex-direction: column; gap: 4px; }
-    .azure-metric-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
-    .azure-bar-bg { width: 100%; height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
-    .azure-bar-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 0.4s ease; }
-
-    .words-container { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin: 15px 0; padding: 18px; background: #0f1217; border-radius: var(--radius-md); border: 1px solid var(--border); }
-    .word-block { display: inline-flex; flex-direction: column; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: all 0.2s ease; }
-    .word-block:hover { border-color: var(--primary); transform: translateY(-2px); }
-    .word-text { font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 2px; }
-    .word-score { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
-    .word-err-tag { margin-top: 3px; font-size: 9px; text-transform: uppercase; font-weight: 700; }
-
-    .score-high { background: rgba(61,204,145,.15); color: #3dcc91; border: 1px solid rgba(61,204,145,.3); }
-    .score-mid { background: rgba(231,173,82,.15); color: #e7ad52; border: 1px solid rgba(231,173,82,.3); }
-    .score-low { background: rgba(239,107,115,.15); color: #ef6b73; border: 1px solid rgba(239,107,115,.3); }
-
-    .phonemes-detail { margin-top: 15px; padding: 15px; background: #0d1015; border-radius: var(--radius-md); border: 1px solid var(--border); display: none; }
-    .phonemes-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-    .phoneme-chip { padding: 4px 8px; background: var(--surface-3); border-radius: 4px; font-size: 11px; font-weight: 600; display: flex; gap: 6px; }
-
-    /* HISTORIAL */
-    .history-card { padding: 18px 20px; margin-bottom: 10px; text-align: left; transition: all .15s ease; }
-    .history-card:hover { background: var(--surface-2); border-color: var(--border-hover); }
-    .history-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; font-weight: 600; color: var(--text); margin-bottom: 7px; }
-    .history-scores { display: flex; gap: 18px; flex-wrap: wrap; font-size: 11px; color: var(--text-secondary); }
-
-    /* MODALES */
-    .modal-overlay { display: none; position: fixed; inset: 0; width: 100%; height: 100%; padding: 20px; background: rgba(4,6,9,.78); backdrop-filter: blur(8px); justify-content: center; align-items: center; z-index: 1000; }
-    .modal-card { width: 90%; max-width: 440px; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 24px 70px rgba(0,0,0,.42); text-align: center; }
-
-    @media (max-width: 820px) {
-      .app-shell { display: block; }
-      .sidebar { position: static; width: 100%; padding: 16px; border-right: 0; border-bottom: 1px solid var(--border); }
-      .sidebar .nav-label, .sidebar-footer { display: none; }
-      .tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
-      .main-area { width: 100%; margin-left: 0; }
-      .topbar { height: 58px; padding: 0 18px; }
-      .page { width: min(100% - 32px, 720px); padding: 28px 0 48px; }
-      .azure-dashboard { grid-template-columns: 1fr; }
-      .azure-score-main { border-right: 0; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 15px; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Academy</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#090b10;--surface:#11151c;--surface2:#181e27;--surface3:#202733;
+  --border:#2a313d;--text:#f5f7fb;--muted:#9aa4b2;--primary:#7180ff;
+  --primary2:#5c6dff;--success:#3dcc91;--danger:#ef6b73;--warning:#e7ad52;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,sans-serif}
+body{background:var(--bg);color:var(--text);min-height:100vh}
+button,input,textarea{font:inherit}button{cursor:pointer}
+.app{min-height:100vh;display:flex}
+.sidebar{position:fixed;inset:0 auto 0 0;width:245px;padding:24px 14px;background:#0e1117;border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:20}
+.brand{padding:5px 12px 28px}.brand b{font-size:18px}.brand b span{color:var(--primary)}
+.brand small{display:block;color:#657080;margin-top:5px;font-size:10px;letter-spacing:.09em;text-transform:uppercase}
+.nav-label{color:#657080;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:0 12px 7px}
+.nav{display:flex;flex-direction:column;gap:4px;margin-bottom:22px}
+.tab{border:1px solid transparent;background:transparent;color:var(--muted);padding:11px 12px;border-radius:9px;text-align:left;font-size:13px;display:flex;gap:10px;align-items:center;transition:.16s}
+.tab:hover{background:var(--surface);color:#fff}.tab.active{background:rgba(113,128,255,.12);border-color:rgba(113,128,255,.2);color:#fff}
+.sidebar-foot{margin-top:auto;padding:10px}.account{border:1px solid var(--border);background:rgba(255,255,255,.02);padding:11px;border-radius:10px;font-size:11px}
+.main{width:calc(100% - 245px);margin-left:245px;min-width:0}
+.topbar{height:66px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 40px;background:rgba(9,11,16,.9);position:sticky;top:0;z-index:10}
+.userbar{display:flex;align-items:center;gap:12px}.user{font-size:12px;color:var(--muted);max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.page{width:min(1100px,calc(100% - 70px));margin:auto;padding:38px 0 70px}
+.eyebrow{color:var(--primary);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+h1{font-size:29px;line-height:1.2}h2{font-size:20px}h3{font-size:16px}
+.desc{color:var(--muted);font-size:13px;line-height:1.65;margin-top:8px}
+.section{display:none}.section.active{display:block}
+.card,.result,.history{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 14px 38px rgba(0,0,0,.14)}
+.card{padding:25px;margin-top:18px}.result{padding:24px;margin-top:18px;display:none}
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:#0e1117;border:1px solid var(--border);padding:6px;border-radius:12px;margin-top:20px}
+.mode{border:0;background:transparent;color:var(--muted);padding:11px 8px;border-radius:8px;font-weight:600;font-size:12px;transition:.16s}
+.mode:hover{color:#fff}.mode.active{background:var(--primary);color:#fff}
+.panel{display:none}.panel.active{display:block}
+.hero{text-align:center}.quote{font-size:clamp(21px,3vw,31px);line-height:1.4;font-weight:650;max-width:820px;margin:auto}
+.sub{color:var(--muted);font-size:13px;line-height:1.65;margin:10px auto 20px;max-width:760px}
+.actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+.btn{min-height:39px;padding:0 14px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:12px;font-weight:600;transition:.12s}
+.btn:hover{background:var(--surface3);color:#fff;border-color:#3a4452;transform:translateY(-1px)}
+.btn:active{transform:scale(.97)}.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary2)}.btn.danger{border-color:rgba(239,107,115,.35);color:#ff9aa0;background:transparent}
+.btn.loading{opacity:.72;pointer-events:none}.btn.loading::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;vertical-align:-2px;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.custom{display:flex;gap:8px;max-width:760px;margin:16px auto 0}
+input,textarea{width:100%;background:#0c0f14;color:#fff;border:1px solid var(--border);border-radius:9px;padding:12px 13px;outline:none}
+input:focus,textarea:focus{border-color:rgba(113,128,255,.65);box-shadow:0 0 0 3px rgba(113,128,255,.08)}
+textarea{min-height:150px;resize:vertical;line-height:1.65}
+.record{width:100%;height:54px;border-radius:11px;border:1px solid var(--primary);background:var(--primary);color:#fff;font-weight:700;margin-top:18px;transition:.15s}
+.record:hover{background:var(--primary2)}.record.recording{background:var(--danger);border-color:var(--danger);animation:pulse 1.5s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 12px rgba(239,107,115,0)}}
+.badges{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:15px}
+.badge{border:1px solid var(--border);background:#0c0f14;color:var(--muted);padding:6px 10px;border-radius:20px;font-size:10px}
+.score-grid{display:grid;grid-template-columns:190px 1fr;gap:20px;background:#0c0f14;border:1px solid var(--border);padding:18px;border-radius:12px}
+.big-score{display:flex;align-items:center;justify-content:center;flex-direction:column;border-right:1px solid var(--border)}
+.circle{width:105px;height:105px;border:6px solid var(--primary);border-radius:50%;display:grid;place-items:center;font-size:27px;font-weight:700}
+.meter{margin:10px 0}.meter-head{display:flex;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:5px}.bar{height:8px;background:var(--surface3);border-radius:5px;overflow:hidden}.fill{height:100%;background:var(--primary);border-radius:5px;transition:.4s}
+.inspect{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:18px}
+.inspect-item{background:#0e1117;border:1px solid var(--border);padding:11px 7px;border-radius:9px;text-align:center}.inspect-item b{font-size:19px}.inspect-item small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
+.words{display:flex;flex-wrap:wrap;gap:8px;padding:15px;background:#0e1117;border:1px solid var(--border);border-radius:10px;margin-top:12px}
+.word{border:1px solid var(--border);background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center}.word b{display:block;font-size:13px}.word small{color:var(--muted);font-size:9px}
+.phonemes{display:none;background:#0c0f14;border:1px solid var(--border);padding:14px;border-radius:10px;margin-top:12px}.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.chip{padding:5px 8px;background:var(--surface3);border-radius:6px;font-size:10px}
+.reading-text{font-size:16px;line-height:1.85;margin-top:16px;color:#e9edf5}.notice{border-left:3px solid var(--primary);padding:10px 13px;background:rgba(113,128,255,.07);color:var(--muted);font-size:12px;line-height:1.6;margin-top:15px}
+.report-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:15px 0}.report-stat{background:#0e1117;border:1px solid var(--border);padding:14px;border-radius:9px}.report-stat b{font-size:20px}.report-stat small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.report-list{margin-top:12px;padding-left:20px;color:#dfe4ed;font-size:12px;line-height:1.8}
+.vocab{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.vocab-card{border:1px solid var(--border);background:#0e1117;border-radius:9px;padding:12px;font-size:11px}.vocab-card b{color:#fff}.vocab-card p{color:var(--muted);margin-top:4px}
+.tutor-layout{display:grid;grid-template-columns:250px 1fr;gap:16px}.tutor-avatar{min-height:330px;border:1px solid var(--border);border-radius:14px;background:radial-gradient(circle at 50% 25%,rgba(113,128,255,.24),transparent 35%),#0d1016;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center}
+.face{width:115px;height:115px;border-radius:50%;border:2px solid rgba(113,128,255,.55);display:grid;place-items:center;font-size:47px;background:rgba(113,128,255,.08);margin-bottom:15px}.tutor-avatar p{color:var(--muted);font-size:11px;line-height:1.6;padding:0 20px}
+.chat{min-height:330px;display:flex;flex-direction:column}.messages{flex:1;max-height:430px;overflow:auto;padding:5px}.msg{max-width:82%;padding:11px 13px;border-radius:12px;margin-bottom:9px;font-size:12px;line-height:1.6}.msg.ai{background:var(--surface2);border:1px solid var(--border)}.msg.user{margin-left:auto;background:rgba(113,128,255,.15);border:1px solid rgba(113,128,255,.25)}
+.chat-input{display:flex;gap:7px;margin-top:10px}.mini{min-width:44px}
+.history{padding:17px 19px;margin-top:10px}.history-head{display:flex;justify-content:space-between;gap:10px}.history-score{color:var(--success);font-weight:700}.history-meta{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:10px;margin-top:7px}
+.empty{text-align:center;color:var(--muted);padding:25px}
+.modal{display:none;position:fixed;inset:0;background:rgba(3,5,8,.8);backdrop-filter:blur(8px);z-index:100;align-items:center;justify-content:center;padding:20px}.modal-card{width:min(420px,100%);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:25px}
+.modal-card input{margin-top:9px}.modal-card .btn{width:100%;margin-top:9px}
+@media(max-width:850px){
+ .app{display:block}.sidebar{position:static;width:100%;padding:15px;border-right:0;border-bottom:1px solid var(--border)}.sidebar-foot,.nav-label{display:none}.nav{display:grid;grid-template-columns:repeat(2,1fr);margin:0}.main{width:100%;margin:0}.topbar{height:57px;padding:0 17px}.page{width:min(100% - 30px,720px);padding:28px 0 50px}
+ .modes{grid-template-columns:repeat(2,1fr)}.inspect{grid-template-columns:repeat(3,1fr)}.score-grid{grid-template-columns:1fr}.big-score{border-right:0;border-bottom:1px solid var(--border);padding-bottom:16px}.report-grid{grid-template-columns:repeat(2,1fr)}.vocab{grid-template-columns:1fr}.tutor-layout{grid-template-columns:1fr}.tutor-avatar{min-height:180px}.custom{flex-direction:column}
+}
+</style>
 </head>
 <body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-name">English <span>Academy</span></div>
-      <div class="brand-subtitle">AI Learning Platform</div>
-    </div>
-    <div class="nav-section">
-      <div class="nav-label">Learn</div>
-      <div class="tabs">
-        <button class="tab-btn active" onclick="cambiarPestana('pronunciacion', this)">
-          <span class="nav-icon">🎙️</span><span>Pronunciation</span>
-        </button>
-        <button class="tab-btn" onclick="cambiarPestana('escritura', this)">
-          <span class="nav-icon">Aa</span><span>Writing</span>
-        </button>
-        <button class="tab-btn" onclick="cambiarPestana('lectura', this)">
-          <span class="nav-icon">📖</span><span>Reading & Grammar</span>
-        </button>
-        <button class="tab-btn" onclick="cambiarPestana('escucha', this)">
-          <span class="nav-icon">🎧</span><span>Listening</span>
-        </button>
-      </div>
-    </div>
-    <div class="nav-section">
-      <div class="nav-label">Progress</div>
-      <div class="tabs">
-        <button class="tab-btn" onclick="cambiarPestana('historial', this)">
-          <span class="nav-icon">📊</span><span>My Progress</span>
-        </button>
-      </div>
-    </div>
-    <div class="sidebar-footer">
-      <div class="account-mini">
-        <div class="avatar">EA</div>
-        <div class="account-copy">
-          <div class="account-name" id="sidebar-user-name">English Academy</div>
-          <div class="account-status">Account active</div>
-        </div>
-      </div>
-    </div>
-  </aside>
-
-  <main class="main-area">
-    <header class="topbar">
-      <div class="user-bar">
-        <div id="user-display" class="user-info">Cargando sesión...</div>
-        <div>
-          <button id="btn-login-modal" class="btn btn-accent" onclick="abrirModalAuth()">Iniciar Sesión</button>
-          <button id="btn-logout" class="btn btn-danger" style="display:none;" onclick="cerrarSesion()">Cerrar Sesión</button>
-        </div>
-      </div>
-    </header>
-
-    <div class="page">
-      <div class="page-heading">
-        <div class="eyebrow">English Academy</div>
-        <h1 class="page-title">Build confidence in English</h1>
-        <p class="page-description">Practice pronunciation, writing, reading and listening with Azure Speech Studio precision.</p>
-      </div>
-
-      <div class="container" id="main-container">
-        <!-- 1. PRONUNCIACIÓN (3 MODOS) -->
-        <div id="sec-pronunciacion" class="content-section active">
-          <!-- SELECTOR DE MODOS AZURE SPEECH -->
-          <div class="mode-selector">
-            <button class="mode-btn active" id="btn-mode-lectura" onclick="cambiarModoPronunciacion('lectura')">📖 Lectura</button>
-            <button class="mode-btn" id="btn-mode-habla-libre" onclick="cambiarModoPronunciacion('habla_libre')">💬 Habla Libre</button>
-            <button class="mode-btn" id="btn-mode-trabalenguas" onclick="cambiarModoPronunciacion('trabalenguas')">⚡ Trabalenguas</button>
-          </div>
-
-          <!-- MODO 1: LECTURA -->
-          <div id="panel-modo-lectura">
-            <div class="card">
-              <div id="frase-esperada" class="phrase-title">"Today was a beautiful day. We had a great time taking a long walk outside in the morning."</div>
-              <div id="frase-traduccion" class="phrase-sub">Hoy fue un día hermoso. Nos la pasamos genial dando un largo paseo por la mañana.</div>
-              <div class="btn-group">
-                <button class="btn" onclick="hablarNativo(1)">Escuchar Nativo</button>
-                <button class="btn" onclick="hablarNativo(0.7)">Lento</button>
-                <button class="btn btn-accent" onclick="obtenerNuevaFrase()">Nueva frase</button>
-              </div>
-              <div class="custom-input">
-                <input type="text" id="input-personalizado" placeholder="Escribe tu propia frase aquí...">
-                <button class="btn" onclick="usarFrasePersonalizada()">Usar frase</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- MODO 2: HABLA LIBRE -->
-          <div id="panel-modo-habla-libre" style="display: none;">
-            <div class="card" style="text-align: center;">
-              <h2 id="tema-habla-libre" class="phrase-title">"Talk about your day today"</h2>
-              <p class="phrase-sub">Prepárese y empiece a grabar su discusión sobre este tema cuando esté listo.</p>
-              <div class="targets-row">
-                <span class="target-badge">⏱️ &gt; 15s (Recomendado)</span>
-                <span class="target-badge">📝 &gt; 50 words</span>
-                <span class="target-badge">💬 &gt; 3 sentences</span>
-              </div>
-              <div class="btn-group" style="margin-top: 15px;">
-                <button class="btn btn-accent" onclick="obtenerNuevoTemaHablaLibre()">Generar nuevo tema</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- MODO 3: TRABALENGUAS -->
-          <div id="panel-modo-trabalenguas" style="display: none;">
-            <div class="card" style="text-align: center; background: linear-gradient(180deg, #121722 0%, #12151b 100%); border-color: rgba(113, 128, 255, 0.3);">
-              <div style="font-size: 11px; text-transform: uppercase; color: var(--primary); font-weight: 700; margin-bottom: 8px;">Retorcedor de la lengua</div>
-              <h2 id="trabalenguas-texto" class="phrase-title" style="color: #00d2ff;">"Bouncing basketballs bounce briskly."</h2>
-              <div class="btn-group" style="margin-top: 15px;">
-                <button class="btn" onclick="hablarTrabalenguasNativo()">🔊 Escuchar Pronunciación</button>
-                <button class="btn btn-accent" onclick="obtenerNuevoTrabalenguas()">🔁 Generar nuevo trabalenguas</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- BOTÓN DE GRABACIÓN ÚNICO -->
-          <button id="btn-grabar" class="record-btn" onclick="alternarGrabacion()">Start recording</button>
-
-          <!-- RESULTADOS ESPEJO AZURE SPEECH STUDIO -->
-          <div id="resultado-pron" class="result-box">
-            <!-- BARRA 6 CATEGORÍAS DE INSPECCIÓN AZURE -->
-            <div class="azure-inspection-grid">
-              <div class="azure-inspection-card card-omision">
-                <div class="azure-inspection-val" id="val-omisiones">0</div>
-                <div class="azure-inspection-lbl">Omisiones</div>
-              </div>
-              <div class="azure-inspection-card card-incoherente">
-                <div class="azure-inspection-val" id="val-incoherentes">0</div>
-                <div class="azure-inspection-lbl">Incoherentes</div>
-              </div>
-              <div class="azure-inspection-card card-insercion">
-                <div class="azure-inspection-val" id="val-inserciones">0</div>
-                <div class="azure-inspection-lbl">Inserciones</div>
-              </div>
-              <div class="azure-inspection-card card-interrupcion">
-                <div class="azure-inspection-val" id="val-interrupcion">0</div>
-                <div class="azure-inspection-lbl">Interrupción</div>
-              </div>
-              <div class="azure-inspection-card card-descanso">
-                <div class="azure-inspection-val" id="val-descanso">0</div>
-                <div class="azure-inspection-lbl">Falta descanso</div>
-              </div>
-              <div class="azure-inspection-card card-monotona">
-                <div class="azure-inspection-val" id="val-monotona">0</div>
-                <div class="azure-inspection-lbl">Monótona</div>
-              </div>
-            </div>
-
-            <!-- PANEL GENERAL DE MÉTRICAS -->
-            <div class="azure-dashboard">
-              <div class="azure-score-main">
-                <div class="azure-score-circle" id="azure-puntuacion-global">0</div>
-                <div class="azure-score-title">Puntuación Global</div>
-              </div>
-              <div class="azure-metrics-list" id="contenedor-metricas-variables">
-                <!-- Se llena dinámicamente según el modo -->
-              </div>
-            </div>
-
-            <!-- DESGLOSE DETALLADO PALABRA POR PALABRA -->
-            <h4 style="margin-bottom: 10px; font-size: 14px; color: var(--text-secondary);">Análisis Palabra por Palabra (Haz clic para ver fonemas):</h4>
-            <div id="palabras-pron" class="words-container"></div>
-            
-            <div id="phonemes-box" class="phonemes-detail">
-              <h5 style="color: var(--primary);" id="phoneme-word-title">Palabra: -</h5>
-              <div class="phonemes-list" id="phoneme-chips"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. ESCRITURA -->
-        <div id="sec-escritura" class="content-section">
-          <div class="card">
-            <h3 style="margin-bottom:10px;">Writing practice</h3>
-            <p class="phrase-sub">Tema: Describe tu rutina diaria o qué hiciste hoy.</p>
-            <textarea id="texto-escritura" placeholder="Write your paragraph here in English..."></textarea>
-            <button class="btn-submit" onclick="evaluarEscritura()">Enviar y Evaluar Redacción</button>
-          </div>
-          <div id="resultado-escritura" class="result-box">
-            <div style="font-size:26px; font-weight:700; color:var(--success); text-align:center; margin-bottom:15px;" id="calificacion-escritura">0/10</div>
-            <div id="analisis-escritura" style="line-height:1.7; font-size:13px;"></div>
-          </div>
-        </div>
-
-        <!-- 3. LECTURA -->
-        <div id="sec-lectura" class="content-section">
-          <div class="card">
-            <h3 id="lectura-titulo" style="margin-bottom: 10px;">Cargando Lectura...</h3>
-            <p id="lectura-texto" style="font-size: 1.1rem; line-height: 1.6; margin-bottom: 15px;"></p>
-            <p id="lectura-traduccion" class="phrase-sub"></p>
-            <button class="btn btn-accent" onclick="cargarLectura()">Nueva Lectura</button>
-          </div>
-          <div id="lectura-preguntas" class="card"></div>
-        </div>
-
-        <!-- 4. ESCUCHA -->
-        <div id="sec-escucha" class="content-section">
-          <div class="card">
-            <h3>Listening practice</h3>
-            <p class="phrase-sub">Escucha atentamente el audio y escribe exactamente lo que oigas.</p>
-            <div class="btn-group" style="margin: 15px 0;">
-              <button class="btn" onclick="reproducirDictado(1)">Escuchar Audio</button>
-              <button class="btn" onclick="reproducirDictado(0.7)">Escuchar Lento</button>
-              <button class="btn btn-accent" onclick="cargarDictado()">Nuevo Dictado</button>
-            </div>
-            <input type="text" id="input-dictado" placeholder="Escribe lo que escuchaste aquí...">
-            <button class="btn-submit" onclick="evaluarDictado()">Verificar Dictado</button>
-          </div>
-          <div id="resultado-dictado" class="result-box">
-            <div style="font-size:26px; font-weight:700; color:var(--success); text-align:center; margin-bottom:15px;" id="calificacion-dictado">0/10</div>
-            <div id="analisis-dictado" style="line-height:1.7; font-size:13px;"></div>
-          </div>
-        </div>
-
-        <!-- 5. HISTORIAL -->
-        <div id="sec-historial" class="content-section">
-          <div class="btn-group" style="justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h2>Practice history</h2>
-            <button class="btn" onclick="cargarHistorial()">Refresh</button>
-          </div>
-          <div id="contenedor-historial">
-            <p style="text-align: center; color: var(--text-secondary);">Cargando registros desde Supabase...</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<!-- MODALES (AUTH Y PAGO) -->
-<div id="modal-auth" class="modal-overlay">
-  <div class="modal-card">
-    <h2 id="auth-title" style="margin-bottom: 15px; color:#00d2ff;">Iniciar Sesión</h2>
-    <input type="email" id="auth-email" placeholder="Correo electrónico">
-    <input type="password" id="auth-password" placeholder="Contraseña">
-    <button class="btn-submit" onclick="procesarAuth()">Ingresar</button>
-    <button class="btn" style="width: 100%; margin-top:10px;" onclick="alternarModoAuth()" id="btn-toggle-auth">¿No tienes cuenta? Regístrate</button>
-    <button class="btn btn-danger" style="width: 100%; margin-top:10px;" onclick="cerrarModalAuth()">Cancelar</button>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><b>English <span>Academy</span></b><small>Personal English Lab</small></div>
+  <div class="nav-label">Learn</div>
+  <div class="nav">
+    <button class="tab active" onclick="tab('pronunciacion',this)">🎙️ Pronunciation</button>
+    <button class="tab" onclick="tab('escritura',this)">Aa Writing</button>
+    <button class="tab" onclick="tab('lectura',this)">📖 Reading</button>
+    <button class="tab" onclick="tab('escucha',this)">🎧 Listening</button>
+    <button class="tab" onclick="tab('tutor',this)">🤖 AI Tutor</button>
   </div>
+  <div class="nav-label">Progress</div>
+  <div class="nav"><button class="tab" onclick="tab('historial',this)">📊 My Progress</button></div>
+  <div class="sidebar-foot"><div class="account"><b id="side-user">English Academy</b><br><span id="side-status" style="color:var(--success)">Ready to practice</span></div></div>
+</aside>
+
+<main class="main">
+<header class="topbar"><div class="userbar"><span id="user-display" class="user">Cargando sesión...</span><button id="login-btn" class="btn primary" onclick="openAuth()">Iniciar sesión</button><button id="logout-btn" class="btn danger" style="display:none" onclick="logout()">Cerrar sesión</button></div></header>
+
+<div class="page">
+<div class="eyebrow">English Academy</div>
+<h1>Build confidence in English</h1>
+<p class="desc">Practica pronunciación, escritura, comprensión y conversación con una experiencia diseñada para mejorar paso a paso.</p>
+
+<div id="main-container">
+<section id="sec-pronunciacion" class="section active">
+  <div class="modes">
+    <button class="mode active" id="mode-lectura" onclick="pronMode('lectura')">📖 Guided Reading</button>
+    <button class="mode" id="mode-habla-libre" onclick="pronMode('habla_libre')">💬 Free Talk</button>
+    <button class="mode" id="mode-trabalenguas" onclick="pronMode('trabalenguas')">⚡ Tongue Twister</button>
+    <button class="mode" id="mode-tutor" onclick="tab('tutor',document.querySelectorAll('.tab')[4])">🤖 AI Tutor</button>
+  </div>
+
+  <div id="panel-lectura" class="panel active">
+    <div class="card hero">
+      <div id="phrase" class="quote">Today was a beautiful day. We had a great time taking a long walk outside in the morning.</div>
+      <div id="translation" class="sub">Hoy fue un día hermoso. Nos la pasamos genial dando un largo paseo por la mañana.</div>
+      <div class="actions">
+        <button class="btn" onclick="speakText(document.getElementById('phrase').innerText,1)">🔊 Natural</button>
+        <button class="btn" onclick="speakText(document.getElementById('phrase').innerText,.7)">🐢 Slow</button>
+        <button id="new-phrase" class="btn primary" onclick="newPhrase()">Nueva frase</button>
+      </div>
+      <div class="custom"><input id="custom-phrase" placeholder="Escribe tu propia frase para practicar..."><button class="btn" onclick="useCustomPhrase()">Usar</button></div>
+    </div>
+  </div>
+
+  <div id="panel-habla_libre" class="panel">
+    <div class="card hero">
+      <div id="free-topic" class="quote">What are your goals for learning English?</div>
+      <p id="free-instructions" class="sub">Habla durante 20 a 30 segundos y explica tus ideas con ejemplos.</p>
+      <div class="badges"><span class="badge">20–30 s</span><span class="badge">3+ ideas</span><span class="badge">Natural English</span></div>
+      <div class="actions" style="margin-top:16px"><button id="new-topic" class="btn primary" onclick="newTopic()">Nuevo tema</button></div>
+    </div>
+  </div>
+
+  <div id="panel-trabalenguas" class="panel">
+    <div class="card hero">
+      <div class="eyebrow">Articulation challenge</div>
+      <div id="twister" class="quote" style="color:#7fd5ff">Peter Piper picked a peck of pickled peppers.</div>
+      <div id="twister-focus" class="sub">Enfoque: sonido /p/</div>
+      <div class="actions"><button class="btn" onclick="speakText(document.getElementById('twister').innerText,1)">🔊 Escuchar</button><button id="new-twister" class="btn primary" onclick="newTwister()">Nuevo reto</button></div>
+    </div>
+  </div>
+
+  <button id="record-btn" class="record" onclick="toggleRecord()">Start recording</button>
+
+  <div id="pron-result" class="result">
+    <div class="inspect">
+      <div class="inspect-item"><b id="i-om">0</b><small>Omisiones</small></div>
+      <div class="inspect-item"><b id="i-mis">0</b><small>Pronunciación</small></div>
+      <div class="inspect-item"><b id="i-in">0</b><small>Inserciones</small></div>
+      <div class="inspect-item"><b id="i-break">0</b><small>Interrupciones</small></div>
+      <div class="inspect-item"><b id="i-rest">0</b><small>Pausas</small></div>
+      <div class="inspect-item"><b id="i-mono">0</b><small>Entonación</small></div>
+    </div>
+    <div class="score-grid">
+      <div class="big-score"><div class="circle" id="global-score">0</div><small style="color:var(--muted);margin-top:8px">Overall score</small></div>
+      <div id="metric-list"></div>
+    </div>
+    <h3 style="margin-top:22px">Word-by-word analysis</h3>
+    <div id="words" class="words"></div>
+    <div id="phonemes" class="phonemes"><b id="phoneme-title">Word</b><div id="chips" class="chips"></div></div>
+  </div>
+</section>
+
+<section id="sec-escritura" class="section">
+  <div class="card"><h2>Writing practice</h2><p class="desc">Escribe en inglés. Recibirás una evaluación de gramática, vocabulario, claridad y naturalidad.</p><textarea id="writing" placeholder="Write your paragraph here in English..."></textarea><button id="writing-btn" class="btn primary" style="width:100%;margin-top:8px" onclick="evaluateWriting()">Evaluar mi escritura</button></div>
+  <div id="writing-result" class="result"><div class="report-grid"><div class="report-stat"><b id="w-score">0</b><small>Score /10</small></div><div class="report-stat"><b id="w-grammar">0</b><small>Grammar</small></div><div class="report-stat"><b id="w-vocab">0</b><small>Vocabulary</small></div><div class="report-stat"><b id="w-natural">0</b><small>Naturalness</small></div></div><div id="writing-analysis" style="font-size:12px;line-height:1.8"></div></div>
+</section>
+
+<section id="sec-lectura" class="section">
+  <div class="card"><div class="eyebrow">Comprehension lab</div><h2 id="reading-title">Cargando lectura...</h2><div id="reading-text" class="reading-text"></div><div class="notice">Lee con atención. No verás una traducción ni respuestas predeterminadas. Después explica en inglés, con tus propias palabras, qué entendiste.</div><textarea id="reading-answer" placeholder="In English, explain what you understood from the text..."></textarea><div class="actions" style="justify-content:flex-start"><button id="reading-btn" class="btn primary" onclick="evaluateReading()">Analizar comprensión</button><button id="new-reading" class="btn" onclick="loadReading()">Nueva lectura</button></div></div>
+  <div id="reading-result" class="result"><h2>Comprehension report</h2><div class="report-grid"><div class="report-stat"><b id="r-score">0</b><small>Score /10</small></div><div class="report-stat"><b id="r-main">0</b><small>Main idea</small></div><div class="report-stat"><b id="r-details">0</b><small>Details</small></div><div class="report-stat"><b id="r-vocab">0</b><small>Vocabulary</small></div></div><div id="reading-summary" style="font-size:12px;line-height:1.8"></div><h3 style="margin-top:18px">What you did well</h3><ul id="reading-hits" class="report-list"></ul><h3 style="margin-top:14px">What was missing</h3><ul id="reading-misses" class="report-list"></ul><h3 style="margin-top:18px">Useful vocabulary</h3><div id="reading-vocab" class="vocab"></div></div>
+</section>
+
+<section id="sec-escucha" class="section">
+  <div class="card"><h2>Listening practice</h2><p class="desc">Escucha la frase y escribe exactamente lo que oigas.</p><div class="actions" style="justify-content:flex-start;margin-top:16px"><button class="btn" onclick="playDictation(1)">🔊 Natural</button><button class="btn" onclick="playDictation(.7)">🐢 Slow</button><button id="new-dict" class="btn primary" onclick="loadDictation()">Nuevo dictado</button></div><input id="dictation" placeholder="Write what you heard..."><button id="dict-btn" class="btn primary" style="width:100%;margin-top:8px" onclick="evaluateDictation()">Verificar dictado</button></div>
+  <div id="dict-result" class="result"><div class="report-grid"><div class="report-stat"><b id="d-score">0</b><small>Score /10</small></div></div><div id="dict-analysis" style="font-size:12px;line-height:1.8"></div></div>
+</section>
+
+<section id="sec-tutor" class="section">
+  <div class="card"><div class="eyebrow">Conversation coach</div><h2>AI Tutor</h2><p class="desc">Practica conversación en inglés con un tutor que mantiene el contexto, adapta el nivel y usa tus resultados de pronunciación cuando están disponibles.</p></div>
+  <div class="tutor-layout">
+    <div class="tutor-avatar"><div class="face">👨‍🏫</div><b>English Coach</b><p>Friendly, patient and focused on helping you speak with confidence.</p></div>
+    <div class="card chat"><div id="messages" class="messages"><div class="msg ai">Hi! I'm your English coach. Tell me about your day in English.</div></div><div class="chat-input"><button class="btn mini" onclick="startTutorVoice()">🎙️</button><input id="tutor-input" placeholder="Type or speak in English..."><button id="tutor-btn" class="btn primary" onclick="sendTutor()">Send</button></div></div>
+  </div>
+</section>
+
+<section id="sec-historial" class="section">
+  <div class="actions" style="justify-content:space-between;margin-bottom:14px"><h2>My progress</h2><button class="btn" onclick="loadHistory()">Actualizar</button></div>
+  <div id="history"><div class="empty">Cargando registros...</div></div>
+</section>
+</div>
+</div>
+</main>
 </div>
 
-<div id="modal-pago" class="modal-overlay">
-  <div class="modal-card">
-    <h2 style="margin-bottom: 10px;">¡Activa tu Plan VIP!</h2>
-    <p style="color:#8b949e; font-size:0.9rem; margin-bottom:15px;">Para acceder a las funciones ilimitadas de Inteligencia Artificial, realiza tu transferencia y envíanos tu comprobante.</p>
-    <div style="background: #0d1117; padding: 15px; border-radius: 8px; text-align:left; margin-bottom: 15px; font-size:0.9rem; border:1px solid #30363d;">
-      <p style="color: #00e676; font-weight:700; margin-bottom:8px;">Datos para Transferencia / Depósito:</p>
-      <p style="margin-bottom:4px;"><strong>Banco:</strong> Banco Azteca</p>
-      <p style="margin-bottom:4px;"><strong>Titular:</strong> Lucero Nava</p>
-      <p style="margin-bottom:4px;"><strong>No. de Cuenta:</strong> 4027 6658 8177 6406</p>
-      <p style="margin-top:8px; font-weight:700; color:#00d2ff;">Monto Suscripción: $129 MXN/mes</p>
-    </div>
-    <a id="link-whatsapp" href="https://wa.me/529911093870?text=Hola,%20realic%C3%A9%20el%20pago%20de%20mi%20suscripci%C3%B3n%20VIP%20para%20English%20Academy%20AI.%20Adjunto%20mi%20comprobante:" target="_blank" class="btn btn-accent" style="display:block; text-decoration: none; padding: 12px; font-weight:700; margin-bottom: 10px;">Enviar Comprobante por WhatsApp</a>
-    <button class="btn btn-danger" onclick="cerrarSesion()" style="width: 100%;">Cerrar Sesión</button>
-  </div>
-</div>
+<div id="auth-modal" class="modal"><div class="modal-card"><h2 id="auth-title">Iniciar sesión</h2><input id="auth-email" type="email" placeholder="Correo electrónico"><input id="auth-password" type="password" placeholder="Contraseña"><button id="auth-submit" class="btn primary" onclick="processAuth()">Ingresar</button><button class="btn" onclick="toggleAuth()" id="auth-toggle">¿No tienes cuenta? Regístrate</button><button class="btn danger" onclick="closeAuth()">Cancelar</button></div></div>
 
 <script>
-  const API_URL = "https://backend-ingles-e3ms.onrender.com";
-  const SUPABASE_URL = "https://lqdgbmuodnshfgokesvd.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_ivnebDTQZ9SeyZQUHBKtmg_yRtH6mFu";
-  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const API_URL="https://backend-ingles-e3ms.onrender.com";
+const SUPABASE_URL="https://lqdgbmuodnshfgokesvd.supabase.co";
+const SUPABASE_ANON_KEY="sb_publishable_ivnebDTQZ9SeyZQUHBKtmg_yRtH6mFu";
+const supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-  let usuarioActual = null;
-  let modoRegistro = false;
-  let mediaRecorder;
-  let audioChunks = [];
-  let grabando = false;
-  let fraseDictadoActual = "";
-  let timerInterval;
-  let segundosGrabacion = 0;
-  let modoPronunciacionActual = 'lectura'; // 'lectura', 'habla_libre', 'trabalenguas'
+let currentUser=null, registerMode=false, pronModeCurrent="lectura";
+let mediaRecorder=null,audioChunks=[],recording=false,timer=0,timerId=null;
+let dictationText="",readingData=null;
+let tutorHistory=[];
 
-  window.addEventListener('DOMContentLoaded', () => {
-    verificarSesion();
-  });
+document.addEventListener("DOMContentLoaded",async()=>{await verifySession();});
 
-  /* MODO DE PRONUNCIACIÓN */
-  function cambiarModoPronunciacion(modo) {
-    modoPronunciacionActual = modo;
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`btn-mode-${modo.replace('_', '-')}`).classList.add('active');
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+function setLoading(id,on,text){const b=document.getElementById(id);if(!b)return;if(on){b.dataset.old=b.innerText;b.innerText=text||"Procesando...";b.classList.add("loading")}else{b.innerText=b.dataset.old||"Listo";b.classList.remove("loading")}}
+function tab(name,btn){document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));if(btn)btn.classList.add("active");document.getElementById("sec-"+name).classList.add("active");if(name==="lectura"&&!readingData)loadReading();if(name==="escucha"&&!dictationText)loadDictation();if(name==="historial")loadHistory();}
+function pronMode(mode){pronModeCurrent=mode;document.querySelectorAll(".mode").forEach(x=>x.classList.remove("active"));document.getElementById("mode-"+mode.replace("_","-")).classList.add("active");document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));document.getElementById("panel-"+mode).classList.add("active");document.getElementById("pron-result").style.display="none";}
 
-    document.getElementById('panel-modo-lectura').style.display = modo === 'lectura' ? 'block' : 'none';
-    document.getElementById('panel-modo-habla-libre').style.display = modo === 'habla_libre' ? 'block' : 'none';
-    document.getElementById('panel-modo-trabalenguas').style.display = modo === 'trabalenguas' ? 'block' : 'none';
-    document.getElementById('resultado-pron').style.display = 'none';
-  }
+function speakText(text,rate=1){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text.replace(/^"|"$/g,""));u.lang="en-US";u.rate=rate;speechSynthesis.speak(u);}
+async function authFetch(url,opt={}){const {data:{session}}=await supabaseClient.auth.getSession();if(!session){openAuth();throw new Error("Sin sesión");}opt.headers={...(opt.headers||{}),Authorization:"Bearer "+session.access_token};return fetch(url,opt);}
+async function verifySession(){const {data:{session}}=await supabaseClient.auth.getSession();await updateUser(session?.user||null);supabaseClient.auth.onAuthStateChange(async(_,s)=>updateUser(s?.user||null));}
+async function updateUser(user){
+ currentUser=user;const display=document.getElementById("user-display"),side=document.getElementById("side-user"),login=document.getElementById("login-btn"),logoutBtn=document.getElementById("logout-btn");
+ if(!user){display.innerText="Inicia sesión para practicar";side.innerText="English Academy";login.style.display="inline-block";logoutBtn.style.display="none";document.getElementById("main-container").style.display="none";openAuth();return;}
+ try{
+  const {data}=await supabaseClient.from("profiles").select("is_subscribed").eq("id",user.id).maybeSingle();
+  if(!data?.is_subscribed){display.innerText=user.email+" · Acceso pendiente";side.innerText=user.email||"Usuario";login.style.display="none";logoutBtn.style.display="inline-block";document.getElementById("main-container").style.display="none";return;}
+  display.innerText=user.email||"Cuenta activa";side.innerText=user.email||"Usuario";login.style.display="none";logoutBtn.style.display="inline-block";document.getElementById("main-container").style.display="block";
+ }catch(e){console.error(e);}
+}
+function openAuth(){document.getElementById("auth-modal").style.display="flex"}function closeAuth(){document.getElementById("auth-modal").style.display="none"}
+function toggleAuth(){registerMode=!registerMode;document.getElementById("auth-title").innerText=registerMode?"Crear cuenta":"Iniciar sesión";document.getElementById("auth-submit").innerText=registerMode?"Crear cuenta":"Ingresar";document.getElementById("auth-toggle").innerText=registerMode?"¿Ya tienes cuenta? Inicia sesión":"¿No tienes cuenta? Regístrate"}
+async function processAuth(){const email=document.getElementById("auth-email").value.trim(),password=document.getElementById("auth-password").value.trim();if(!email||!password)return alert("Ingresa correo y contraseña.");const r=registerMode?await supabaseClient.auth.signUp({email,password}):await supabaseClient.auth.signInWithPassword({email,password});if(r.error)return alert(r.error.message);closeAuth();await verifySession()}
+async function logout(){await supabaseClient.auth.signOut();}
 
-  function obtenerNuevoTemaHablaLibre() {
-    const temas = [
-      "Talk about your day today",
-      "Describe your favorite holiday or vacation spot",
-      "What are your goals for learning English?",
-      "Tell us about your best friend or family member",
-      "Describe your ideal dream job and workplace"
-    ];
-    const aleatorio = temas[Math.floor(Math.random() * temas.length)];
-    document.getElementById('tema-habla-libre').innerText = `"${aleatorio}"`;
-  }
+async function newPhrase(){setLoading("new-phrase",true,"Generando...");try{const r=await fetch(API_URL+"/nueva-frase");const d=await r.json();document.getElementById("phrase").innerText=d.frase;document.getElementById("translation").innerText=d.traduccion}catch(e){alert("No se pudo generar la frase.")}finally{setLoading("new-phrase",false,"Nueva frase")}}
+function useCustomPhrase(){const x=document.getElementById("custom-phrase").value.trim();if(x){document.getElementById("phrase").innerText=x;document.getElementById("translation").innerText="Frase personalizada";document.getElementById("custom-phrase").value=""}}
+async function newTopic(){setLoading("new-topic",true,"Generando...");try{const r=await fetch(API_URL+"/nuevo-tema-libre");const d=await r.json();document.getElementById("free-topic").innerText=d.tema;document.getElementById("free-instructions").innerText=d.instrucciones}catch(e){alert("No se pudo generar el tema.")}finally{setLoading("new-topic",false,"Nuevo tema")}}
+async function newTwister(){setLoading("new-twister",true,"Generando...");try{const r=await fetch(API_URL+"/nuevo-trabalenguas");const d=await r.json();document.getElementById("twister").innerText=d.trabalenguas;document.getElementById("twister-focus").innerText="Enfoque: "+d.enfoque}catch(e){alert("No se pudo generar el reto.")}finally{setLoading("new-twister",false,"Nuevo reto")}}
 
-  function obtenerNuevoTrabalenguas() {
-    const trabalenguas = [
-      "Bouncing basketballs bounce briskly.",
-      "She sells seashells by the seashore.",
-      "Peter Piper picked a peck of pickled peppers.",
-      "How much wood would a woodchuck chuck if a woodchuck could chuck wood?",
-      "Fresh fried fish, fish fresh fried, fried fish fresh, fish fried fresh."
-    ];
-    const aleatorio = trabalenguas[Math.floor(Math.random() * trabalenguas.length)];
-    document.getElementById('trabalenguas-texto').innerText = `"${aleatorio}"`;
-  }
+async function toggleRecord(){
+ const btn=document.getElementById("record-btn");
+ if(recording){clearInterval(timerId);mediaRecorder.stop();recording=false;btn.classList.remove("recording");btn.innerText="Nuestra inteligencia está analizando tu desempeño...";return;}
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});mediaRecorder=new MediaRecorder(stream);audioChunks=[];
+  mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);mediaRecorder.onstop=sendAudio;mediaRecorder.start();recording=true;timer=0;btn.classList.add("recording");btn.innerText="Recording... (0s) · Click to stop";
+  timerId=setInterval(()=>{timer++;btn.innerText=`Recording... (${timer}s) · Click to stop`},1000);
+ }catch(e){alert("No fue posible acceder al micrófono.")}
+}
+async function sendAudio(){
+ const blob=new Blob(audioChunks,{type:"audio/webm"}),fd=new FormData();fd.append("audio",blob);
+ let endpoint=API_URL+"/analizar-audio-real";
+ if(pronModeCurrent==="lectura"){fd.append("frase_esperada",document.getElementById("phrase").innerText);fd.append("modo","lectura")}
+ else if(pronModeCurrent==="trabalenguas"){fd.append("frase_esperada",document.getElementById("twister").innerText);fd.append("modo","trabalenguas")}
+ else {endpoint=API_URL+"/api/assess-unscripted";fd.append("topic",document.getElementById("free-topic").innerText)}
+ try{const r=await authFetch(endpoint,{method:"POST",body:fd});const d=await r.json();if(!r.ok)throw new Error(d.error||"No se pudo analizar.");renderPron(d)}catch(e){alert(e.message)}finally{document.getElementById("record-btn").innerText="Start recording";document.querySelectorAll("audio").forEach(x=>x.remove())}
+}
+function renderPron(d){
+ const box=document.getElementById("pron-result");box.style.display="block";
+ if(pronModeCurrent==="habla_libre"){const c=d.content_assessment||{};document.getElementById("global-score").innerText=d.pronunciation_score??0;renderMeters([{n:"Pronunciación",v:d.accuracy_score||0},{n:"Fluidez",v:d.fluency_score||0},{n:"Prosodia",v:d.prosody_score||0},{n:"Gramática",v:c.grammar_score||0},{n:"Vocabulario",v:c.vocabulary_score||0},{n:"Tema",v:c.topic_score||0}]);document.getElementById("words").innerHTML=`<div style="color:var(--muted);font-size:12px">Transcripción: ${esc(d.transcription||"")}</div>`;return}
+ const i=d.inspeccion||{};document.getElementById("i-om").innerText=i.omisiones||0;document.getElementById("i-mis").innerText=i.pronunciaciones_incoherentes||0;document.getElementById("i-in").innerText=i.inserciones||0;document.getElementById("i-break").innerText=i.interrupcion_inesperada||0;document.getElementById("i-rest").innerText=i.falta_un_descanso||0;document.getElementById("i-mono").innerText=i.monotona||0;document.getElementById("global-score").innerText=d.puntuacion_global||0;
+ renderMeters([{n:"Precisión fonética",v:d.precision||0},{n:"Fluidez",v:d.fluidez||0},{n:"Completitud",v:d.completitud||0},{n:"Prosodia",v:d.prosodia||0}]);
+ const w=document.getElementById("words");w.innerHTML="";(d.palabras||[]).forEach(item=>{const el=document.createElement("button");el.className="word";el.innerHTML=`<b>${esc(item.palabra)}</b><small>${item.precision||0}%</small>`;el.onclick=()=>showPhonemes(item);w.appendChild(el)});document.getElementById("phonemes").style.display="none";
+}
+function renderMeters(arr){document.getElementById("metric-list").innerHTML=arr.map(m=>`<div class="meter"><div class="meter-head"><span>${esc(m.n)}</span><span>${m.v}%</span></div><div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,m.v))}%"></div></div></div>`).join("")}
+function showPhonemes(item){document.getElementById("phonemes").style.display="block";document.getElementById("phoneme-title").innerText=`${item.palabra} · ${item.precision||0}%`;document.getElementById("chips").innerHTML=(item.fonemas||[]).map(p=>`<span class="chip">/${esc(p.fonema)}/ · ${p.precision}%</span>`).join("")||"<span style='color:var(--muted);font-size:11px'>Sin desglose disponible.</span>"}
 
-  function hablarTrabalenguasNativo() {
-    const texto = document.getElementById('trabalenguas-texto').innerText.replace(/"/g, "");
-    const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'en-US';
-    window.speechSynthesis.speak(utterance);
-  }
+async function evaluateWriting(){const text=document.getElementById("writing").value.trim();if(!text)return alert("Escribe primero.");setLoading("writing-btn",true,"Analizando...");try{const r=await authFetch(API_URL+"/analizar-escritura",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({texto:text})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById("writing-result").style.display="block";document.getElementById("w-score").innerText=d.calificacion??0;document.getElementById("w-grammar").innerText=d.gramatica??0;document.getElementById("w-vocab").innerText=d.vocabulario??0;document.getElementById("w-natural").innerText=d.naturalidad??0;document.getElementById("writing-analysis").innerHTML=`<b>Analysis</b><p>${esc(d.analisis||"")}</p><br><b>Corrections</b><ul class="report-list">${(d.correcciones||[]).map(x=>`<li><b>${esc(x.original)}</b> → ${esc(x.corregido)} — ${esc(x.explicacion)}</li>`).join("")}</ul><br><b>More natural version</b><p>${esc(d.version_natural||"")}</p><br><b>Next step</b><p>${esc(d.siguiente_paso||"")}</p>`}catch(e){alert(e.message)}finally{setLoading("writing-btn",false,"Evaluar mi escritura")}}
 
-  function iniciarCronometro() {
-    segundosGrabacion = 0;
-    const btn = document.getElementById('btn-grabar');
-    btn.innerText = `Recording... (${segundosGrabacion}s) Click to Stop`;
-    timerInterval = setInterval(() => {
-      segundosGrabacion++;
-      btn.innerText = `Recording... (${segundosGrabacion}s) Click to Stop`;
-    }, 1000);
-  }
+async function loadReading(){setLoading("new-reading",true,"Generando...");try{const r=await authFetch(API_URL+"/nuevo-texto-lectura");const d=await r.json();if(!r.ok)throw new Error(d.error);readingData=d;document.getElementById("reading-title").innerText=d.titulo;document.getElementById("reading-text").innerText=d.texto;document.getElementById("reading-answer").value="";document.getElementById("reading-result").style.display="none"}catch(e){alert(e.message)}finally{setLoading("new-reading",false,"Nueva lectura")}}
+async function evaluateReading(){if(!readingData)return;const ans=document.getElementById("reading-answer").value.trim();if(!ans)return alert("Escribe en inglés lo que entendiste.");setLoading("reading-btn",true,"Analizando comprensión...");try{const r=await authFetch(API_URL+"/evaluar-lectura",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({titulo:readingData.titulo,texto:readingData.texto,respuesta:ans})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById("reading-result").style.display="block";document.getElementById("r-score").innerText=d.calificacion??0;document.getElementById("r-main").innerText=(d.idea_principal??0)+"%";document.getElementById("r-details").innerText=(d.detalles??0)+"%";document.getElementById("r-vocab").innerText=(d.vocabulario??0)+"%";document.getElementById("reading-summary").innerHTML=`<p>${esc(d.resumen_evaluacion||"")}</p><p style="color:var(--muted);margin-top:8px">Estimated level: ${esc(d.nivel_estimado||"")}</p><p style="color:var(--muted);margin-top:8px">${esc(d.recomendacion||"")}</p>`;document.getElementById("reading-hits").innerHTML=(d.aciertos||[]).map(x=>`<li>${esc(x)}</li>`).join("");document.getElementById("reading-misses").innerHTML=(d.faltantes||[]).map(x=>`<li>${esc(x)}</li>`).join("");document.getElementById("reading-vocab").innerHTML=(d.vocabulario_util||[]).map(x=>`<div class="vocab-card"><b>${esc(x.palabra)}</b><p>${esc(x.significado)}</p><p><i>${esc(x.ejemplo)}</i></p></div>`).join("")}catch(e){alert(e.message)}finally{setLoading("reading-btn",false,"Analizar comprensión")}}
+async function loadDictation(){setLoading("new-dict",true,"Generando...");try{const r=await authFetch(API_URL+"/nuevo-dictado");const d=await r.json();if(!r.ok)throw new Error(d.error);dictationText=d.frase;document.getElementById("dictation").value="";document.getElementById("dict-result").style.display="none"}catch(e){alert(e.message)}finally{setLoading("new-dict",false,"Nuevo dictado")}}
+function playDictation(rate){if(dictationText)speakText(dictationText,rate)}
+async function evaluateDictation(){const u=document.getElementById("dictation").value.trim();if(!u)return alert("Escribe lo que escuchaste.");setLoading("dict-btn",true,"Comparando...");try{const r=await authFetch(API_URL+"/evaluar-dictado",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({original:dictationText,usuario:u})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById("dict-result").style.display="block";document.getElementById("d-score").innerText=d.calificacion??0;document.getElementById("dict-analysis").innerHTML=`<p>${esc(d.analisis||"")}</p><ul class="report-list">${(d.aciertos||[]).map(x=>`<li>✓ ${esc(x)}</li>`).join("")}${(d.errores||[]).map(x=>`<li>• ${esc(x)}</li>`).join("")}</ul><p style="margin-top:10px;color:var(--muted)">${esc(d.consejo||"")}</p>`}catch(e){alert(e.message)}finally{setLoading("dict-btn",false,"Verificar dictado")}}
 
-  function detenerCronometro() {
-    clearInterval(timerInterval);
-  }
-
-  async function fetchAutenticado(url, options = {}) {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) {
-      alert("Debes iniciar sesión para continuar.");
-      abrirModalAuth();
-      throw new Error("Sin sesión");
-    }
-    options.headers = {
-      ...(options.headers || {}),
-      'Authorization': `Bearer ${session.access_token}`
-    };
-    return await fetch(url, options);
-  }
-
-  async function verificarSesion() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    await actualizarEstadoUsuario(session ? session.user : null);
-
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-      await actualizarEstadoUsuario(session ? session.user : null);
-    });
-  }
-
-  async function actualizarEstadoUsuario(user) {
-    usuarioActual = user;
-    const userDisplay = document.getElementById('user-display');
-    const sidebarUserName = document.getElementById('sidebar-user-name');
-    if (sidebarUserName) sidebarUserName.innerText = user ? (user.email || 'Usuario') : 'English Academy';
-
-    const btnLoginModal = document.getElementById('btn-login-modal');
-    const btnLogout = document.getElementById('btn-logout');
-    const mainContainer = document.getElementById('main-container');
-    const modalPago = document.getElementById('modal-pago');
-
-    if (user) {
-      try {
-        const { data } = await supabaseClient.from('profiles').select('is_subscribed').eq('id', user.id).maybeSingle();
-        const estaSuscrito = data ? data.is_subscribed : false;
-        if (estaSuscrito) {
-          userDisplay.innerText = `${user.email} (VIP)`;
-          btnLoginModal.style.display = 'none';
-          btnLogout.style.display = 'inline-block';
-          mainContainer.style.display = 'block';
-          modalPago.style.display = 'none';
-        } else {
-          userDisplay.innerText = `${user.email} (Inactivo)`;
-          btnLoginModal.style.display = 'none';
-          btnLogout.style.display = 'inline-block';
-          mainContainer.style.display = 'none';
-          modalPago.style.display = 'flex';
-        }
-        cerrarModalAuth();
-      } catch (err) {
-        console.error("Error consultando perfil:", err);
-      }
-    } else {
-      userDisplay.innerText = "Acceso Restringido";
-      btnLoginModal.style.display = 'inline-block';
-      btnLogout.style.display = 'none';
-      mainContainer.style.display = 'none';
-      modalPago.style.display = 'none';
-      abrirModalAuth();
-    }
-  }
-
-  function abrirModalAuth() { document.getElementById('modal-auth').style.display = 'flex'; }
-  function cerrarModalAuth() { document.getElementById('modal-auth').style.display = 'none'; }
-
-  function alternarModoAuth() {
-    modoRegistro = !modoRegistro;
-    document.getElementById('auth-title').innerText = modoRegistro ? "Crear Cuenta" : "Iniciar Sesión";
-    document.getElementById('btn-toggle-auth').innerText = modoRegistro ? "¿Ya tienes cuenta? Inicia Sesión" : "¿No tienes cuenta? Regístrate";
-  }
-
-  async function procesarAuth() {
-    const email = document.getElementById('auth-email').value.trim();
-    const password = document.getElementById('auth-password').value.trim();
-    if (!email || !password) { alert("Ingresa correo y contraseña."); return; }
-
-    if (modoRegistro) {
-      const { error } = await supabaseClient.auth.signUp({ email, password });
-      if (error) alert("Error al registrar: " + error.message);
-      else { alert("Cuenta registrada con éxito. Ya puedes ingresar."); cerrarModalAuth(); }
-    } else {
-      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) alert("Error de ingreso: " + error.message);
-      else cerrarModalAuth();
-    }
-  }
-
-  async function cerrarSesion() { await supabaseClient.auth.signOut(); }
-
-  function cambiarPestana(nombre, btnElement) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-    btnElement.classList.add('active');
-    document.getElementById(`sec-${nombre}`).classList.add('active');
-
-    if (nombre === 'lectura') cargarLectura();
-    if (nombre === 'escucha') cargarDictado();
-    if (nombre === 'historial') cargarHistorial();
-  }
-
-  function hablarNativo(velocidad) {
-    const texto = document.getElementById('frase-esperada').innerText.replace(/"/g, "");
-    const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'en-US';
-    utterance.rate = velocidad;
-    window.speechSynthesis.speak(utterance);
-  }
-
-  async function obtenerNuevaFrase() {
-    try {
-      const res = await fetch(`${API_URL}/nueva-frase`);
-      const data = await res.json();
-      document.getElementById('frase-esperada').innerText = `"${data.frase}"`;
-      document.getElementById('frase-traduccion').innerText = data.traduccion;
-    } catch (e) { alert("Error conectando con el servidor"); }
-  }
-
-  function usarFrasePersonalizada() {
-    const texto = document.getElementById('input-personalizado').value.trim();
-    if (texto) {
-      document.getElementById('frase-esperada').innerText = `"${texto}"`;
-      document.getElementById('frase-traduccion').innerText = "Frase personalizada";
-      document.getElementById('input-personalizado').value = "";
-    }
-  }
-
-  async function alternarGrabacion() {
-    const btn = document.getElementById('btn-grabar');
-    if (!grabando) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.onstop = enviarAudioServidor;
-        mediaRecorder.start();
-        grabando = true;
-        btn.classList.add('recording');
-        iniciarCronometro();
-      } catch (err) { alert("Error al acceder al micrófono: " + err.message); }
-    } else {
-      detenerCronometro();
-      mediaRecorder.stop();
-      grabando = false;
-      btn.innerText = "Analyzing your recording...";
-      btn.classList.remove('recording');
-    }
-  }
-
-  function renderizarRespuestaPronunciacion(data) {
-    const insp = data.inspeccion || {};
-    document.getElementById('val-omisiones').innerText = insp.omisiones || 0;
-    document.getElementById('val-incoherentes').innerText = insp.pronunciaciones_incoherentes || insp.incoherentes || 0;
-    document.getElementById('val-inserciones').innerText = insp.inserciones || 0;
-    document.getElementById('val-interrupcion').innerText = insp.interrupcion_inesperada || 0;
-    document.getElementById('val-descanso').innerText = insp.falta_un_descanso || 0;
-    document.getElementById('val-monotona').innerText = insp.monotona || 0;
-
-    document.getElementById('azure-puntuacion-global').innerText = data.puntuacion_global || 0;
-
-    const listCont = document.getElementById('contenedor-metricas-variables');
-    listCont.innerHTML = "";
-
-    if (modoPronunciacionActual === 'habla_libre') {
-      const metricasContent = [
-        { label: "Vocabulario", val: data.vocabulario || 0 },
-        { label: "Gramática", val: data.gramatica || 0 },
-        { label: "Coherencia Temática", val: data.coherencia || 0 },
-        { label: "Pronunciación Fonética", val: data.precision || 0 }
-      ];
-      metricasContent.forEach(m => {
-        listCont.innerHTML += `
-          <div class="azure-metric-item">
-            <div class="azure-metric-head"><span>${m.label}</span><span>${m.val}%</span></div>
-            <div class="azure-bar-bg"><div class="azure-bar-fill" style="width: ${m.val}%;"></div></div>
-          </div>`;
-      });
-    } else {
-      const metricasStandard = [
-        { label: "Precisión Fonética", val: data.precision || 0 },
-        { label: "Fluidez", val: data.fluidez || 0 },
-        { label: "Integridad / Completitud", val: data.completitud || 0 },
-        { label: "Prosodia (Ritmo y Tono)", val: data.prosodia || 0 }
-      ];
-      metricasStandard.forEach(m => {
-        listCont.innerHTML += `
-          <div class="azure-metric-item">
-            <div class="azure-metric-head"><span>${m.label}</span><span>${m.val}%</span></div>
-            <div class="azure-bar-bg"><div class="azure-bar-fill" style="width: ${m.val}%;"></div></div>
-          </div>`;
-      });
-    }
-
-    const contenedor = document.getElementById('palabras-pron');
-    const phonemesBox = document.getElementById('phonemes-box');
-    contenedor.innerHTML = "";
-    phonemesBox.style.display = 'none';
-
-    if (data.palabras && Array.isArray(data.palabras)) {
-      data.palabras.forEach(item => {
-        const block = document.createElement('div');
-        block.classList.add('word-block');
-
-        const score = item.puntuacion || item.precision || 0;
-        let scoreClass = 'score-high';
-        if (score < 60) scoreClass = 'score-low';
-        else if (score < 80) scoreClass = 'score-mid';
-
-        let errTag = '';
-        if (item.error_type === 'Omission') errTag = '<div class="word-err-tag" style="color:#606060;">Omitida</div>';
-        else if (item.error_type === 'Mispronunciation') errTag = '<div class="word-err-tag" style="color:#d8a000;">Incoherente</div>';
-        else if (item.error_type === 'Insertion') errTag = '<div class="word-err-tag" style="color:#a80000;">Inserción</div>';
-
-        block.innerHTML = `
-          <div class="word-text">${item.palabra}</div>
-          <div class="word-score ${scoreClass}">${score}%</div>
-          ${errTag}
-        `;
-        block.onclick = () => mostrarFonemasPalabra(item);
-        contenedor.appendChild(block);
-      });
-      contenedor.style.display = 'flex';
-    }
-  }
-
-  function mostrarFonemasPalabra(item) {
-    const phonemesBox = document.getElementById('phonemes-box');
-    const title = document.getElementById('phoneme-word-title');
-    const chipsCont = document.getElementById('phoneme-chips');
-
-    title.innerText = `Palabra: "${item.palabra}" (Precisión: ${item.precision || item.puntuacion}%)`;
-    chipsCont.innerHTML = "";
-
-    if (item.fonemas && item.fonemas.length > 0) {
-      item.fonemas.forEach(p => {
-        const chip = document.createElement('div');
-        chip.classList.add('phoneme-chip');
-        let color = p.precision >= 80 ? '#3dcc91' : (p.precision >= 60 ? '#e7ad52' : '#ef6b73');
-        chip.innerHTML = `<span>/${p.fonema}/</span> <span style="color:${color}">${p.precision}%</span>`;
-        chipsCont.appendChild(chip);
-      });
-    } else {
-      chipsCont.innerHTML = "<span style='font-size:12px; color:var(--text-secondary);'>No hay desglose de fonemas disponible para esta palabra.</span>";
-    }
-    phonemesBox.style.display = 'block';
-  }
-
-  async function enviarAudioServidor() {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
-
-    let endpoint = `${API_URL}/analizar-audio-real`;
-    if (modoPronunciacionActual === 'lectura') {
-      const frase = document.getElementById('frase-esperada').innerText.replace(/"/g, "");
-      formData.append('frase_esperada', frase);
-      formData.append('modo', 'lectura');
-    } else if (modoPronunciacionActual === 'habla_libre') {
-      const tema = document.getElementById('tema-habla-libre').innerText.replace(/"/g, "");
-      formData.append('tema', tema);
-      formData.append('modo', 'habla_libre');
-    } else if (modoPronunciacionActual === 'trabalenguas') {
-      const trabalenguas = document.getElementById('trabalenguas-texto').innerText.replace(/"/g, "");
-      formData.append('frase_esperada', trabalenguas);
-      formData.append('modo', 'trabalenguas');
-    }
-
-    try {
-      const res = await fetchAutenticado(endpoint, { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Error al analizar el audio."); return; }
-
-      document.getElementById('resultado-pron').style.display = 'block';
-      renderizarRespuestaPronunciacion(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      document.getElementById('btn-grabar').innerText = "Start recording";
-    }
-  }
-
-  async function evaluarEscritura() {
-    const texto = document.getElementById('texto-escritura').value.trim();
-    if (!texto) { alert("Escribe un párrafo primero."); return; }
-    try {
-      const res = await fetchAutenticado(`${API_URL}/analizar-escritura`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto })
-      });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Error al analizar."); return; }
-
-      document.getElementById('resultado-escritura').style.display = 'block';
-      document.getElementById('calificacion-escritura').innerText = `${data.calificacion}/10`;
-      document.getElementById('analisis-escritura').innerHTML = marked.parse(data.analisis);
-    } catch (e) { alert("Error de conexión."); }
-  }
-
-  async function cargarLectura() {
-    try {
-      const res = await fetchAutenticado(`${API_URL}/nuevo-texto-lectura`);
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Error al obtener lectura."); return; }
-
-      document.getElementById('lectura-titulo').innerText = data.titulo;
-      document.getElementById('lectura-texto').innerText = data.texto;
-      document.getElementById('lectura-traduccion').innerText = data.traduccion;
-
-      const cont = document.getElementById('lectura-preguntas');
-      cont.innerHTML = data.preguntas.map(p => `
-        <h4 style="margin-bottom: 10px;">${p.pregunta}</h4>
-        ${p.opciones.map((opc, idx) => `
-          <button class="btn" style="margin-right: 5px; margin-bottom: 8px;" onclick="verificarRespuestaLectura(${idx}, ${p.correcta}, '${p.explicacion.replace(/'/g, "\\'")}')">${opc}</button>
-        `).join('')}
-      `).join('');
-    } catch (e) { console.error(e); }
-  }
-
-  function verificarRespuestaLectura(seleccion, correcta, explicacion) {
-    alert(seleccion === correcta ? `¡Correcto!\n\n${explicacion}` : `Incorrecto. Inténtalo de nuevo.\n\n${explicacion}`);
-  }
-
-  async function cargarDictado() {
-    try {
-      const res = await fetchAutenticado(`${API_URL}/nuevo-dictado`);
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Error al cargar dictado."); return; }
-
-      fraseDictadoActual = data.frase;
-      document.getElementById('input-dictado').value = "";
-      document.getElementById('resultado-dictado').style.display = "none";
-    } catch (e) { console.error(e); }
-  }
-
-  function reproducirDictado(velocidad) {
-    if (!fraseDictadoActual) return;
-    const utterance = new SpeechSynthesisUtterance(fraseDictadoActual);
-    utterance.lang = 'en-US';
-    utterance.rate = velocidad;
-    window.speechSynthesis.speak(utterance);
-  }
-
-  async function evaluarDictado() {
-    const usrText = document.getElementById('input-dictado').value.trim();
-    if (!usrText) { alert("Escribe lo que escuchaste."); return; }
-    try {
-      const res = await fetchAutenticado(`${API_URL}/evaluar-dictado`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ original: fraseDictadoActual, usuario: usrText })
-      });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Error evaluando dictado."); return; }
-
-      document.getElementById('resultado-dictado').style.display = 'block';
-      document.getElementById('calificacion-dictado').innerText = `${data.calificacion}/10`;
-      document.getElementById('analisis-dictado').innerHTML = marked.parse(data.analisis);
-    } catch (e) { alert("Error evaluando dictado."); }
-  }
-
-  async function cargarHistorial() {
-    const cont = document.getElementById('contenedor-historial');
-    cont.innerHTML = "<p style='text-align:center;'>Cargando registros...</p>";
-    try {
-      const res = await fetchAutenticado(`${API_URL}/obtener-historial`);
-      const registros = await res.json();
-      if (!res.ok) {
-        cont.innerHTML = `<p style='text-align:center; color:#ff5252;'>${registros.error || "Error al cargar historial."}</p>`;
-        return;
-      }
-      if (!registros || registros.length === 0) {
-        cont.innerHTML = "<p style='text-align:center;'>Aún no hay prácticas guardadas.</p>";
-        return;
-      }
-      cont.innerHTML = registros.map(item => `
-        <div class="history-card">
-          <div class="history-header">
-            <span>"${item.frase_esperada}"</span>
-            <span style="color:#00e676;">${item.puntuacion_global} / 100 pts</span>
-          </div>
-          <div class="history-scores">
-            <span>Precisión: ${item.precision_fonemas}%</span>
-            <span>Fluidez: ${item.fluidez}%</span>
-            <span>Completitud: ${item.completitud}%</span>
-          </div>
-        </div>
-      `).join('');
-    } catch (e) {
-      cont.innerHTML = "<p style='text-align:center; color:#ff5252;'>Error de conexión con el backend.</p>";
-    }
-  }
+function addMessage(text,who){const box=document.getElementById("messages"),el=document.createElement("div");el.className="msg "+who;el.innerText=text;box.appendChild(el);box.scrollTop=box.scrollHeight}
+async function sendTutor(){const input=document.getElementById("tutor-input"),text=input.value.trim();if(!text)return;input.value="";addMessage(text,"user");const btn=document.getElementById("tutor-btn");setLoading("tutor-btn",true,"Thinking...");try{const pron=document.getElementById("global-score").innerText;const r=await authFetch(API_URL+"/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text,history:tutorHistory.slice(-8),pronunciation_score:pron})});const d=await r.json();if(!r.ok)throw new Error(d.error);tutorHistory.push({role:"user",content:text},{role:"assistant",content:d.reply});addMessage(d.reply,"ai");speakText(d.reply,.95)}catch(e){addMessage("Sorry, I couldn't respond right now.","ai")}finally{setLoading("tutor-btn",false,"Send")}}
+function startTutorVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert("Tu navegador no permite reconocimiento de voz aquí.");const rec=new SR();rec.lang="en-US";rec.interimResults=false;rec.maxAlternatives=1;rec.onresult=e=>{document.getElementById("tutor-input").value=e.results[0][0].transcript;sendTutor()};rec.onerror=()=>alert("No pude captar tu voz.");rec.start()}
+async function loadHistory(){const box=document.getElementById("history");box.innerHTML="<div class='empty'>Cargando...</div>";try{const r=await authFetch(API_URL+"/obtener-historial");const d=await r.json();if(!r.ok)throw new Error(d.error);if(!d.length){box.innerHTML="<div class='empty'>Todavía no hay prácticas guardadas.</div>";return}box.innerHTML=d.map(x=>`<div class="history"><div class="history-head"><span>${esc(x.frase_esperada)}</span><span class="history-score">${x.puntuacion_global}/100</span></div><div class="history-meta"><span>Precisión ${x.precision_fonemas}%</span><span>Fluidez ${x.fluidez}%</span><span>Completitud ${x.completitud}%</span></div></div>`).join("")}catch(e){box.innerHTML="<div class='empty'>No fue posible cargar el progreso.</div>"}}
 </script>
 </body>
 </html>
