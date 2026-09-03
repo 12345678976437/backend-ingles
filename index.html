@@ -392,6 +392,48 @@ async function logout(){
 }
 
 
+
+function tab(name,btn){
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  const section=document.getElementById("sec-"+name);
+  if(!section){
+    console.error("[NAV] No existe la sección sec-"+name);
+    return;
+  }
+  section.classList.add("active");
+  if(name==="lectura"&&!readingData)loadReading();
+  if(name==="escucha"&&!dictationText)loadDictation();
+  if(name==="historial")loadHistory();
+  if(name==="progreso"&&typeof loadProgress==="function")loadProgress();
+}
+
+function pronMode(mode){
+  pronModeCurrent=mode;
+  document.querySelectorAll(".mode").forEach(x=>x.classList.remove("active"));
+  const modeId="mode-"+mode.replace("_","-");
+  const modeButton=document.getElementById(modeId);
+  if(modeButton)modeButton.classList.add("active");
+  document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+  const panel=document.getElementById("panel-"+mode);
+  if(panel)panel.classList.add("active");
+  const result=document.getElementById("pron-result");
+  if(result)result.style.display="none";
+}
+
+function speakText(text,rate=1){
+  if(!("speechSynthesis" in window)){
+    console.warn("[VOICE] speechSynthesis no disponible");
+    return;
+  }
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(String(text).replace(/^"|"$/g,""));
+  u.lang="en-US";
+  u.rate=rate;
+  speechSynthesis.speak(u);
+}
+
 async function newPhrase(){
   setLoading("new-phrase",true,"Generando...");
   try{
