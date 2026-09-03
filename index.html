@@ -391,6 +391,205 @@ async function logout(){
   openAuth();
 }
 
+
+async function newPhrase(){
+  setLoading("new-phrase",true,"Generando...");
+  try{
+    const r=await fetch(API_URL+"/nueva-frase");
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"No se pudo generar la frase.");
+    document.getElementById("phrase").innerText=d.frase||"";
+    document.getElementById("translation").innerText=d.traduccion||"";
+  }catch(e){alert(e.message||"No se pudo generar la frase.");}
+  finally{setLoading("new-phrase",false,"Nueva frase");}
+}
+
+function useCustomPhrase(){
+  const x=document.getElementById("custom-phrase").value.trim();
+  if(!x)return;
+  document.getElementById("phrase").innerText=x;
+  document.getElementById("translation").innerText="Frase personalizada";
+  document.getElementById("custom-phrase").value="";
+}
+
+async function newTopic(){
+  setLoading("new-topic",true,"Generando...");
+  try{
+    const r=await fetch(API_URL+"/nuevo-tema-libre");
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"No se pudo generar el tema.");
+    document.getElementById("free-topic").innerText=d.tema||"";
+    document.getElementById("free-instructions").innerText=d.instrucciones||"";
+  }catch(e){alert(e.message||"No se pudo generar el tema.");}
+  finally{setLoading("new-topic",false,"Nuevo tema");}
+}
+
+async function newTwister(){
+  setLoading("new-twister",true,"Generando...");
+  try{
+    const r=await fetch(API_URL+"/nuevo-trabalenguas");
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"No se pudo generar el reto.");
+    document.getElementById("twister").innerText=d.trabalenguas||"";
+    document.getElementById("twister-focus").innerText="Enfoque: "+(d.enfoque||"");
+  }catch(e){alert(e.message||"No se pudo generar el reto.");}
+  finally{setLoading("new-twister",false,"Nuevo reto");}
+}
+
+async function toggleRecord(){
+  const btn=document.getElementById("record-btn");
+  if(recording){
+    clearInterval(timerId);
+    if(mediaRecorder && mediaRecorder.state!=="inactive")mediaRecorder.stop();
+    recording=false;
+    btn.classList.remove("recording");
+    btn.innerText="Analizando tu desempeño...";
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia){
+    alert("Tu navegador no permite acceso al micrófono. Usa Chrome o Edge con HTTPS.");
+    return;
+  }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRecorder=new MediaRecorder(stream);
+    audioChunks=[];
+    mediaRecorder.ondataavailable=e=>{if(e.data.size>0)audioChunks.push(e.data)};
+    mediaRecorder.onstop=()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      sendAudio();
+    };
+    mediaRecorder.start();
+    recording=true;
+    timer=0;
+    btn.classList.add("recording");
+    btn.innerText="Recording... (0s) · Click to stop";
+    timerId=setInterval(()=>{timer++;btn.innerText=`Recording... (${timer}s) · Click to stop`},1000);
+  }catch(e){
+    console.error("[MIC]",e);
+    alert("No fue posible acceder al micrófono. Revisa los permisos del navegador.");
+  }
+}
+
+async function sendAudio(){
+  const blob=new Blob(audioChunks,{type:"audio/webm"});
+  const fd=new FormData();
+  fd.append("audio",blob,"recording.webm");
+
+  let endpoint=API_URL+"/analizar-audio-real";
+  if(pronModeCurrent==="lectura"){
+    fd.append("frase_esperada",document.getElementById("phrase").innerText);
+    fd.append("modo","lectura");
+  }else if(pronModeCurrent==="trabalenguas"){
+    fd.append("frase_esperada",document.getElementById("twister").innerText);
+    fd.append("modo","trabalenguas");
+  }else{
+    endpoint=API_URL+"/api/assess-unscripted";
+    fd.append("topic",document.getElementById("free-topic").innerText);
+  }
+
+  try{
+    const r=await authFetch(endpoint,{method:"POST",body:fd});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"No se pudo analizar el audio.");
+    renderPron(d);
+  }catch(e){
+    console.error("[PRONUNCIATION]",e);
+    alert(e.message||"No se pudo analizar el audio.");
+  }finally{
+    document.getElementById("record-btn").innerText="Start recording";
+    document.querySelectorAll("audio").forEach(x=>x.remove());
+  }
+}
+
+function renderPron(d){
+  const box=document.getElementById("pron-result");
+  box.style.display="block";
+
+  if(pronModeCurrent==="habla_libre"){
+    const c=d.content_assessment||{};
+    document.getElementById("global-score").innerText=d.pronunciation_score??0;
+    renderMeters([
+      {n:"Pronunciación",v:d.accuracy_score||0},
+      {n:"Fluidez",v:d.fluency_score||0},
+      {n:"Prosodia",v:d.prosody_score||0},
+      {n:"Gramática",v:c.grammar_score||0},
+      {n:"Vocabulario",v:c.vocabulary_score||0},
+      {n:"Tema",v:c.topic_score||0}
+    ]);
+    document.getElementById("words").innerHTML=`<div style="color:var(--muted);font-size:12px">Transcripción: ${esc(d.transcription||"")}</div>`;
+    return;
+  }
+
+  const i=d.inspeccion||{};
+  document.getElementById("i-om").innerText=i.omisiones||0;
+  document.getElementById("i-mis").innerText=i.pronunciaciones_incoherentes||0;
+  document.getElementById("i-in").innerText=i.inserciones||0;
+  document.getElementById("i-break").innerText=i.interrupcion_inesperada||0;
+  document.getElementById("i-rest").innerText=i.falta_un_descanso||0;
+  document.getElementById("i-mono").innerText=i.monotona||0;
+  document.getElementById("global-score").innerText=d.puntuacion_global||0;
+
+  renderMeters([
+    {n:"Precisión fonética",v:d.precision||0},
+    {n:"Fluidez",v:d.fluidez||0},
+    {n:"Completitud",v:d.completitud||0},
+    {n:"Prosodia",v:d.prosodia||0}
+  ]);
+
+  const w=document.getElementById("words");
+  w.innerHTML="";
+  (d.palabras||[]).forEach(item=>{
+    const el=document.createElement("button");
+    el.type="button";
+    el.className="word";
+    el.innerHTML=`<b>${esc(item.palabra)}</b><small>${item.precision||0}%</small>`;
+    el.onclick=()=>showPhonemes(item);
+    w.appendChild(el);
+  });
+  document.getElementById("phonemes").style.display="none";
+}
+
+function renderMeters(arr){
+  document.getElementById("metric-list").innerHTML=arr.map(m=>
+    `<div class="meter"><div class="meter-head"><span>${esc(m.n)}</span><span>${m.v}%</span></div><div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,m.v))}%"></div></div></div>`
+  ).join("");
+}
+
+function showPhonemes(item){
+  document.getElementById("phonemes").style.display="block";
+  document.getElementById("phoneme-title").innerText=`${item.palabra} · ${item.precision||0}%`;
+  document.getElementById("chips").innerHTML=(item.fonemas||[]).map(p=>
+    `<span class="chip">/${esc(p.fonema)}/ · ${p.precision}%</span>`
+  ).join("")||"<span style='color:var(--muted);font-size:11px'>Sin desglose disponible.</span>";
+}
+
+async function evaluateWriting(){
+  const text=document.getElementById("writing").value.trim();
+  if(!text)return alert("Escribe primero.");
+  setLoading("writing-btn",true,"Analizando...");
+  try{
+    const r=await authFetch(API_URL+"/analizar-escritura",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({texto:text})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"No se pudo evaluar la escritura.");
+    document.getElementById("writing-result").style.display="block";
+    document.getElementById("w-score").innerText=d.calificacion??0;
+    document.getElementById("w-grammar").innerText=d.gramatica??0;
+    document.getElementById("w-vocab").innerText=d.vocabulario??0;
+    document.getElementById("w-natural").innerText=d.naturalidad??0;
+    document.getElementById("writing-analysis").innerHTML=
+      `<b>Analysis</b><p>${esc(d.analisis||"")}</p><br>
+       <b>Corrections</b><ul class="report-list">${(d.correcciones||[]).map(x=>`<li><b>${esc(x.original)}</b> → ${esc(x.corregido)} — ${esc(x.explicacion)}</li>`).join("")}</ul><br>
+       <b>More natural version</b><p>${esc(d.version_natural||"")}</p><br>
+       <b>Next step</b><p>${esc(d.siguiente_paso||"")}</p>`;
+  }catch(e){alert(e.message||"No se pudo evaluar la escritura.");}
+  finally{setLoading("writing-btn",false,"Evaluar mi escritura");}
+}
+
 async function loadReading(){setLoading("new-reading",true,"Generando...");try{const r=await authFetch(API_URL+"/nuevo-texto-lectura");const d=await r.json();if(!r.ok)throw new Error(d.error);readingData=d;document.getElementById("reading-title").innerText=d.titulo;document.getElementById("reading-text").innerText=d.texto;document.getElementById("reading-answer").value="";document.getElementById("reading-result").style.display="none"}catch(e){alert(e.message)}finally{setLoading("new-reading",false,"Nueva lectura")}}
 async function evaluateReading(){if(!readingData)return;const ans=document.getElementById("reading-answer").value.trim();if(!ans)return alert("Escribe en inglés lo que entendiste.");setLoading("reading-btn",true,"Analizando comprensión...");try{const r=await authFetch(API_URL+"/evaluar-lectura",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({titulo:readingData.titulo,texto:readingData.texto,respuesta:ans})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById("reading-result").style.display="block";document.getElementById("r-score").innerText=d.calificacion??0;document.getElementById("r-main").innerText=(d.idea_principal??0)+"%";document.getElementById("r-details").innerText=(d.detalles??0)+"%";document.getElementById("r-vocab").innerText=(d.vocabulario??0)+"%";document.getElementById("reading-summary").innerHTML=`<p>${esc(d.resumen_evaluacion||"")}</p><p style="color:var(--muted);margin-top:8px">Estimated level: ${esc(d.nivel_estimado||"")}</p><p style="color:var(--muted);margin-top:8px">${esc(d.recomendacion||"")}</p>`;document.getElementById("reading-hits").innerHTML=(d.aciertos||[]).map(x=>`<li>${esc(x)}</li>`).join("");document.getElementById("reading-misses").innerHTML=(d.faltantes||[]).map(x=>`<li>${esc(x)}</li>`).join("");document.getElementById("reading-vocab").innerHTML=(d.vocabulario_util||[]).map(x=>`<div class="vocab-card"><b>${esc(x.palabra)}</b><p>${esc(x.significado)}</p><p><i>${esc(x.ejemplo)}</i></p></div>`).join("")}catch(e){alert(e.message)}finally{setLoading("reading-btn",false,"Analizar comprensión")}}
 async function loadDictation(){setLoading("new-dict",true,"Generando...");try{const r=await authFetch(API_URL+"/nuevo-dictado");const d=await r.json();if(!r.ok)throw new Error(d.error);dictationText=d.frase;document.getElementById("dictation").value="";document.getElementById("dict-result").style.display="none"}catch(e){alert(e.message)}finally{setLoading("new-dict",false,"Nuevo dictado")}}
