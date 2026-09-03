@@ -90,19 +90,19 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
   <div class="brand"><b>English <span>Academy</span></b><small>Personal English Lab</small></div>
   <div class="nav-label">Learn</div>
   <div class="nav">
-    <button class="tab active" onclick="tab('pronunciacion',this)">🎙️ Pronunciation</button>
-    <button class="tab" onclick="tab('escritura',this)">Aa Writing</button>
-    <button class="tab" onclick="tab('lectura',this)">📖 Reading</button>
-    <button class="tab" onclick="tab('escucha',this)">🎧 Listening</button>
-    <button class="tab" onclick="tab('tutor',this)">🤖 AI Tutor</button>
+    <button class="tab active" data-action="tab('pronunciacion',this)">🎙️ Pronunciation</button>
+    <button class="tab" data-action="tab('escritura',this)">Aa Writing</button>
+    <button class="tab" data-action="tab('lectura',this)">📖 Reading</button>
+    <button class="tab" data-action="tab('escucha',this)">🎧 Listening</button>
+    <button class="tab" data-action="tab('tutor',this)">🤖 AI Tutor</button>
   </div>
   <div class="nav-label">Progress</div>
-  <div class="nav"><button class="tab" onclick="tab('historial',this)">📊 My Progress</button></div>
+  <div class="nav"><button class="tab" data-action="tab('historial',this)">📊 My Progress</button></div>
   <div class="sidebar-foot"><div class="account"><b id="side-user">English Academy</b><br><span id="side-status" style="color:var(--success)">Ready to practice</span></div></div>
 </aside>
 
 <main class="main">
-<header class="topbar"><div class="userbar"><span id="user-display" class="user">Cargando sesión...</span><button id="login-btn" class="btn primary" onclick="openAuth()">Iniciar sesión</button><button id="logout-btn" class="btn danger" style="display:none" onclick="logout()">Cerrar sesión</button></div></header>
+<header class="topbar"><div class="userbar"><span id="user-display" class="user">Cargando sesión...</span><button id="login-btn" class="btn primary" data-action="openAuth()">Iniciar sesión</button><button id="logout-btn" class="btn danger" style="display:none" data-action="logout()">Cerrar sesión</button></div></header>
 
 <div class="page">
 <div class="eyebrow">English Academy</div>
@@ -112,10 +112,10 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
 <div id="main-container">
 <section id="sec-pronunciacion" class="section active">
   <div class="modes">
-    <button class="mode active" id="mode-lectura" onclick="pronMode('lectura')">📖 Guided Reading</button>
-    <button class="mode" id="mode-habla-libre" onclick="pronMode('habla_libre')">💬 Free Talk</button>
-    <button class="mode" id="mode-trabalenguas" onclick="pronMode('trabalenguas')">⚡ Tongue Twister</button>
-    <button class="mode" id="mode-tutor" onclick="tab('tutor',document.querySelectorAll('.tab')[4])">🤖 AI Tutor</button>
+    <button class="mode active" id="mode-lectura" data-action="pronMode('lectura')">📖 Guided Reading</button>
+    <button class="mode" id="mode-habla-libre" data-action="pronMode('habla_libre')">💬 Free Talk</button>
+    <button class="mode" id="mode-trabalenguas" data-action="pronMode('trabalenguas')">⚡ Tongue Twister</button>
+    <button class="mode" id="mode-tutor" data-action="tab('tutor',document.querySelectorAll('.tab')[4])">🤖 AI Tutor</button>
   </div>
 
   <div id="panel-lectura" class="panel active">
@@ -123,11 +123,11 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
       <div id="phrase" class="quote">Today was a beautiful day. We had a great time taking a long walk outside in the morning.</div>
       <div id="translation" class="sub">Hoy fue un día hermoso. Nos la pasamos genial dando un largo paseo por la mañana.</div>
       <div class="actions">
-        <button class="btn" onclick="speakText(document.getElementById('phrase').innerText,1)">🔊 Natural</button>
-        <button class="btn" onclick="speakText(document.getElementById('phrase').innerText,.7)">🐢 Slow</button>
-        <button id="new-phrase" class="btn primary" onclick="newPhrase()">Nueva frase</button>
+        <button class="btn" data-action="speakText(document.getElementById('phrase').innerText,1)">🔊 Natural</button>
+        <button class="btn" data-action="speakText(document.getElementById('phrase').innerText,.7)">🐢 Slow</button>
+        <button id="new-phrase" class="btn primary" data-action="newPhrase()">Nueva frase</button>
       </div>
-      <div class="custom"><input id="custom-phrase" placeholder="Escribe tu propia frase para practicar..."><button class="btn" onclick="useCustomPhrase()">Usar</button></div>
+      <div class="custom"><input id="custom-phrase" placeholder="Escribe tu propia frase para practicar..."><button class="btn" data-action="useCustomPhrase()">Usar</button></div>
     </div>
   </div>
 
@@ -136,7 +136,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
       <div id="free-topic" class="quote">What are your goals for learning English?</div>
       <p id="free-instructions" class="sub">Habla durante 20 a 30 segundos y explica tus ideas con ejemplos.</p>
       <div class="badges"><span class="badge">20–30 s</span><span class="badge">3+ ideas</span><span class="badge">Natural English</span></div>
-      <div class="actions" style="margin-top:16px"><button id="new-topic" class="btn primary" onclick="newTopic()">Nuevo tema</button></div>
+      <div class="actions" style="margin-top:16px"><button id="new-topic" class="btn primary" data-action="newTopic()">Nuevo tema</button></div>
     </div>
   </div>
 
@@ -145,11 +145,11 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
       <div class="eyebrow">Articulation challenge</div>
       <div id="twister" class="quote" style="color:#7fd5ff">Peter Piper picked a peck of pickled peppers.</div>
       <div id="twister-focus" class="sub">Enfoque: sonido /p/</div>
-      <div class="actions"><button class="btn" onclick="speakText(document.getElementById('twister').innerText,1)">🔊 Escuchar</button><button id="new-twister" class="btn primary" onclick="newTwister()">Nuevo reto</button></div>
+      <div class="actions"><button class="btn" data-action="speakText(document.getElementById('twister').innerText,1)">🔊 Escuchar</button><button id="new-twister" class="btn primary" data-action="newTwister()">Nuevo reto</button></div>
     </div>
   </div>
 
-  <button id="record-btn" class="record" onclick="toggleRecord()">Start recording</button>
+  <button id="record-btn" class="record" data-action="toggleRecord()">Start recording</button>
 
   <div id="pron-result" class="result">
     <div class="inspect">
@@ -171,17 +171,17 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
 </section>
 
 <section id="sec-escritura" class="section">
-  <div class="card"><h2>Writing practice</h2><p class="desc">Escribe en inglés. Recibirás una evaluación de gramática, vocabulario, claridad y naturalidad.</p><textarea id="writing" placeholder="Write your paragraph here in English..."></textarea><button id="writing-btn" class="btn primary" style="width:100%;margin-top:8px" onclick="evaluateWriting()">Evaluar mi escritura</button></div>
+  <div class="card"><h2>Writing practice</h2><p class="desc">Escribe en inglés. Recibirás una evaluación de gramática, vocabulario, claridad y naturalidad.</p><textarea id="writing" placeholder="Write your paragraph here in English..."></textarea><button id="writing-btn" class="btn primary" style="width:100%;margin-top:8px" data-action="evaluateWriting()">Evaluar mi escritura</button></div>
   <div id="writing-result" class="result"><div class="report-grid"><div class="report-stat"><b id="w-score">0</b><small>Score /10</small></div><div class="report-stat"><b id="w-grammar">0</b><small>Grammar</small></div><div class="report-stat"><b id="w-vocab">0</b><small>Vocabulary</small></div><div class="report-stat"><b id="w-natural">0</b><small>Naturalness</small></div></div><div id="writing-analysis" style="font-size:12px;line-height:1.8"></div></div>
 </section>
 
 <section id="sec-lectura" class="section">
-  <div class="card"><div class="eyebrow">Comprehension lab</div><h2 id="reading-title">Cargando lectura...</h2><div id="reading-text" class="reading-text"></div><div class="notice">Lee con atención. No verás una traducción ni respuestas predeterminadas. Después explica en inglés, con tus propias palabras, qué entendiste.</div><textarea id="reading-answer" placeholder="In English, explain what you understood from the text..."></textarea><div class="actions" style="justify-content:flex-start"><button id="reading-btn" class="btn primary" onclick="evaluateReading()">Analizar comprensión</button><button id="new-reading" class="btn" onclick="loadReading()">Nueva lectura</button></div></div>
+  <div class="card"><div class="eyebrow">Comprehension lab</div><h2 id="reading-title">Cargando lectura...</h2><div id="reading-text" class="reading-text"></div><div class="notice">Lee con atención. No verás una traducción ni respuestas predeterminadas. Después explica en inglés, con tus propias palabras, qué entendiste.</div><textarea id="reading-answer" placeholder="In English, explain what you understood from the text..."></textarea><div class="actions" style="justify-content:flex-start"><button id="reading-btn" class="btn primary" data-action="evaluateReading()">Analizar comprensión</button><button id="new-reading" class="btn" data-action="loadReading()">Nueva lectura</button></div></div>
   <div id="reading-result" class="result"><h2>Comprehension report</h2><div class="report-grid"><div class="report-stat"><b id="r-score">0</b><small>Score /10</small></div><div class="report-stat"><b id="r-main">0</b><small>Main idea</small></div><div class="report-stat"><b id="r-details">0</b><small>Details</small></div><div class="report-stat"><b id="r-vocab">0</b><small>Vocabulary</small></div></div><div id="reading-summary" style="font-size:12px;line-height:1.8"></div><h3 style="margin-top:18px">What you did well</h3><ul id="reading-hits" class="report-list"></ul><h3 style="margin-top:14px">What was missing</h3><ul id="reading-misses" class="report-list"></ul><h3 style="margin-top:18px">Useful vocabulary</h3><div id="reading-vocab" class="vocab"></div></div>
 </section>
 
 <section id="sec-escucha" class="section">
-  <div class="card"><h2>Listening practice</h2><p class="desc">Escucha la frase y escribe exactamente lo que oigas.</p><div class="actions" style="justify-content:flex-start;margin-top:16px"><button class="btn" onclick="playDictation(1)">🔊 Natural</button><button class="btn" onclick="playDictation(.7)">🐢 Slow</button><button id="new-dict" class="btn primary" onclick="loadDictation()">Nuevo dictado</button></div><input id="dictation" placeholder="Write what you heard..."><button id="dict-btn" class="btn primary" style="width:100%;margin-top:8px" onclick="evaluateDictation()">Verificar dictado</button></div>
+  <div class="card"><h2>Listening practice</h2><p class="desc">Escucha la frase y escribe exactamente lo que oigas.</p><div class="actions" style="justify-content:flex-start;margin-top:16px"><button class="btn" data-action="playDictation(1)">🔊 Natural</button><button class="btn" data-action="playDictation(.7)">🐢 Slow</button><button id="new-dict" class="btn primary" data-action="loadDictation()">Nuevo dictado</button></div><input id="dictation" placeholder="Write what you heard..."><button id="dict-btn" class="btn primary" style="width:100%;margin-top:8px" data-action="evaluateDictation()">Verificar dictado</button></div>
   <div id="dict-result" class="result"><div class="report-grid"><div class="report-stat"><b id="d-score">0</b><small>Score /10</small></div></div><div id="dict-analysis" style="font-size:12px;line-height:1.8"></div></div>
 </section>
 
@@ -189,12 +189,12 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
   <div class="card"><div class="eyebrow">Conversation coach</div><h2>AI Tutor</h2><p class="desc">Practica conversación en inglés con un tutor que mantiene el contexto, adapta el nivel y usa tus resultados de pronunciación cuando están disponibles.</p></div>
   <div class="tutor-layout">
     <div class="tutor-avatar"><div class="face">👨‍🏫</div><b>English Coach</b><p>Friendly, patient and focused on helping you speak with confidence.</p></div>
-    <div class="card chat"><div id="messages" class="messages"><div class="msg ai">Hi! I'm your English coach. Tell me about your day in English.</div></div><div class="chat-input"><button class="btn mini" onclick="startTutorVoice()">🎙️</button><input id="tutor-input" placeholder="Type or speak in English..."><button id="tutor-btn" class="btn primary" onclick="sendTutor()">Send</button></div></div>
+    <div class="card chat"><div id="messages" class="messages"><div class="msg ai">Hi! I'm your English coach. Tell me about your day in English.</div></div><div class="chat-input"><button class="btn mini" data-action="startTutorVoice()">🎙️</button><input id="tutor-input" placeholder="Type or speak in English..."><button id="tutor-btn" class="btn primary" data-action="sendTutor()">Send</button></div></div>
   </div>
 </section>
 
 <section id="sec-historial" class="section">
-  <div class="actions" style="justify-content:space-between;margin-bottom:14px"><h2>My progress</h2><button class="btn" onclick="loadHistory()">Actualizar</button></div>
+  <div class="actions" style="justify-content:space-between;margin-bottom:14px"><h2>My progress</h2><button class="btn" data-action="loadHistory()">Actualizar</button></div>
   <div id="history"><div class="empty">Cargando registros...</div></div>
 </section>
 </div>
@@ -202,7 +202,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.65}
 </main>
 </div>
 
-<div id="auth-modal" class="modal"><div class="modal-card"><h2 id="auth-title">Iniciar sesión</h2><div id="auth-error" style="display:none;margin:10px 0;padding:10px;border-radius:10px;background:rgba(255,80,80,.12);color:#ffb4b4;font-size:13px"></div><input id="auth-email" type="email" placeholder="Correo electrónico"><input id="auth-password" type="password" placeholder="Contraseña"><button id="auth-submit" class="btn primary" onclick="processAuth()">Ingresar</button><button class="btn" onclick="toggleAuth()" id="auth-toggle">¿No tienes cuenta? Regístrate</button><button class="btn danger" onclick="closeAuth()">Cancelar</button></div></div>
+<div id="auth-modal" class="modal"><div class="modal-card"><h2 id="auth-title">Iniciar sesión</h2><div id="auth-error" style="display:none;margin:10px 0;padding:10px;border-radius:10px;background:rgba(255,80,80,.12);color:#ffb4b4;font-size:13px"></div><input id="auth-email" type="email" placeholder="Correo electrónico"><input id="auth-password" type="password" placeholder="Contraseña"><button id="auth-submit" class="btn primary" data-action="processAuth()">Ingresar</button><button class="btn" data-action="toggleAuth()" id="auth-toggle">¿No tienes cuenta? Regístrate</button><button class="btn danger" data-action="closeAuth()">Cancelar</button></div></div>
 
 <script>
 
@@ -667,6 +667,63 @@ async function sendTutor(){
 function startTutorVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert("Tu navegador no permite reconocimiento de voz aquí.");const rec=new SR();rec.lang="en-US";rec.interimResults=false;rec.maxAlternatives=1;rec.onresult=e=>{document.getElementById("tutor-input").value=e.results[0][0].transcript;sendTutor()};rec.onerror=()=>alert("No pude captar tu voz.");rec.start()}
 async function loadHistory(){const box=document.getElementById("history");box.innerHTML="<div class='empty'>Cargando...</div>";try{const r=await authFetch(API_URL+"/obtener-historial");const d=await r.json();if(!r.ok)throw new Error(d.error);if(!d.length){box.innerHTML="<div class='empty'>Todavía no hay prácticas guardadas.</div>";return}box.innerHTML=d.map(x=>`<div class="history"><div class="history-head"><span>${esc(x.frase_esperada)}</span><span class="history-score">${x.puntuacion_global}/100</span></div><div class="history-meta"><span>Precisión ${x.precision_fonemas}%</span><span>Fluidez ${x.fluidez}%</span><span>Completitud ${x.completitud}%</span></div></div>`).join("")}catch(e){box.innerHTML="<div class='empty'>No fue posible cargar el progreso.</div>"}}
 
+
+
+document.addEventListener("click", function(event){
+  const el=event.target.closest("[data-action]");
+  if(!el)return;
+  const action=el.getAttribute("data-action");
+  try{
+    if(action==="tab('pronunciacion',this)" || action==="tab('escritura',this)" ||
+       action==="tab('lectura',this)" || action==="tab('escucha',this)" ||
+       action==="tab('tutor',this)" || action==="tab('historial',this)"){
+      const m=action.match(/^tab\('([^']+)',this\)$/);
+      if(m) window.tab(m[1],el);
+      return;
+    }
+    if(action==="tab('tutor',document.querySelectorAll('.tab')[4])"){
+      window.tab("tutor",document.querySelectorAll(".tab")[4]);
+      return;
+    }
+    if(action==="pronMode('lectura')" || action==="pronMode('habla_libre')" || action==="pronMode('trabalenguas')"){
+      const m=action.match(/^pronMode\('([^']+)'\)$/);
+      if(m) window.pronMode(m[1]);
+      return;
+    }
+    if(action==="speakText(document.getElementById('phrase').innerText,1)"){
+      window.speakText(document.getElementById("phrase").innerText,1); return;
+    }
+    if(action==="speakText(document.getElementById('phrase').innerText,.7)"){
+      window.speakText(document.getElementById("phrase").innerText,.7); return;
+    }
+    if(action==="speakText(document.getElementById('twister').innerText,1)"){
+      window.speakText(document.getElementById("twister").innerText,1); return;
+    }
+    if(action==="newPhrase()"){window.newPhrase();return;}
+    if(action==="useCustomPhrase()"){window.useCustomPhrase();return;}
+    if(action==="newTopic()"){window.newTopic();return;}
+    if(action==="newTwister()"){window.newTwister();return;}
+    if(action==="toggleRecord()"){window.toggleRecord();return;}
+    if(action==="evaluateWriting()"){window.evaluateWriting();return;}
+    if(action==="evaluateReading()"){window.evaluateReading();return;}
+    if(action==="loadReading()"){window.loadReading();return;}
+    if(action==="playDictation(1)"){window.playDictation(1);return;}
+    if(action==="playDictation(.7)"){window.playDictation(.7);return;}
+    if(action==="loadDictation()"){window.loadDictation();return;}
+    if(action==="evaluateDictation()"){window.evaluateDictation();return;}
+    if(action==="startTutorVoice()"){window.startTutorVoice();return;}
+    if(action==="sendTutor()"){window.sendTutor();return;}
+    if(action==="loadHistory()"){window.loadHistory();return;}
+    if(action==="openAuth()"){window.openAuth();return;}
+    if(action==="closeAuth()"){window.closeAuth();return;}
+    if(action==="toggleAuth()"){window.toggleAuth();return;}
+    if(action==="processAuth()"){window.processAuth();return;}
+    if(action==="logout()"){window.logout();return;}
+    console.warn("[CLICK] Acción no reconocida:",action);
+  }catch(err){
+    console.error("[CLICK]",action,err);
+  }
+});
 
 // Expose UI functions explicitly for the HTML onclick handlers.
 window.tab=tab;
