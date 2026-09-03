@@ -1,673 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>English Academy</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{
-  --bg:#090b10;--surface:#11151c;--surface2:#181e27;--surface3:#202733;
-  --border:#2a313d;--text:#f5f7fb;--muted:#9aa4b2;--primary:#7180ff;
-  --primary2:#5c6dff;--success:#3dcc91;--danger:#ef6b73;--warning:#e7ad52;
-  --radius:14px;
-}
-*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,sans-serif}
-body{background:var(--bg);color:var(--text);min-height:100vh}
-button,input,textarea{font:inherit}button{cursor:pointer}
-.app{min-height:100vh;display:flex}
-.sidebar{position:fixed;inset:0 auto 0 0;width:245px;padding:24px 14px;background:#0e1117;border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:20}
-.brand{padding:5px 12px 28px}.brand b{font-size:18px}.brand b span{color:var(--primary)}
-.brand small{display:block;color:#657080;margin-top:5px;font-size:10px;letter-spacing:.09em;text-transform:uppercase}
-.nav-label{color:#657080;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:0 12px 7px}
-.nav{display:flex;flex-direction:column;gap:4px;margin-bottom:22px}
-.tab{border:1px solid transparent;background:transparent;color:var(--muted);padding:11px 12px;border-radius:9px;text-align:left;font-size:13px;display:flex;gap:10px;align-items:center;transition:.16s}
-.tab:hover{background:var(--surface);color:#fff}.tab.active{background:rgba(113,128,255,.12);border-color:rgba(113,128,255,.2);color:#fff}
-.sidebar-foot{margin-top:auto;padding:10px}.account{border:1px solid var(--border);background:rgba(255,255,255,.02);padding:11px;border-radius:10px;font-size:11px}
-.main{width:calc(100% - 245px);margin-left:245px;min-width:0}
-.topbar{height:66px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 40px;background:rgba(9,11,16,.9);position:sticky;top:0;z-index:10}
-.userbar{display:flex;align-items:center;gap:12px}.user{font-size:12px;color:var(--muted);max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.page{width:min(1100px,calc(100% - 70px));margin:auto;padding:38px 0 70px}
-.eyebrow{color:var(--primary);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
-h1{font-size:29px;line-height:1.2}h2{font-size:20px}h3{font-size:16px}
-.desc{color:var(--muted);font-size:13px;line-height:1.65;margin-top:8px}
-.section{display:none}.section.active{display:block}
-.card,.result,.history{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 14px 38px rgba(0,0,0,.14)}
-.card{padding:25px;margin-top:18px}.result{padding:24px;margin-top:18px;display:none}
-.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:#0e1117;border:1px solid var(--border);padding:6px;border-radius:12px;margin-top:20px}
-.mode{border:0;background:transparent;color:var(--muted);padding:11px 8px;border-radius:8px;font-weight:600;font-size:12px;transition:.16s}
-.mode:hover{color:#fff}.mode.active{background:var(--primary);color:#fff}
-.panel{display:none}.panel.active{display:block}
-.hero{text-align:center}.quote{font-size:clamp(21px,3vw,31px);line-height:1.4;font-weight:650;max-width:820px;margin:auto}
-.sub{color:var(--muted);font-size:13px;line-height:1.65;margin:10px auto 20px;max-width:760px}
-.actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
-.btn{min-height:39px;padding:0 14px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:12px;font-weight:600;transition:.12s}
-.btn:hover{background:var(--surface3);color:#fff;border-color:#3a4452;transform:translateY(-1px)}
-.btn:active{transform:scale(.97)}.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
-.btn.primary:hover{background:var(--primary2)}.btn.danger{border-color:rgba(239,107,115,.35);color:#ff9aa0;background:transparent}
-.btn.loading{opacity:.72;pointer-events:none}.btn.loading::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;vertical-align:-2px;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.custom{display:flex;gap:8px;max-width:760px;margin:16px auto 0}
-input,textarea{width:100%;background:#0c0f14;color:#fff;border:1px solid var(--border);border-radius:9px;padding:12px 13px;outline:none}
-input:focus,textarea:focus{border-color:rgba(113,128,255,.65);box-shadow:0 0 0 3px rgba(113,128,255,.08)}
-textarea{min-height:150px;resize:vertical;line-height:1.65}
-.record{width:100%;height:54px;border-radius:11px;border:1px solid var(--primary);background:var(--primary);color:#fff;font-weight:700;margin-top:18px;transition:.15s}
-.record:hover{background:var(--primary2)}.record.recording{background:var(--danger);border-color:var(--danger);animation:pulse 1.5s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 12px rgba(239,107,115,0)}}
-.badges{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:15px}
-.badge{border:1px solid var(--border);background:#0c0f14;color:var(--muted);padding:6px 10px;border-radius:20px;font-size:10px}
-.score-grid{display:grid;grid-template-columns:190px 1fr;gap:20px;background:#0c0f14;border:1px solid var(--border);padding:18px;border-radius:12px}
-.big-score{display:flex;align-items:center;justify-content:center;flex-direction:column;border-right:1px solid var(--border)}
-.circle{width:105px;height:105px;border:6px solid var(--primary);border-radius:50%;display:grid;place-items:center;font-size:27px;font-weight:700}
-.meter{margin:10px 0}.meter-head{display:flex;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:5px}.bar{height:8px;background:var(--surface3);border-radius:5px;overflow:hidden}.fill{height:100%;background:var(--primary);border-radius:5px;transition:.4s}
-.inspect{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:18px}
-.inspect-item{background:#0e1117;border:1px solid var(--border);padding:11px 7px;border-radius:9px;text-align:center}.inspect-item b{font-size:19px}.inspect-item small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
-.words{display:flex;flex-wrap:wrap;gap:8px;padding:15px;background:#0e1117;border:1px solid var(--border);border-radius:10px;margin-top:12px}
-.word{border:1px solid var(--border);background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center}.word b{display:block;font-size:13px}.word small{color:var(--muted);font-size:9px}
-.phonemes{display:none;background:#0c0f14;border:1px solid var(--border);padding:14px;border-radius:10px;margin-top:12px}.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.chip{padding:5px 8px;background:var(--surface3);border-radius:6px;font-size:10px}
-.reading-text{font-size:16px;line-height:1.85;margin-top:16px;color:#e9edf5}.notice{border-left:3px solid var(--primary);padding:10px 13px;background:rgba(113,128,255,.07);color:var(--muted);font-size:12px;line-height:1.6;margin-top:15px}
-.report-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:15px 0}.report-stat{background:#0e1117;border:1px solid var(--border);padding:14px;border-radius:9px}.report-stat b{font-size:20px}.report-stat small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
-.report-list{margin-top:12px;padding-left:20px;color:#dfe4ed;font-size:12px;line-height:1.8}
-.vocab{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.vocab-card{border:1px solid var(--border);background:#0e1117;border-radius:9px;padding:12px;font-size:11px}.vocab-card b{color:#fff}.vocab-card p{color:var(--muted);margin-top:4px}
-.tutor-layout{display:grid;grid-template-columns:250px 1fr;gap:16px}.tutor-avatar{min-height:330px;border:1px solid var(--border);border-radius:14px;background:radial-gradient(circle at 50% 25%,rgba(113,128,255,.24),transparent 35%),#0d1016;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center}
-.face{width:115px;height:115px;border-radius:50%;border:2px solid rgba(113,128,255,.55);display:grid;place-items:center;font-size:47px;background:rgba(113,128,255,.08);margin-bottom:15px}.tutor-avatar p{color:var(--muted);font-size:11px;line-height:1.6;padding:0 20px}
-.chat{min-height:330px;display:flex;flex-direction:column}.messages{flex:1;max-height:430px;overflow:auto;padding:5px}.msg{max-width:82%;padding:11px 13px;border-radius:12px;margin-bottom:9px;font-size:12px;line-height:1.6}.msg.ai{background:var(--surface2);border:1px solid var(--border)}.msg.user{margin-left:auto;background:rgba(113,128,255,.15);border:1px solid rgba(113,128,255,.25)}
-.chat-input{display:flex;gap:7px;margin-top:10px}.mini{min-width:44px}
-.history{padding:17px 19px;margin-top:10px}.history-head{display:flex;justify-content:space-between;gap:10px}.history-score{color:var(--success);font-weight:700}.history-meta{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:10px;margin-top:7px}
-.empty{text-align:center;color:var(--muted);padding:25px}
-.modal{display:none;position:fixed;inset:0;background:rgba(3,5,8,.8);backdrop-filter:blur(8px);z-index:100;align-items:center;justify-content:center;padding:20px}.modal-card{width:min(420px,100%);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:25px}
-.modal-card input{margin-top:9px}.modal-card .btn{width:100%;margin-top:9px}
-@media(max-width:850px){
- .app{display:block}.sidebar{position:static;width:100%;padding:15px;border-right:0;border-bottom:1px solid var(--border)}.sidebar-foot,.nav-label{display:none}.nav{display:grid;grid-template-columns:repeat(2,1fr);margin:0}.main{width:100%;margin:0}.topbar{height:57px;padding:0 17px}.page{width:min(100% - 30px,720px);padding:28px 0 50px}
- .modes{grid-template-columns:repeat(2,1fr)}.inspect{grid-template-columns:repeat(3,1fr)}.score-grid{grid-template-columns:1fr}.big-score{border-right:0;border-bottom:1px solid var(--border);padding-bottom:16px}.report-grid{grid-template-columns:repeat(2,1fr)}.vocab{grid-template-columns:1fr}.tutor-layout{grid-template-columns:1fr}.tutor-avatar{min-height:180px}.custom{flex-direction:column}
-}
+:root{--bg:#080b12;--card:#111722;--card2:#182130;--line:#2b3748;--text:#f7f9fc;--muted:#9ba8b8;--primary:#7180ff;--success:#38cf91;--danger:#ef6b73;--shadow:0 18px 55px rgba(0,0,0,.25);--r:16px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-serif}button,input,textarea{font:inherit}button{cursor:pointer}
+.app{min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:245px;padding:24px 14px;background:#0d1118;border-right:1px solid var(--line);z-index:20;display:flex;flex-direction:column}.brand{padding:5px 12px 28px}.brand b{font-size:19px}.brand b span{color:var(--primary)}.brand small{display:block;color:#677487;margin-top:6px;font-size:10px;text-transform:uppercase;letter-spacing:.1em}.label{padding:0 12px 7px;color:#677487;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em}.nav{display:flex;flex-direction:column;gap:4px;margin-bottom:22px}.nav button{border:1px solid transparent;background:transparent;color:var(--muted);padding:11px 12px;border-radius:10px;text-align:left}.nav button:hover{background:var(--card);color:#fff}.nav button.active{background:rgba(113,128,255,.12);border-color:rgba(113,128,255,.22);color:#fff}.side{margin-top:auto;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:11px}.side small{display:block;color:var(--muted);margin-top:3px}
+.main{margin-left:245px;min-height:100vh}.top{height:67px;border-bottom:1px solid var(--line);display:flex;justify-content:flex-end;align-items:center;padding:0 40px;position:sticky;top:0;background:rgba(8,11,18,.94);z-index:10}.userbar{display:flex;gap:10px;align-items:center}.user{max-width:280px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.page{width:min(1080px,calc(100% - 70px));margin:auto;padding:40px 0 70px}.eyebrow{color:var(--primary);font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}h1{font-size:30px;margin:0}h2{font-size:20px;margin:0}.desc{color:var(--muted);font-size:13px;line-height:1.65;margin-top:8px}.section{display:none}.section.active{display:block}
+.card,.result,.history-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}.card{padding:24px;margin-top:18px}.result{padding:23px;margin-top:18px;display:none}
+.btn{min-height:39px;padding:0 14px;border:1px solid var(--line);background:var(--card2);border-radius:10px;color:var(--muted);font-size:12px;font-weight:700}.btn:hover{color:#fff;border-color:#415067}.primary{background:var(--primary);border-color:var(--primary);color:#fff}.danger{background:transparent;border-color:rgba(239,107,115,.3);color:#ffabb0}.loading{opacity:.7;pointer-events:none}
+.modebar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:6px;background:#0d1118;border:1px solid var(--line);border-radius:12px;margin-top:20px}.mode{border:0;background:transparent;color:var(--muted);padding:11px 7px;border-radius:9px;font-weight:700;font-size:12px}.mode.active{background:var(--primary);color:#fff}
+.panel{display:none}.panel.active{display:block}.hero{text-align:center}.phrase{font-size:clamp(22px,3vw,34px);line-height:1.4;font-weight:700}.sub{color:var(--muted);font-size:13px;line-height:1.65;margin:10px auto 20px}.actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}.custom{display:flex;gap:8px;max-width:780px;margin:15px auto 0}
+input,textarea{width:100%;background:#0b0f15;color:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 13px;outline:none}textarea{min-height:155px;resize:vertical;line-height:1.65}
+.record{width:100%;height:55px;background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:11px;margin-top:18px;font-weight:800}.record.recording{background:var(--danger);border-color:var(--danger)}
+.badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:15px}.badge{padding:6px 10px;border:1px solid var(--line);border-radius:20px;background:#0b1017;color:var(--muted);font-size:10px}
+.inspect{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:18px}.inspect .item{background:#0d1118;border:1px solid var(--line);border-radius:10px;padding:11px 6px;text-align:center}.inspect b{font-size:19px}.inspect small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
+.scoregrid{display:grid;grid-template-columns:190px 1fr;gap:18px;background:#0b0f15;border:1px solid var(--line);border-radius:12px;padding:18px}.score{display:flex;flex-direction:column;justify-content:center;align-items:center;border-right:1px solid var(--line)}.circle{width:106px;height:106px;border:6px solid var(--primary);border-radius:50%;display:grid;place-items:center;font-size:28px;font-weight:800}.metrics{display:flex;flex-direction:column;gap:12px;justify-content:center}.mhead{display:flex;justify-content:space-between;font-size:11px;font-weight:700}.bar{height:8px;background:#232d3b;border-radius:6px;overflow:hidden;margin-top:5px}.fill{height:100%;background:var(--primary);border-radius:6px}.words{display:flex;flex-wrap:wrap;gap:8px;background:#0d1118;border:1px solid var(--line);padding:15px;border-radius:10px;margin-top:10px}.word{border:1px solid var(--line);background:var(--card2);color:#fff;border-radius:9px;padding:8px 10px}.word b{display:block;font-size:12px}.word small{color:var(--muted);font-size:9px}.phonemes{display:none;margin-top:12px;padding:13px;background:#0b0f15;border:1px solid var(--line);border-radius:10px}.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.chip{padding:5px 8px;background:#232d3b;border-radius:7px;font-size:10px}
+.reading{font-size:16px;line-height:1.9;margin-top:14px}.notice{margin-top:14px;padding:11px 13px;border-left:3px solid var(--primary);background:rgba(113,128,255,.07);color:var(--muted);font-size:12px;line-height:1.6}.reports{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:14px 0}.report{background:#0d1118;border:1px solid var(--line);border-radius:10px;padding:13px}.report b{font-size:20px}.report small{display:block;color:var(--muted);margin-top:3px;font-size:10px}.list{padding-left:20px;font-size:12px;line-height:1.8}.vocab{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.vocab>div{background:#0d1118;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:11px}.vocab p{color:var(--muted);margin:4px 0 0}
+.tutor{display:grid;grid-template-columns:240px 1fr;gap:16px}.coach{min-height:360px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border:1px solid var(--line);border-radius:15px;background:radial-gradient(circle at 50% 20%,rgba(113,128,255,.24),transparent 38%),#0c1016}.face{width:120px;height:120px;border-radius:50%;display:grid;place-items:center;font-size:50px;border:2px solid rgba(113,128,255,.55);background:rgba(113,128,255,.07);margin-bottom:14px}.coach p{max-width:190px;color:var(--muted);font-size:11px;line-height:1.6}.chat{min-height:360px;display:flex;flex-direction:column}.messages{flex:1;max-height:450px;overflow:auto}.msg{max-width:84%;padding:11px 13px;border-radius:12px;margin-bottom:9px;font-size:12px;line-height:1.65}.msg.ai{background:var(--card2);border:1px solid var(--line)}.msg.user{margin-left:auto;background:rgba(113,128,255,.14);border:1px solid rgba(113,128,255,.24)}.chatinput{display:flex;gap:7px;margin-top:10px}
+.progress{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:17px}.pbox{background:#0d1118;border:1px solid var(--line);border-radius:10px;padding:14px}.pbox strong{font-size:23px}.pbox small{display:block;color:var(--muted);font-size:10px;margin-top:4px}.evolution{margin-top:16px;padding:17px;background:#0d1118;border:1px solid var(--line);border-radius:10px}.bars{height:160px;display:flex;align-items:flex-end;gap:7px;margin-top:13px}.barcol{flex:1;height:100%;display:flex;align-items:flex-end}.barcol i{display:block;width:100%;background:var(--primary);min-height:4px;border-radius:5px 5px 0 0}
+.modal{display:none;position:fixed;inset:0;z-index:100;background:rgba(3,5,9,.82);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:18px}.modal-card{width:min(430px,100%);background:var(--card);border:1px solid var(--line);border-radius:15px;padding:24px}.modal-card input{margin-top:9px}.modal-card .btn{width:100%;margin-top:9px}.autherror{display:none;margin:9px 0 0;padding:10px;border-radius:9px;background:rgba(239,107,115,.1);border:1px solid rgba(239,107,115,.25);color:#ffb2b7;font-size:12px}
+.lock{max-width:580px;margin:80px auto;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:var(--shadow)}.lock p{color:var(--muted);font-size:13px;line-height:1.7}
+@media(max-width:850px){.sidebar{position:static;width:100%;height:auto;padding:14px}.sidebar .label,.side{display:none}.nav{display:grid;grid-template-columns:repeat(2,1fr);margin:0}.main{margin:0}.top{height:58px;padding:0 16px}.page{width:min(100% - 30px,720px);padding:28px 0 50px}.modebar{grid-template-columns:repeat(2,1fr)}.inspect{grid-template-columns:repeat(3,1fr)}.scoregrid,.tutor{grid-template-columns:1fr}.score{border-right:0;border-bottom:1px solid var(--line);padding-bottom:15px}.reports,.progress{grid-template-columns:repeat(2,1fr)}.vocab{grid-template-columns:1fr}.custom,.chatinput{flex-direction:column}}
 </style>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar">
   <div class="brand"><b>English <span>Academy</span></b><small>Personal English Lab</small></div>
-  <div class="nav-label">Learn</div>
-  <div class="nav">
-    <button class="tab active" data-action="tab('pronunciacion',this)">🎙️ Pronunciation</button>
-    <button class="tab" data-action="tab('escritura',this)">Aa Writing</button>
-    <button class="tab" data-action="tab('lectura',this)">📖 Reading</button>
-    <button class="tab" data-action="tab('escucha',this)">🎧 Listening</button>
-    <button class="tab" data-action="tab('tutor',this)">🤖 AI Tutor</button>
-  </div>
-  <div class="nav-label">Progress</div>
-  <div class="nav"><button class="tab" data-action="tab('historial',this)">📊 My Progress</button></div>
-  <div class="sidebar-foot"><div class="account"><b id="side-user">English Academy</b><br><span id="side-status" style="color:var(--success)">Ready to practice</span></div></div>
+  <div class="label">Learn</div>
+  <nav class="nav" id="nav">
+    <button class="active" data-section="pronunciacion">🎙️ Pronunciation</button>
+    <button data-section="escritura">Aa Writing</button>
+    <button data-section="lectura">📖 Reading</button>
+    <button data-section="escucha">🎧 Listening</button>
+    <button data-section="tutor">🤖 AI Tutor</button>
+  </nav>
+  <div class="label">Progress</div>
+  <nav class="nav"><button data-section="historial">📊 My Progress</button></nav>
+  <div class="side"><b id="side-user">English Academy</b><small id="side-status">Checking access...</small></div>
 </aside>
 
 <main class="main">
-<header class="topbar"><div class="userbar"><span id="user-display" class="user">Cargando sesión...</span><button id="login-btn" class="btn primary" data-action="openAuth()">Iniciar sesión</button><button id="logout-btn" class="btn danger" style="display:none" data-action="logout()">Cerrar sesión</button></div></header>
+<header class="top"><div class="userbar"><span class="user" id="user-display">Checking session...</span><button class="btn primary" id="login-btn">Sign in</button><button class="btn danger" id="logout-btn" style="display:none">Sign out</button></div></header>
 
 <div class="page">
-<div class="eyebrow">English Academy</div>
-<h1>Build confidence in English</h1>
-<p class="desc">Practica pronunciación, escritura, comprensión y conversación con una experiencia diseñada para mejorar paso a paso.</p>
+<div id="locked" class="lock" style="display:none"><div class="eyebrow">English Academy</div><h2>Your workspace is ready</h2><p>Tu cuenta está iniciada, pero el acceso todavía no aparece como activo. Puedes comprobarlo nuevamente cuando tu acceso haya sido habilitado.</p><button class="btn primary" id="retry-access">Comprobar acceso</button></div>
 
-<div id="main-container">
+<div id="app-content" style="display:none">
 <section id="sec-pronunciacion" class="section active">
-  <div class="modes">
-    <button class="mode active" id="mode-lectura" data-action="pronMode('lectura')">📖 Guided Reading</button>
-    <button class="mode" id="mode-habla-libre" data-action="pronMode('habla_libre')">💬 Free Talk</button>
-    <button class="mode" id="mode-trabalenguas" data-action="pronMode('trabalenguas')">⚡ Tongue Twister</button>
-    <button class="mode" id="mode-tutor" data-action="tab('tutor',document.querySelectorAll('.tab')[4])">🤖 AI Tutor</button>
-  </div>
-
-  <div id="panel-lectura" class="panel active">
-    <div class="card hero">
-      <div id="phrase" class="quote">Today was a beautiful day. We had a great time taking a long walk outside in the morning.</div>
-      <div id="translation" class="sub">Hoy fue un día hermoso. Nos la pasamos genial dando un largo paseo por la mañana.</div>
-      <div class="actions">
-        <button class="btn" data-action="speakText(document.getElementById('phrase').innerText,1)">🔊 Natural</button>
-        <button class="btn" data-action="speakText(document.getElementById('phrase').innerText,.7)">🐢 Slow</button>
-        <button id="new-phrase" class="btn primary" data-action="newPhrase()">Nueva frase</button>
-      </div>
-      <div class="custom"><input id="custom-phrase" placeholder="Escribe tu propia frase para practicar..."><button class="btn" data-action="useCustomPhrase()">Usar</button></div>
-    </div>
-  </div>
-
-  <div id="panel-habla_libre" class="panel">
-    <div class="card hero">
-      <div id="free-topic" class="quote">What are your goals for learning English?</div>
-      <p id="free-instructions" class="sub">Habla durante 20 a 30 segundos y explica tus ideas con ejemplos.</p>
-      <div class="badges"><span class="badge">20–30 s</span><span class="badge">3+ ideas</span><span class="badge">Natural English</span></div>
-      <div class="actions" style="margin-top:16px"><button id="new-topic" class="btn primary" data-action="newTopic()">Nuevo tema</button></div>
-    </div>
-  </div>
-
-  <div id="panel-trabalenguas" class="panel">
-    <div class="card hero">
-      <div class="eyebrow">Articulation challenge</div>
-      <div id="twister" class="quote" style="color:#7fd5ff">Peter Piper picked a peck of pickled peppers.</div>
-      <div id="twister-focus" class="sub">Enfoque: sonido /p/</div>
-      <div class="actions"><button class="btn" data-action="speakText(document.getElementById('twister').innerText,1)">🔊 Escuchar</button><button id="new-twister" class="btn primary" data-action="newTwister()">Nuevo reto</button></div>
-    </div>
-  </div>
-
-  <button id="record-btn" class="record" data-action="toggleRecord()">Start recording</button>
-
-  <div id="pron-result" class="result">
-    <div class="inspect">
-      <div class="inspect-item"><b id="i-om">0</b><small>Omisiones</small></div>
-      <div class="inspect-item"><b id="i-mis">0</b><small>Pronunciación</small></div>
-      <div class="inspect-item"><b id="i-in">0</b><small>Inserciones</small></div>
-      <div class="inspect-item"><b id="i-break">0</b><small>Interrupciones</small></div>
-      <div class="inspect-item"><b id="i-rest">0</b><small>Pausas</small></div>
-      <div class="inspect-item"><b id="i-mono">0</b><small>Entonación</small></div>
-    </div>
-    <div class="score-grid">
-      <div class="big-score"><div class="circle" id="global-score">0</div><small style="color:var(--muted);margin-top:8px">Overall score</small></div>
-      <div id="metric-list"></div>
-    </div>
-    <h3 style="margin-top:22px">Word-by-word analysis</h3>
-    <div id="words" class="words"></div>
-    <div id="phonemes" class="phonemes"><b id="phoneme-title">Word</b><div id="chips" class="chips"></div></div>
-  </div>
+<div class="eyebrow">Pronunciation Lab</div><h1>Speak with confidence</h1><p class="desc">Practica lectura, conversación espontánea y articulación con una evaluación detallada de tu voz.</p>
+<div class="modebar">
+<button class="mode active" data-pron="lectura">📖 Guided Reading</button><button class="mode" data-pron="habla_libre">💬 Free Talk</button><button class="mode" data-pron="trabalenguas">⚡ Tongue Twister</button><button class="mode" data-section-jump="tutor">🤖 AI Tutor</button>
+</div>
+<div id="panel-lectura" class="panel active"><div class="card hero"><div id="phrase" class="phrase">Today was a beautiful day. We had a great time taking a long walk outside in the morning.</div><div id="translation" class="sub">Hoy fue un día hermoso. Nos la pasamos genial dando un largo paseo por la mañana.</div><div class="actions"><button class="btn" id="phrase-natural">🔊 Natural</button><button class="btn" id="phrase-slow">🐢 Slow</button><button class="btn primary" id="new-phrase">Nueva frase</button></div><div class="custom"><input id="custom-phrase" placeholder="Escribe tu propia frase..."><button class="btn" id="use-custom">Usar</button></div></div></div>
+<div id="panel-habla_libre" class="panel"><div class="card hero"><div id="free-topic" class="phrase">What are your goals for learning English?</div><p id="free-instructions" class="sub">Habla durante 20 a 30 segundos y desarrolla al menos tres ideas.</p><div class="badges"><span class="badge">20–30 s</span><span class="badge">3+ ideas</span><span class="badge">Natural English</span></div><div class="actions" style="margin-top:16px"><button class="btn primary" id="new-topic">Nuevo tema</button></div></div></div>
+<div id="panel-trabalenguas" class="panel"><div class="card hero"><div class="eyebrow">Articulation challenge</div><div id="twister" class="phrase">Peter Piper picked a peck of pickled peppers.</div><div id="twister-focus" class="sub">Enfoque: /p/</div><div class="actions"><button class="btn" id="twister-speak">🔊 Escuchar</button><button class="btn primary" id="new-twister">Nuevo reto</button></div></div></div>
+<button class="record" id="record-btn">Start recording</button>
+<div class="result" id="pron-result"><div class="inspect"><div class="item"><b id="i-om">0</b><small>Omisiones</small></div><div class="item"><b id="i-mis">0</b><small>Pronunciación</small></div><div class="item"><b id="i-in">0</b><small>Inserciones</small></div><div class="item"><b id="i-break">0</b><small>Interrupciones</small></div><div class="item"><b id="i-rest">0</b><small>Pausas</small></div><div class="item"><b id="i-mono">0</b><small>Entonación</small></div></div><div class="scoregrid"><div class="score"><div class="circle" id="global-score">0</div><small style="color:var(--muted);margin-top:8px">Overall</small></div><div class="metrics" id="metric-list"></div></div><h3 style="margin-top:20px">Word-by-word analysis</h3><div class="words" id="words"></div><div class="phonemes" id="phonemes"><b id="phoneme-title">Word</b><div class="chips" id="chips"></div></div></div>
 </section>
 
-<section id="sec-escritura" class="section">
-  <div class="card"><h2>Writing practice</h2><p class="desc">Escribe en inglés. Recibirás una evaluación de gramática, vocabulario, claridad y naturalidad.</p><textarea id="writing" placeholder="Write your paragraph here in English..."></textarea><button id="writing-btn" class="btn primary" style="width:100%;margin-top:8px" data-action="evaluateWriting()">Evaluar mi escritura</button></div>
-  <div id="writing-result" class="result"><div class="report-grid"><div class="report-stat"><b id="w-score">0</b><small>Score /10</small></div><div class="report-stat"><b id="w-grammar">0</b><small>Grammar</small></div><div class="report-stat"><b id="w-vocab">0</b><small>Vocabulary</small></div><div class="report-stat"><b id="w-natural">0</b><small>Naturalness</small></div></div><div id="writing-analysis" style="font-size:12px;line-height:1.8"></div></div>
-</section>
+<section id="sec-escritura" class="section"><div class="eyebrow">Writing Lab</div><h1>Write naturally</h1><p class="desc">Recibe una evaluación clara de gramática, vocabulario y naturalidad.</p><div class="card"><textarea id="writing" placeholder="Write your paragraph here in English..."></textarea><button class="btn primary" id="writing-btn" style="width:100%;margin-top:8px">Evaluar mi escritura</button></div><div class="result" id="writing-result"><div class="reports"><div class="report"><b id="w-score">0</b><small>Score /10</small></div><div class="report"><b id="w-grammar">0</b><small>Grammar</small></div><div class="report"><b id="w-vocab">0</b><small>Vocabulary</small></div><div class="report"><b id="w-natural">0</b><small>Naturalness</small></div></div><div id="writing-analysis" style="font-size:12px;line-height:1.8"></div></div></section>
 
-<section id="sec-lectura" class="section">
-  <div class="card"><div class="eyebrow">Comprehension lab</div><h2 id="reading-title">Cargando lectura...</h2><div id="reading-text" class="reading-text"></div><div class="notice">Lee con atención. No verás una traducción ni respuestas predeterminadas. Después explica en inglés, con tus propias palabras, qué entendiste.</div><textarea id="reading-answer" placeholder="In English, explain what you understood from the text..."></textarea><div class="actions" style="justify-content:flex-start"><button id="reading-btn" class="btn primary" data-action="evaluateReading()">Analizar comprensión</button><button id="new-reading" class="btn" data-action="loadReading()">Nueva lectura</button></div></div>
-  <div id="reading-result" class="result"><h2>Comprehension report</h2><div class="report-grid"><div class="report-stat"><b id="r-score">0</b><small>Score /10</small></div><div class="report-stat"><b id="r-main">0</b><small>Main idea</small></div><div class="report-stat"><b id="r-details">0</b><small>Details</small></div><div class="report-stat"><b id="r-vocab">0</b><small>Vocabulary</small></div></div><div id="reading-summary" style="font-size:12px;line-height:1.8"></div><h3 style="margin-top:18px">What you did well</h3><ul id="reading-hits" class="report-list"></ul><h3 style="margin-top:14px">What was missing</h3><ul id="reading-misses" class="report-list"></ul><h3 style="margin-top:18px">Useful vocabulary</h3><div id="reading-vocab" class="vocab"></div></div>
-</section>
+<section id="sec-lectura" class="section"><div class="eyebrow">Comprehension Lab</div><h1>Read and explain</h1><p class="desc">Lee un texto informativo y después explica en inglés lo que entendiste. No mostramos traducción ni respuestas antes de tu intento.</p><div class="card"><h2 id="reading-title">Nueva lectura</h2><div class="reading" id="reading-text"></div><div class="notice">Usa tus propias palabras. La evaluación considera la idea principal, detalles, vocabulario y claridad de tu explicación.</div><textarea id="reading-answer" placeholder="In English, explain what you understood from the text..."></textarea><div class="actions" style="justify-content:flex-start"><button class="btn primary" id="reading-btn">Analizar comprensión</button><button class="btn" id="new-reading">Nueva lectura</button></div></div><div class="result" id="reading-result"><div class="reports"><div class="report"><b id="r-score">0</b><small>Score /10</small></div><div class="report"><b id="r-main">0%</b><small>Main idea</small></div><div class="report"><b id="r-details">0%</b><small>Details</small></div><div class="report"><b id="r-vocab">0%</b><small>Vocabulary</small></div></div><div id="reading-summary" style="font-size:12px;line-height:1.8"></div><h3 style="margin-top:18px">What you did well</h3><ul class="list" id="reading-hits"></ul><h3 style="margin-top:14px">What was missing</h3><ul class="list" id="reading-misses"></ul><h3 style="margin-top:18px">Useful vocabulary</h3><div class="vocab" id="reading-vocab"></div></div></section>
 
-<section id="sec-escucha" class="section">
-  <div class="card"><h2>Listening practice</h2><p class="desc">Escucha la frase y escribe exactamente lo que oigas.</p><div class="actions" style="justify-content:flex-start;margin-top:16px"><button class="btn" data-action="playDictation(1)">🔊 Natural</button><button class="btn" data-action="playDictation(.7)">🐢 Slow</button><button id="new-dict" class="btn primary" data-action="loadDictation()">Nuevo dictado</button></div><input id="dictation" placeholder="Write what you heard..."><button id="dict-btn" class="btn primary" style="width:100%;margin-top:8px" data-action="evaluateDictation()">Verificar dictado</button></div>
-  <div id="dict-result" class="result"><div class="report-grid"><div class="report-stat"><b id="d-score">0</b><small>Score /10</small></div></div><div id="dict-analysis" style="font-size:12px;line-height:1.8"></div></div>
-</section>
+<section id="sec-escucha" class="section"><div class="eyebrow">Listening Lab</div><h1>Train your ear</h1><p class="desc">Escucha la frase y escribe exactamente lo que oigas.</p><div class="card"><div class="actions" style="justify-content:flex-start"><button class="btn" id="dict-natural">🔊 Natural</button><button class="btn" id="dict-slow">🐢 Slow</button><button class="btn primary" id="new-dict">Nuevo dictado</button></div><input id="dictation" placeholder="Write what you heard..."><button class="btn primary" id="dict-btn" style="width:100%;margin-top:8px">Verificar dictado</button></div><div class="result" id="dict-result"><div class="reports"><div class="report"><b id="d-score">0</b><small>Score /10</small></div></div><div id="dict-analysis" style="font-size:12px;line-height:1.8"></div></div></section>
 
-<section id="sec-tutor" class="section">
-  <div class="card"><div class="eyebrow">Conversation coach</div><h2>AI Tutor</h2><p class="desc">Practica conversación en inglés con un tutor que mantiene el contexto, adapta el nivel y usa tus resultados de pronunciación cuando están disponibles.</p></div>
-  <div class="tutor-layout">
-    <div class="tutor-avatar"><div class="face">👨‍🏫</div><b>English Coach</b><p>Friendly, patient and focused on helping you speak with confidence.</p></div>
-    <div class="card chat"><div id="messages" class="messages"><div class="msg ai">Hi! I'm your English coach. Tell me about your day in English.</div></div><div class="chat-input"><button class="btn mini" data-action="startTutorVoice()">🎙️</button><input id="tutor-input" placeholder="Type or speak in English..."><button id="tutor-btn" class="btn primary" data-action="sendTutor()">Send</button></div></div>
-  </div>
-</section>
+<section id="sec-tutor" class="section"><div class="eyebrow">Conversation Coach</div><h1>Speak freely</h1><p class="desc">Practica conversación en inglés con un tutor que te anima a hablar más y te corrige lo esencial.</p><div class="tutor"><div class="coach"><div class="face">👨‍🏫</div><b>English Coach</b><p>Patient, encouraging and focused on helping you speak with confidence.</p></div><div class="card chat"><div class="messages" id="messages"><div class="msg ai">Hi! I'm your English coach. Tell me about your day in English.</div></div><div class="chatinput"><button class="btn" id="tutor-voice">🎙️ Voice</button><input id="tutor-input" placeholder="Type or speak in English..."><button class="btn primary" id="tutor-btn">Send</button></div></div></div></section>
 
-<section id="sec-historial" class="section">
-  <div class="actions" style="justify-content:space-between;margin-bottom:14px"><h2>My progress</h2><button class="btn" data-action="loadHistory()">Actualizar</button></div>
-  <div id="history"><div class="empty">Cargando registros...</div></div>
-</section>
+<section id="sec-historial" class="section"><div class="actions" style="justify-content:space-between"><div><div class="eyebrow">Progress Lab</div><h1>My progress</h1></div><button class="btn" id="history-refresh">Actualizar</button></div><div class="progress"><div class="pbox"><strong id="p-sessions">0</strong><small>Sessions</small></div><div class="pbox"><strong id="p-average">0</strong><small>Average score</small></div><div class="pbox"><strong id="p-best">0</strong><small>Best score</small></div><div class="pbox"><strong id="p-accuracy">0%</strong><small>Avg. pronunciation</small></div></div><div class="evolution"><h3>Score evolution</h3><div class="bars" id="evolution-bars"></div></div><div id="history"></div></section>
 </div>
 </div>
 </main>
 </div>
 
-<div id="auth-modal" class="modal"><div class="modal-card"><h2 id="auth-title">Iniciar sesión</h2><div id="auth-error" style="display:none;margin:10px 0;padding:10px;border-radius:10px;background:rgba(255,80,80,.12);color:#ffb4b4;font-size:13px"></div><input id="auth-email" type="email" placeholder="Correo electrónico"><input id="auth-password" type="password" placeholder="Contraseña"><button id="auth-submit" class="btn primary" data-action="processAuth()">Ingresar</button><button class="btn" data-action="toggleAuth()" id="auth-toggle">¿No tienes cuenta? Regístrate</button><button class="btn danger" data-action="closeAuth()">Cancelar</button></div></div>
+<div class="modal" id="auth-modal"><div class="modal-card"><h2 id="auth-title">Iniciar sesión</h2><div class="autherror" id="auth-error"></div><input id="auth-email" type="email" placeholder="Correo electrónico"><input id="auth-password" type="password" placeholder="Contraseña"><button class="btn primary" id="auth-submit">Ingresar</button><button class="btn" id="auth-toggle">¿No tienes cuenta? Regístrate</button><button class="btn danger" id="auth-close">Cancelar</button></div></div>
 
 <script>
-
+"use strict";
 const API_URL="https://backend-ingles-e3ms.onrender.com";
 const SUPABASE_URL="https://lqdgbmuodnshfgokesvd.supabase.co";
 const SUPABASE_ANON_KEY="sb_publishable_ivnebDTQZ9SeyZQUHBKtmg_yRtH6mFu";
-const supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-let currentUser=null, registerMode=false, pronModeCurrent="lectura";
-let mediaRecorder=null,audioChunks=[],recording=false,timer=0,timerId=null;
-let dictationText="",readingData=null;
-let tutorHistory=[];
-let authListenerStarted=false;
+const state={user:null,pron:"lectura",reading:null,dictation:"",recording:false,mediaRecorder:null,chunks:[],timer:null,seconds:0,authRegister:false};
 
-function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]||m));}
-function setLoading(id,on,text){
-  const b=document.getElementById(id); if(!b)return;
-  if(on){b.dataset.old=b.innerText;b.disabled=true;b.innerText=text||"Procesando...";b.classList.add("loading")}
-  else{b.disabled=false;b.innerText=b.dataset.old||"Listo";b.classList.remove("loading")}
+const $=id=>document.getElementById(id);
+const all=sel=>Array.from(document.querySelectorAll(sel));
+const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+
+function busy(id,on,label){const b=$(id);if(!b)return;if(on){b.dataset.old=b.innerText;b.innerText=label;b.disabled=true;b.classList.add("loading")}else{b.disabled=false;b.innerText=b.dataset.old||label;b.classList.remove("loading")}}
+function showAuthError(msg){$("auth-error").textContent=msg||"";$("auth-error").style.display=msg?"block":"none"}
+function openAuth(){showAuthError("");$("auth-modal").style.display="flex"}
+function closeAuth(){$("auth-modal").style.display="none"}
+function speak(text,rate=1){if(!window.speechSynthesis)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(text));u.lang="en-US";u.rate=rate;speechSynthesis.speak(u)}
+
+async function session(){const r=await supabaseClient.auth.getSession();if(r.error)throw r.error;return r.data.session||null}
+async function authFetch(path,options={}){let s=await session();if(!s){openAuth();throw new Error("No hay una sesión activa.")}const headers=new Headers(options.headers||{});headers.set("Authorization","Bearer "+s.access_token);let r=await fetch(API_URL+path,{...options,headers});if(r.status===401){const x=await supabaseClient.auth.refreshSession();if(x.data.session){headers.set("Authorization","Bearer "+x.data.session.access_token);r=await fetch(API_URL+path,{...options,headers})}}return r}
+async function jsonFetch(path,options){const r=await authFetch(path,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||("HTTP "+r.status));return d}
+
+async function syncUser(user){
+ state.user=user||null;$("side-user").textContent=user?.email||"English Academy";
+ if(!user){$("user-display").textContent="Inicia sesión para practicar";$("side-status").textContent="Sign in to begin";$("login-btn").style.display="inline-block";$("logout-btn").style.display="none";$("app-content").style.display="none";$("locked").style.display="none";openAuth();return}
+ try{
+   const {data,error}=await supabaseClient.from("profiles").select("is_subscribed").eq("id",user.id).maybeSingle();
+   if(error)throw error;
+   if(!data?.is_subscribed){$("user-display").textContent=user.email;$("side-status").textContent="Access pending";$("login-btn").style.display="none";$("logout-btn").style.display="inline-block";$("app-content").style.display="none";$("locked").style.display="block";return}
+   $("user-display").textContent=user.email;$("side-status").textContent="Ready to practice";$("login-btn").style.display="none";$("logout-btn").style.display="inline-block";$("locked").style.display="none";$("app-content").style.display="block";
+ }catch(e){console.error("[PROFILE]",e);$("locked").style.display="block";$("app-content").style.display="none";$("side-status").textContent="Profile check needed"}
 }
 
-function showAuthError(message){
-  console.error("[AUTH]",message);
-  const box=document.getElementById("auth-error");
-  if(box){box.innerText=message;box.style.display="block";}
+function section(name,button){
+ all(".nav button").forEach(b=>b.classList.remove("active"));if(button)button.classList.add("active");
+ all(".section").forEach(s=>s.classList.remove("active"));const target=$("sec-"+name);if(!target)return;target.classList.add("active");
+ if(name==="lectura"&&!state.reading)loadReading();if(name==="escucha"&&!state.dictation)loadDictation();if(name==="historial")loadProgress();
 }
-function clearAuthError(){
-  const box=document.getElementById("auth-error");
-  if(box){box.innerText="";box.style.display="none";}
+function pronMode(mode){state.pron=mode;all(".mode").forEach(b=>b.classList.toggle("active",b.dataset.pron===mode));["lectura","habla_libre","trabalenguas"].forEach(x=>$("panel-"+x).classList.toggle("active",x===mode));$("pron-result").style.display="none"}
+
+async function newPhrase(){busy("new-phrase",true,"Generando...");try{const r=await fetch(API_URL+"/nueva-frase");const d=await r.json();$("phrase").textContent=d.frase||"";$("translation").textContent=d.traduccion||""}catch(e){alert("No se pudo generar la frase.")}finally{busy("new-phrase",false,"Nueva frase")}}
+function customPhrase(){const v=$("custom-phrase").value.trim();if(!v)return;$("phrase").textContent=v;$("translation").textContent="Frase personalizada";$("custom-phrase").value=""}
+async function newTopic(){busy("new-topic",true,"Generando...");try{const r=await fetch(API_URL+"/nuevo-tema-libre");const d=await r.json();$("free-topic").textContent=d.tema||"";$("free-instructions").textContent=d.instrucciones||""}catch(e){alert("No se pudo generar el tema.")}finally{busy("new-topic",false,"Nuevo tema")}}
+async function newTwister(){busy("new-twister",true,"Generando...");try{const r=await fetch(API_URL+"/nuevo-trabalenguas");const d=await r.json();$("twister").textContent=d.trabalenguas||"";$("twister-focus").textContent="Enfoque: "+(d.enfoque||"")}catch(e){alert("No se pudo generar el reto.")}finally{busy("new-twister",false,"Nuevo reto")}}
+
+async function toggleRecording(){
+ const b=$("record-btn");
+ if(state.recording){clearInterval(state.timer);if(state.mediaRecorder?.state!=="inactive")state.mediaRecorder.stop();state.recording=false;b.classList.remove("recording");b.textContent="Analizando...";return}
+ if(!navigator.mediaDevices?.getUserMedia)return alert("Tu navegador no permite el micrófono.");
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});const mr=new MediaRecorder(stream);state.mediaRecorder=mr;state.chunks=[];mr.ondataavailable=e=>{if(e.data.size)state.chunks.push(e.data)};mr.onstop=()=>{stream.getTracks().forEach(t=>t.stop());sendRecording()};mr.start();state.recording=true;state.seconds=0;b.classList.add("recording");b.textContent="Recording... (0s) · Click to stop";state.timer=setInterval(()=>{state.seconds++;b.textContent=`Recording... (${state.seconds}s) · Click to stop`},1000)
+ }catch(e){alert("No fue posible acceder al micrófono. Revisa los permisos.")}
 }
-
-document.addEventListener("DOMContentLoaded",async()=>{
-  try{
-    if(!window.supabase || !supabase.createClient) throw new Error("No se pudo cargar la librería de Supabase.");
-    await verifySession();
-    startAuthListener();
-  }catch(e){
-    console.error("[AUTH INIT]",e);
-    showAuthError("No fue posible validar tu sesión: "+(e.message||e));
-    openAuth();
-  }
-});
-
-async function getSession(){
-  const result=await supabaseClient.auth.getSession();
-  if(result.error)throw new Error("Supabase: "+result.error.message);
-  return result.data?.session||null;
-}
-
-async function authFetch(url,opt={}){
-  let session=await getSession();
-  if(!session){
-    openAuth();
-    throw new Error("No hay una sesión activa. Inicia sesión nuevamente.");
-  }
-
-  async function requestWithSession(s){
-    const headers=new Headers(opt.headers||{});
-    headers.set("Authorization","Bearer "+s.access_token);
-    return fetch(url,{...opt,headers});
-  }
-
-  let response=await requestWithSession(session);
-
-  if(response.status===401){
-    const refreshed=await supabaseClient.auth.refreshSession();
-    if(!refreshed.error && refreshed.data?.session){
-      response=await requestWithSession(refreshed.data.session);
-    }
-  }
-  return response;
-}
-
-async function verifySession(){
-  const session=await getSession();
-  await updateUser(session?.user||null);
-}
-
-function startAuthListener(){
-  if(authListenerStarted)return;
-  authListenerStarted=true;
-  supabaseClient.auth.onAuthStateChange((event,session)=>{
-    console.log("[AUTH STATE]",event,session?.user?.email||"sin sesión");
-    setTimeout(()=>updateUser(session?.user||null),0);
-  });
-}
-
-async function updateUser(user){
-  currentUser=user;
-  const display=document.getElementById("user-display");
-  const side=document.getElementById("side-user");
-  const login=document.getElementById("login-btn");
-  const logoutBtn=document.getElementById("logout-btn");
-  const main=document.getElementById("main-container");
-
-  if(!user){
-    display.innerText="Inicia sesión para practicar";
-    side.innerText="English Academy";
-    login.style.display="inline-block";
-    logoutBtn.style.display="none";
-    main.style.display="none";
-    return;
-  }
-
-  try{
-    const {data,error}=await supabaseClient
-      .from("profiles")
-      .select("is_subscribed")
-      .eq("id",user.id)
-      .maybeSingle();
-
-    if(error)throw new Error("No se pudo consultar tu perfil: "+error.message);
-
-    if(!data?.is_subscribed){
-      display.innerText=(user.email||"Usuario")+" · Acceso pendiente";
-      side.innerText=user.email||"Usuario";
-      login.style.display="none";
-      logoutBtn.style.display="inline-block";
-      main.style.display="none";
-      return;
-    }
-
-    display.innerText=user.email||"Cuenta activa";
-    side.innerText=user.email||"Usuario";
-    login.style.display="none";
-    logoutBtn.style.display="inline-block";
-    main.style.display="block";
-    clearAuthError();
-  }catch(e){
-    console.error("[PROFILE]",e);
-    display.innerText="Sesión iniciada · revisa tu perfil";
-    side.innerText=user.email||"Usuario";
-    login.style.display="none";
-    logoutBtn.style.display="inline-block";
-    main.style.display="none";
-    showAuthError(e.message||"No fue posible validar tu perfil.");
-  }
-}
-
-function openAuth(){
-  const m=document.getElementById("auth-modal"); if(m)m.style.display="flex";
-}
-function closeAuth(){
-  const m=document.getElementById("auth-modal"); if(m)m.style.display="none";
-}
-function toggleAuth(){
-  registerMode=!registerMode;
-  clearAuthError();
-  document.getElementById("auth-title").innerText=registerMode?"Crear cuenta":"Iniciar sesión";
-  document.getElementById("auth-submit").innerText=registerMode?"Registrarme":"Ingresar";
-  document.getElementById("auth-toggle").innerText=registerMode?"¿Ya tienes cuenta? Inicia sesión":"¿No tienes cuenta? Regístrate";
-}
-async function processAuth(){
-  clearAuthError();
-  const email=document.getElementById("auth-email").value.trim();
-  const password=document.getElementById("auth-password").value;
-  if(!email||!password){showAuthError("Escribe tu correo y contraseña.");return;}
-
-  setLoading("auth-submit",true,registerMode?"Creando...":"Entrando...");
-  try{
-    const result=registerMode
-      ?await supabaseClient.auth.signUp({email,password})
-      :await supabaseClient.auth.signInWithPassword({email,password});
-
-    if(result.error)throw new Error(result.error.message);
-
-    if(registerMode && !result.data?.session){
-      showAuthError("Cuenta creada. Revisa tu correo para confirmar la cuenta y después inicia sesión.");
-      return;
-    }
-
-    closeAuth();
-    await verifySession();
-  }catch(e){
-    console.error("[AUTH LOGIN]",e);
-    showAuthError(e.message||"No fue posible iniciar sesión.");
-  }finally{
-    setLoading("auth-submit",false,registerMode?"Registrarme":"Ingresar");
-  }
-}
-
-async function logout(){
-  try{await supabaseClient.auth.signOut();}catch(e){console.error("[LOGOUT]",e)}
-  currentUser=null;
-  document.getElementById("main-container").style.display="none";
-  openAuth();
-}
-
-
-
-function tab(name,btn){
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
-  if(btn)btn.classList.add("active");
-  const section=document.getElementById("sec-"+name);
-  if(!section){
-    console.error("[NAV] No existe la sección sec-"+name);
-    return;
-  }
-  section.classList.add("active");
-  if(name==="lectura"&&!readingData)loadReading();
-  if(name==="escucha"&&!dictationText)loadDictation();
-  if(name==="historial")loadHistory();
-  if(name==="progreso"&&typeof loadProgress==="function")loadProgress();
-}
-
-function pronMode(mode){
-  pronModeCurrent=mode;
-  document.querySelectorAll(".mode").forEach(x=>x.classList.remove("active"));
-  const modeId="mode-"+mode.replace("_","-");
-  const modeButton=document.getElementById(modeId);
-  if(modeButton)modeButton.classList.add("active");
-  document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
-  const panel=document.getElementById("panel-"+mode);
-  if(panel)panel.classList.add("active");
-  const result=document.getElementById("pron-result");
-  if(result)result.style.display="none";
-}
-
-function speakText(text,rate=1){
-  if(!("speechSynthesis" in window)){
-    console.warn("[VOICE] speechSynthesis no disponible");
-    return;
-  }
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(String(text).replace(/^"|"$/g,""));
-  u.lang="en-US";
-  u.rate=rate;
-  speechSynthesis.speak(u);
-}
-
-async function newPhrase(){
-  setLoading("new-phrase",true,"Generando...");
-  try{
-    const r=await fetch(API_URL+"/nueva-frase");
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||"No se pudo generar la frase.");
-    document.getElementById("phrase").innerText=d.frase||"";
-    document.getElementById("translation").innerText=d.traduccion||"";
-  }catch(e){alert(e.message||"No se pudo generar la frase.");}
-  finally{setLoading("new-phrase",false,"Nueva frase");}
-}
-
-function useCustomPhrase(){
-  const x=document.getElementById("custom-phrase").value.trim();
-  if(!x)return;
-  document.getElementById("phrase").innerText=x;
-  document.getElementById("translation").innerText="Frase personalizada";
-  document.getElementById("custom-phrase").value="";
-}
-
-async function newTopic(){
-  setLoading("new-topic",true,"Generando...");
-  try{
-    const r=await fetch(API_URL+"/nuevo-tema-libre");
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||"No se pudo generar el tema.");
-    document.getElementById("free-topic").innerText=d.tema||"";
-    document.getElementById("free-instructions").innerText=d.instrucciones||"";
-  }catch(e){alert(e.message||"No se pudo generar el tema.");}
-  finally{setLoading("new-topic",false,"Nuevo tema");}
-}
-
-async function newTwister(){
-  setLoading("new-twister",true,"Generando...");
-  try{
-    const r=await fetch(API_URL+"/nuevo-trabalenguas");
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||"No se pudo generar el reto.");
-    document.getElementById("twister").innerText=d.trabalenguas||"";
-    document.getElementById("twister-focus").innerText="Enfoque: "+(d.enfoque||"");
-  }catch(e){alert(e.message||"No se pudo generar el reto.");}
-  finally{setLoading("new-twister",false,"Nuevo reto");}
-}
-
-async function toggleRecord(){
-  const btn=document.getElementById("record-btn");
-  if(recording){
-    clearInterval(timerId);
-    if(mediaRecorder && mediaRecorder.state!=="inactive")mediaRecorder.stop();
-    recording=false;
-    btn.classList.remove("recording");
-    btn.innerText="Analizando tu desempeño...";
-    return;
-  }
-  if(!navigator.mediaDevices?.getUserMedia){
-    alert("Tu navegador no permite acceso al micrófono. Usa Chrome o Edge con HTTPS.");
-    return;
-  }
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    mediaRecorder=new MediaRecorder(stream);
-    audioChunks=[];
-    mediaRecorder.ondataavailable=e=>{if(e.data.size>0)audioChunks.push(e.data)};
-    mediaRecorder.onstop=()=>{
-      stream.getTracks().forEach(t=>t.stop());
-      sendAudio();
-    };
-    mediaRecorder.start();
-    recording=true;
-    timer=0;
-    btn.classList.add("recording");
-    btn.innerText="Recording... (0s) · Click to stop";
-    timerId=setInterval(()=>{timer++;btn.innerText=`Recording... (${timer}s) · Click to stop`},1000);
-  }catch(e){
-    console.error("[MIC]",e);
-    alert("No fue posible acceder al micrófono. Revisa los permisos del navegador.");
-  }
-}
-
-async function sendAudio(){
-  const blob=new Blob(audioChunks,{type:"audio/webm"});
-  const fd=new FormData();
-  fd.append("audio",blob,"recording.webm");
-
-  let endpoint=API_URL+"/analizar-audio-real";
-  if(pronModeCurrent==="lectura"){
-    fd.append("frase_esperada",document.getElementById("phrase").innerText);
-    fd.append("modo","lectura");
-  }else if(pronModeCurrent==="trabalenguas"){
-    fd.append("frase_esperada",document.getElementById("twister").innerText);
-    fd.append("modo","trabalenguas");
-  }else{
-    endpoint=API_URL+"/api/assess-unscripted";
-    fd.append("topic",document.getElementById("free-topic").innerText);
-  }
-
-  try{
-    const r=await authFetch(endpoint,{method:"POST",body:fd});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||"No se pudo analizar el audio.");
-    renderPron(d);
-  }catch(e){
-    console.error("[PRONUNCIATION]",e);
-    alert(e.message||"No se pudo analizar el audio.");
-  }finally{
-    document.getElementById("record-btn").innerText="Start recording";
-    document.querySelectorAll("audio").forEach(x=>x.remove());
-  }
-}
-
+function metrics(items){$("metric-list").innerHTML=items.map(x=>`<div><div class="mhead"><span>${esc(x.label)}</span><span>${Math.round(x.value)}%</span></div><div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,x.value))}%"></div></div></div>`).join("")}
 function renderPron(d){
-  const box=document.getElementById("pron-result");
-  box.style.display="block";
-
-  if(pronModeCurrent==="habla_libre"){
-    const c=d.content_assessment||{};
-    document.getElementById("global-score").innerText=d.pronunciation_score??0;
-    renderMeters([
-      {n:"Pronunciación",v:d.accuracy_score||0},
-      {n:"Fluidez",v:d.fluency_score||0},
-      {n:"Prosodia",v:d.prosody_score||0},
-      {n:"Gramática",v:c.grammar_score||0},
-      {n:"Vocabulario",v:c.vocabulary_score||0},
-      {n:"Tema",v:c.topic_score||0}
-    ]);
-    document.getElementById("words").innerHTML=`<div style="color:var(--muted);font-size:12px">Transcripción: ${esc(d.transcription||"")}</div>`;
-    return;
-  }
-
-  const i=d.inspeccion||{};
-  document.getElementById("i-om").innerText=i.omisiones||0;
-  document.getElementById("i-mis").innerText=i.pronunciaciones_incoherentes||0;
-  document.getElementById("i-in").innerText=i.inserciones||0;
-  document.getElementById("i-break").innerText=i.interrupcion_inesperada||0;
-  document.getElementById("i-rest").innerText=i.falta_un_descanso||0;
-  document.getElementById("i-mono").innerText=i.monotona||0;
-  document.getElementById("global-score").innerText=d.puntuacion_global||0;
-
-  renderMeters([
-    {n:"Precisión fonética",v:d.precision||0},
-    {n:"Fluidez",v:d.fluidez||0},
-    {n:"Completitud",v:d.completitud||0},
-    {n:"Prosodia",v:d.prosodia||0}
-  ]);
-
-  const w=document.getElementById("words");
-  w.innerHTML="";
-  (d.palabras||[]).forEach(item=>{
-    const el=document.createElement("button");
-    el.type="button";
-    el.className="word";
-    el.innerHTML=`<b>${esc(item.palabra)}</b><small>${item.precision||0}%</small>`;
-    el.onclick=()=>showPhonemes(item);
-    w.appendChild(el);
-  });
-  document.getElementById("phonemes").style.display="none";
+ $("pron-result").style.display="block";$("global-score").textContent=d.puntuacion_global??d.pronunciation_score??0;const i=d.inspeccion||{};$("i-om").textContent=i.omisiones||0;$("i-mis").textContent=i.pronunciaciones_incoherentes||0;$("i-in").textContent=i.inserciones||0;$("i-break").textContent=i.interrupcion_inesperada||0;$("i-rest").textContent=i.falta_un_descanso||0;$("i-mono").textContent=i.monotona||0;
+ if(state.pron==="habla_libre"){metrics([{label:"Pronunciación",value:d.accuracy_score||0},{label:"Fluidez",value:d.fluency_score||0},{label:"Prosodia",value:d.prosody_score||0},{label:"Gramática",value:d.gramatica||0},{label:"Vocabulario",value:d.vocabulario||0},{label:"Tema",value:d.coherencia||0}]);$("words").innerHTML=`<div style="color:var(--muted);font-size:12px">Transcripción: ${esc(d.transcription||"")}</div>`;return}
+ metrics([{label:"Precisión fonética",value:d.precision||0},{label:"Fluidez",value:d.fluidez||0},{label:"Completitud",value:d.completitud||0},{label:"Prosodia",value:d.prosodia||0}]);$("words").innerHTML="";(d.palabras||[]).forEach(item=>{const b=document.createElement("button");b.className="word";b.innerHTML=`<b>${esc(item.palabra)}</b><small>${item.precision||0}%</small>`;b.addEventListener("click",()=>showPhonemes(item));$("words").appendChild(b)})
+}
+function showPhonemes(item){$("phonemes").style.display="block";$("phoneme-title").textContent=`${item.palabra} · ${item.precision||item.puntuacion||0}%`;$("chips").innerHTML=(item.fonemas||[]).map(p=>`<span class="chip">/${esc(p.fonema)}/ · ${p.precision}%</span>`).join("")||"Sin desglose disponible."}
+async function sendRecording(){
+ const fd=new FormData();fd.append("audio",new Blob(state.chunks,{type:"audio/webm"}),"recording.webm");let path="/analizar-audio-real";
+ if(state.pron==="lectura")fd.append("frase_esperada",$("phrase").textContent);else if(state.pron==="trabalenguas")fd.append("frase_esperada",$("twister").textContent);else{path="/api/assess-unscripted";fd.append("topic",$("free-topic").textContent)}
+ try{const d=await jsonFetch(path,{method:"POST",body:fd});renderPron(d)}catch(e){alert(e.message)}finally{$("record-btn").textContent="Start recording"}
 }
 
-function renderMeters(arr){
-  document.getElementById("metric-list").innerHTML=arr.map(m=>
-    `<div class="meter"><div class="meter-head"><span>${esc(m.n)}</span><span>${m.v}%</span></div><div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,m.v))}%"></div></div></div>`
-  ).join("");
+async function evalWriting(){const text=$("writing").value.trim();if(!text)return alert("Escribe primero.");busy("writing-btn",true,"Analizando...");try{const d=await jsonFetch("/analizar-escritura",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({texto:text})});$("writing-result").style.display="block";$("w-score").textContent=d.calificacion??0;$("w-grammar").textContent=d.gramatica??0;$("w-vocab").textContent=d.vocabulario??0;$("w-natural").textContent=d.naturalidad??0;$("writing-analysis").innerHTML=`<p>${esc(d.analisis||"")}</p><h3>Corrections</h3><ul class="list">${(d.correcciones||[]).map(x=>`<li>${esc(x.original)} → ${esc(x.corregido)} — ${esc(x.explicacion)}</li>`).join("")}</ul><h3>More natural version</h3><p>${esc(d.version_natural||"")}</p><h3>Next step</h3><p>${esc(d.siguiente_paso||"")}</p>`}catch(e){alert(e.message)}finally{busy("writing-btn",false,"Evaluar mi escritura")}}
+async function loadReading(){busy("new-reading",true,"Generando...");try{state.reading=await jsonFetch("/nuevo-texto-lectura");$("reading-title").textContent=state.reading.titulo||"";$("reading-text").textContent=state.reading.texto||"";$("reading-answer").value="";$("reading-result").style.display="none"}catch(e){alert(e.message)}finally{busy("new-reading",false,"Nueva lectura")}}
+async function evalReading(){if(!state.reading)return alert("Carga una lectura.");const answer=$("reading-answer").value.trim();if(!answer)return alert("Escribe en inglés lo que entendiste.");busy("reading-btn",true,"Analizando...");try{const d=await jsonFetch("/evaluar-lectura",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({titulo:state.reading.titulo,texto:state.reading.texto,respuesta:answer})});$("reading-result").style.display="block";$("r-score").textContent=d.calificacion??0;$("r-main").textContent=(d.idea_principal??0)+"%";$("r-details").textContent=(d.detalles??0)+"%";$("r-vocab").textContent=(d.vocabulario??0)+"%";$("reading-summary").innerHTML=`<p>${esc(d.resumen_evaluacion||"")}</p><p style="color:var(--muted)">Nivel estimado: ${esc(d.nivel_estimado||"")}</p><p style="color:var(--muted)">${esc(d.recomendacion||"")}</p>`;$("reading-hits").innerHTML=(d.aciertos||[]).map(x=>`<li>${esc(x)}</li>`).join("");$("reading-misses").innerHTML=(d.faltantes||[]).map(x=>`<li>${esc(x)}</li>`).join("");$("reading-vocab").innerHTML=(d.vocabulario_util||[]).map(x=>`<div><b>${esc(x.palabra)}</b><p>${esc(x.significado)}</p><p><i>${esc(x.ejemplo)}</i></p></div>`).join("")}catch(e){alert(e.message)}finally{busy("reading-btn",false,"Analizar comprensión")}}
+async function loadDictation(){busy("new-dict",true,"Generando...");try{const d=await jsonFetch("/nuevo-dictado");state.dictation=d.frase||"";$("dictation").value="";$("dict-result").style.display="none"}catch(e){alert(e.message)}finally{busy("new-dict",false,"Nuevo dictado")}}
+function evalDictationPlay(rate){if(state.dictation)speak(state.dictation,rate)}
+async function evalDictation(){const answer=$("dictation").value.trim();if(!answer)return alert("Escribe lo que escuchaste.");busy("dict-btn",true,"Comparando...");try{const d=await jsonFetch("/evaluar-dictado",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({original:state.dictation,usuario:answer})});$("dict-result").style.display="block";$("d-score").textContent=d.calificacion??0;$("dict-analysis").innerHTML=`<p>${esc(d.analisis||"")}</p><ul class="list">${(d.aciertos||[]).map(x=>`<li>✓ ${esc(x)}</li>`).join("")}${(d.errores||[]).map(x=>`<li>• ${esc(x)}</li>`).join("")}</ul><p style="color:var(--muted)">${esc(d.consejo||"")}</p>`}catch(e){alert(e.message)}finally{busy("dict-btn",false,"Verificar dictado")}}
+function addMsg(text,type){const el=document.createElement("div");el.className="msg "+type;el.textContent=text;$("messages").appendChild(el);$("messages").scrollTop=$("messages").scrollHeight}
+async function tutorSend(){const text=$("tutor-input").value.trim();if(!text)return;$("tutor-input").value="";addMsg(text,"user");busy("tutor-btn",true,"Thinking...");try{const history=all("#messages .msg").slice(-10).map(x=>({role:x.classList.contains("user")?"user":"assistant",content:x.textContent}));const d=await jsonFetch("/api/tutor",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text,history,pronunciation_score:$("global-score").textContent})});addMsg(d.reply||"Tell me more.","ai");speak(d.reply||"",.96)}catch(e){addMsg("No pude continuar la conversación: "+e.message,"ai")}finally{busy("tutor-btn",false,"Send")}}
+function tutorVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert("Este navegador no dispone de reconocimiento de voz.");const r=new SR();r.lang="en-US";r.interimResults=false;r.onresult=e=>{$("tutor-input").value=e.results[0][0].transcript;tutorSend()};r.onerror=()=>alert("No pude captar tu voz.");r.start()}
+async function loadProgress(){try{const d=await jsonFetch("/api/progreso");$("p-sessions").textContent=d.sesiones??0;$("p-average").textContent=d.promedio??0;$("p-best").textContent=d.mejor??0;$("p-accuracy").textContent=(d.precision_promedio??0)+"%";$("evolution-bars").innerHTML=(d.evolucion||[]).map(x=>`<div class="barcol" title="${esc(x.score)}"><i style="height:${Math.max(4,Math.min(100,x.score))}%"></i></div>`).join("")||"<div class='empty'>Aún no hay sesiones.</div>";const h=await jsonFetch("/obtener-historial");$("history").innerHTML=h.length?h.map(x=>`<div class="history-card"><div class="history-head"><span>${esc(x.frase_esperada||"Pronunciation session")}</span><span style="color:var(--success);font-weight:800">${x.puntuacion_global??0}/100</span></div><div class="history-meta"><span>Precisión ${x.precision_fonemas??0}%</span><span>Fluidez ${x.fluidez??0}%</span><span>Completitud ${x.completitud??0}%</span></div></div>`).join(""):"<div class='empty'>Todavía no hay prácticas guardadas.</div>"}catch(e){$("history").innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
+
+async function authSubmit(){showAuthError("");const email=$("auth-email").value.trim(),password=$("auth-password").value;if(!email||!password)return showAuthError("Escribe correo y contraseña.");busy("auth-submit",true,state.authRegister?"Creando...":"Ingresando...");try{const r=state.authRegister?await supabaseClient.auth.signUp({email,password}):await supabaseClient.auth.signInWithPassword({email,password});if(r.error)throw r.error;if(state.authRegister&&!r.data.session){showAuthError("Cuenta creada. Revisa tu correo para confirmar la cuenta.");return}closeAuth();await syncUser(r.data.user)}catch(e){showAuthError(e.message||"No fue posible autenticarte.")}finally{busy("auth-submit",false,state.authRegister?"Registrarme":"Ingresar")}}
+
+function bind(){
+ all("#nav button").forEach(b=>b.addEventListener("click",()=>section(b.dataset.section,b)));
+ all("[data-section-jump]").forEach(b=>b.addEventListener("click",()=>section(b.dataset.sectionJump,document.querySelector(`#nav button[data-section="${b.dataset.sectionJump}"]`))));
+ all(".mode[data-pron]").forEach(b=>b.addEventListener("click",()=>pronMode(b.dataset.pron)));
+ $("phrase-natural").addEventListener("click",()=>speak($("phrase").textContent,1));$("phrase-slow").addEventListener("click",()=>speak($("phrase").textContent,.7));$("new-phrase").addEventListener("click",newPhrase);$("use-custom").addEventListener("click",customPhrase);$("new-topic").addEventListener("click",newTopic);$("twister-speak").addEventListener("click",()=>speak($("twister").textContent,1));$("new-twister").addEventListener("click",newTwister);$("record-btn").addEventListener("click",toggleRecording);
+ $("writing-btn").addEventListener("click",evalWriting);$("new-reading").addEventListener("click",loadReading);$("reading-btn").addEventListener("click",evalReading);$("new-dict").addEventListener("click",loadDictation);$("dict-natural").addEventListener("click",()=>evalDictationPlay(1));$("dict-slow").addEventListener("click",()=>evalDictationPlay(.7));$("dict-btn").addEventListener("click",evalDictation);$("tutor-btn").addEventListener("click",tutorSend);$("tutor-voice").addEventListener("click",tutorVoice);$("tutor-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();tutorSend()}});$("history-refresh").addEventListener("click",loadProgress);
+ $("login-btn").addEventListener("click",openAuth);$("logout-btn").addEventListener("click",()=>supabaseClient.auth.signOut());$("auth-close").addEventListener("click",closeAuth);$("auth-submit").addEventListener("click",authSubmit);$("auth-toggle").addEventListener("click",()=>{state.authRegister=!state.authRegister;$("auth-title").textContent=state.authRegister?"Crear cuenta":"Iniciar sesión";$("auth-submit").textContent=state.authRegister?"Registrarme":"Ingresar";$("auth-toggle").textContent=state.authRegister?"¿Ya tienes cuenta? Inicia sesión":"¿No tienes cuenta? Regístrate";showAuthError("")});$("retry-access").addEventListener("click",()=>syncUser(state.user));
 }
 
-function showPhonemes(item){
-  document.getElementById("phonemes").style.display="block";
-  document.getElementById("phoneme-title").innerText=`${item.palabra} · ${item.precision||0}%`;
-  document.getElementById("chips").innerHTML=(item.fonemas||[]).map(p=>
-    `<span class="chip">/${esc(p.fonema)}/ · ${p.precision}%</span>`
-  ).join("")||"<span style='color:var(--muted);font-size:11px'>Sin desglose disponible.</span>";
-}
-
-async function evaluateWriting(){
-  const text=document.getElementById("writing").value.trim();
-  if(!text)return alert("Escribe primero.");
-  setLoading("writing-btn",true,"Analizando...");
-  try{
-    const r=await authFetch(API_URL+"/analizar-escritura",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({texto:text})
-    });
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||"No se pudo evaluar la escritura.");
-    document.getElementById("writing-result").style.display="block";
-    document.getElementById("w-score").innerText=d.calificacion??0;
-    document.getElementById("w-grammar").innerText=d.gramatica??0;
-    document.getElementById("w-vocab").innerText=d.vocabulario??0;
-    document.getElementById("w-natural").innerText=d.naturalidad??0;
-    document.getElementById("writing-analysis").innerHTML=
-      `<b>Analysis</b><p>${esc(d.analisis||"")}</p><br>
-       <b>Corrections</b><ul class="report-list">${(d.correcciones||[]).map(x=>`<li><b>${esc(x.original)}</b> → ${esc(x.corregido)} — ${esc(x.explicacion)}</li>`).join("")}</ul><br>
-       <b>More natural version</b><p>${esc(d.version_natural||"")}</p><br>
-       <b>Next step</b><p>${esc(d.siguiente_paso||"")}</p>`;
-  }catch(e){alert(e.message||"No se pudo evaluar la escritura.");}
-  finally{setLoading("writing-btn",false,"Evaluar mi escritura");}
-}
-
-async function loadReading(){setLoading("new-reading",true,"Generando...");try{const r=await authFetch(API_URL+"/nuevo-texto-lectura");const d=await r.json();if(!r.ok)throw new Error(d.error);readingData=d;document.getElementById("reading-title").innerText=d.titulo;document.getElementById("reading-text").innerText=d.texto;document.getElementById("reading-answer").value="";document.getElementById("reading-result").style.display="none"}catch(e){alert(e.message)}finally{setLoading("new-reading",false,"Nueva lectura")}}
-async function evaluateReading(){if(!readingData)return;const ans=document.getElementById("reading-answer").value.trim();if(!ans)return alert("Escribe en inglés lo que entendiste.");setLoading("reading-btn",true,"Analizando comprensión...");try{const r=await authFetch(API_URL+"/evaluar-lectura",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({titulo:readingData.titulo,texto:readingData.texto,respuesta:ans})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById("reading-result").style.display="block";document.getElementById("r-score").innerText=d.calificacion??0;document.getElementById("r-main").innerText=(d.idea_principal??0)+"%";document.getElementById("r-details").innerText=(d.detalles??0)+"%";document.getElementById("r-vocab").innerText=(d.vocabulario??0)+"%";document.getElementById("reading-summary").innerHTML=`<p>${esc(d.resumen_evaluacion||"")}</p><p style="color:var(--muted);margin-top:8px">Estimated level: ${esc(d.nivel_estimado||"")}</p><p style="color:var(--muted);margin-top:8px">${esc(d.recomendacion||"")}</p>`;document.getElementById("reading-hits").innerHTML=(d.aciertos||[]).map(x=>`<li>${esc(x)}</li>`).join("");document.getElementById("reading-misses").innerHTML=(d.faltantes||[]).map(x=>`<li>${esc(x)}</li>`).join("");document.getElementById("reading-vocab").innerHTML=(d.vocabulario_util||[]).map(x=>`<div class="vocab-card"><b>${esc(x.palabra)}</b><p>${esc(x.significado)}</p><p><i>${esc(x.ejemplo)}</i></p></div>`).join("")}catch(e){alert(e.message)}finally{setLoading("reading-btn",false,"Analizar comprensión")}}
-async function loadDictation(){setLoading("new-dict",true,"Generando...");try{const r=await authFetch(API_URL+"/nuevo-dictado");const d=await r.json();if(!r.ok)throw new Error(d.error);dictationText=d.frase;document.getElementById("dictation").value="";document.getElementById("dict-result").style.display="none"}catch(e){alert(e.message)}finally{setLoading("new-dict",false,"Nuevo dictado")}}
-function playDictation(rate){if(dictationText)speakText(dictationText,rate)}
-async function evaluateDictation(){const u=document.getElementById("dictation").value.trim();if(!u)return alert("Escribe lo que escuchaste.");setLoading("dict-btn",true,"Comparando...");try{const r=await authFetch(API_URL+"/evaluar-dictado",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({original:dictationText,usuario:u})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById("dict-result").style.display="block";document.getElementById("d-score").innerText=d.calificacion??0;document.getElementById("dict-analysis").innerHTML=`<p>${esc(d.analisis||"")}</p><ul class="report-list">${(d.aciertos||[]).map(x=>`<li>✓ ${esc(x)}</li>`).join("")}${(d.errores||[]).map(x=>`<li>• ${esc(x)}</li>`).join("")}</ul><p style="margin-top:10px;color:var(--muted)">${esc(d.consejo||"")}</p>`}catch(e){alert(e.message)}finally{setLoading("dict-btn",false,"Verificar dictado")}}
-
-function addMessage(text,who){const box=document.getElementById("messages"),el=document.createElement("div");el.className="msg "+who;el.innerText=text;box.appendChild(el);box.scrollTop=box.scrollHeight}
-async function sendTutor(){
-  const input=document.getElementById("tutor-input"),text=input.value.trim();
-  if(!text)return;
-  input.value="";
-  addMessage(text,"user");
-  setLoading("tutor-btn",true,"Thinking...");
-  try{
-    const pron=document.getElementById("global-score").innerText;
-    const r=await authFetch(API_URL+"/api/tutor",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({message:text,history:tutorHistory.slice(-8),pronunciation_score:pron})
-    });
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||("Backend respondió HTTP "+r.status));
-    tutorHistory.push({role:"user",content:text},{role:"assistant",content:d.reply});
-    addMessage(d.reply,"ai");
-    speakText(d.reply,.95);
-  }catch(e){
-    console.error("[TUTOR]",e);
-    addMessage("Error: "+(e.message||"No se pudo conectar con el tutor."),"ai");
-  }finally{
-    setLoading("tutor-btn",false,"Send");
-  }
-}
-function startTutorVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert("Tu navegador no permite reconocimiento de voz aquí.");const rec=new SR();rec.lang="en-US";rec.interimResults=false;rec.maxAlternatives=1;rec.onresult=e=>{document.getElementById("tutor-input").value=e.results[0][0].transcript;sendTutor()};rec.onerror=()=>alert("No pude captar tu voz.");rec.start()}
-async function loadHistory(){const box=document.getElementById("history");box.innerHTML="<div class='empty'>Cargando...</div>";try{const r=await authFetch(API_URL+"/obtener-historial");const d=await r.json();if(!r.ok)throw new Error(d.error);if(!d.length){box.innerHTML="<div class='empty'>Todavía no hay prácticas guardadas.</div>";return}box.innerHTML=d.map(x=>`<div class="history"><div class="history-head"><span>${esc(x.frase_esperada)}</span><span class="history-score">${x.puntuacion_global}/100</span></div><div class="history-meta"><span>Precisión ${x.precision_fonemas}%</span><span>Fluidez ${x.fluidez}%</span><span>Completitud ${x.completitud}%</span></div></div>`).join("")}catch(e){box.innerHTML="<div class='empty'>No fue posible cargar el progreso.</div>"}}
-
-
+document.addEventListener("DOMContentLoaded",async()=>{bind();try{const s=await session();await syncUser(s?.user||null);supabaseClient.auth.onAuthStateChange((_e,sess)=>setTimeout(()=>syncUser(sess?.user||null),0))}catch(e){console.error("[BOOT]",e);openAuth()}});
 </script>
-</body>
-</html>
+</body></html>
