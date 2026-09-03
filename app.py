@@ -1,514 +1,665 @@
-import json
 import os
+import json
 import random
-import re
 import tempfile
-
-from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI
+from dotenv import load_dotenv
 from pydub import AudioSegment
 import azure.cognitiveservices.speech as speechsdk
-from supabase import Client, create_client
+from google import genai
+from supabase import create_client, Client
 
 load_dotenv()
-
 app = Flask(__name__)
 CORS(app)
 
-def env(name, default=""):
-    return (os.getenv(name) or default).strip()
+# Sanitización de variables de entorno
+AZURE_KEY = (os.getenv("AZURE_SPEECH_KEY") or "").strip()
+AZURE_REGION = (os.getenv("AZURE_SPEECH_REGION") or "").strip()
+GEMINI_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip()
+SUPABASE_KEY = (os.getenv("SUPABASE_KEY") or "").strip()
 
-AZURE_SPEECH_KEY = env("AZURE_SPEECH_KEY")
-AZURE_SPEECH_REGION = env("AZURE_SPEECH_REGION", "westus3")
-AZURE_OPENAI_ENDPOINT = env("AZURE_OPENAI_ENDPOINT").rstrip("/")
-AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY")
-AZURE_OPENAI_DEPLOYMENT = env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
-SUPABASE_URL = env("SUPABASE_URL").rstrip("/")
-SUPABASE_KEY = env("SUPABASE_KEY")
-
-supabase: Client | None = None
+# Cliente Supabase
+supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("[OK] Supabase conectado.")
-    except Exception as exc:
-        print("[ERROR SUPABASE]", exc)
+        print("Supabase conectado correctamente.")
+    except Exception as e:
+        print(f"Error al conectar Supabase: {e}")
 
-ai_client: OpenAI | None = None
-if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY:
+# Cliente Gemini AI
+client = None
+if GEMINI_KEY:
     try:
-        ai_client = OpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            base_url=f"{AZURE_OPENAI_ENDPOINT}/openai/v1/",
-        )
-        print(f"[OK] Azure OpenAI configurado: {AZURE_OPENAI_DEPLOYMENT}")
-    except Exception as exc:
-        print("[ERROR OPENAI]", exc)
+        client = genai.Client(api_key=GEMINI_KEY)
+        print("Cliente de Gemini AI configurado correctamente.")
+    except Exception as e:
+        print(f"Error al configurar cliente de Gemini: {e}")
+
+# Nombres correctos (ortografía oficial de Google)
+MODELOS_GEMINI = [
+    'gemini-3.6-flash',
+    'gemini-3.1-pro-preview'
+]
 
 FRASES_BASE = [
     {"frase": "I usually take a short walk after dinner.", "traduccion": "Normalmente doy un paseo corto después de cenar."},
-    {"frase": "She decided to study English before starting her new job.", "traduccion": "Ella decidió estudiar inglés antes de comenzar su nuevo trabajo."},
-    {"frase": "We had an interesting conversation about technology.", "traduccion": "Tuvimos una conversación interesante sobre tecnología."},
-    {"frase": "Learning a language takes practice, patience, and curiosity.", "traduccion": "Aprender un idioma requiere práctica, paciencia y curiosidad."},
-]
-TOPICS = [
-    "What are your goals for learning English?",
-    "Describe a place you would love to visit.",
-    "Tell me about a skill you want to improve.",
-    "What makes a good friend?",
-    "Describe your ideal workday.",
-]
-TWISTERS = [
-    {"trabalenguas": "Peter Piper picked a peck of pickled peppers.", "enfoque": "/p/"},
-    {"trabalenguas": "She sells seashells by the seashore.", "enfoque": "/s/ and /ʃ/"},
-    {"trabalenguas": "Fresh fried fish, fish fresh fried.", "enfoque": "/f/ and /r/"},
-    {"trabalenguas": "How much wood would a woodchuck chuck?", "enfoque": "/w/ and /tʃ/"},
+    {"frase": "Could you help me carry these boxes upstairs?", "traduccion": "¿Podrías ayudarme a subir estas cajas?"},
+    {"frase": "She has been studying English for two years.", "traduccion": "Ella ha estado estudiando inglés por dos años."}
 ]
 
-def clean_json(raw):
-    text = (raw or "").strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
-    text = re.sub(r"\s*```$", "", text)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, flags=re.S)
-        if not match:
-            raise
-        return json.loads(match.group(0))
+LECTURA_RESPALDO = {
+    "titulo": "A Quiet Morning",
+    "texto": "Maria wakes up early every day. She likes the quiet streets before the city gets busy. She drinks coffee slowly and reads the news on her phone before going to work.",
+    "traduccion": "Maria se despierta temprano todos los días. Le gustan las calles tranquilas antes de que la ciudad se llene de actividad. Bebe café lentamente y lee las noticias en su teléfono antes de ir a trabajar.",
+    "preguntas": []
+}
 
-def ai_json(system, user, fallback=None):
-    if not ai_client:
-        if fallback is not None:
-            return fallback
-        raise RuntimeError("El servicio de IA no está configurado.")
-    response = ai_client.chat.completions.create(
-        model=AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.7,
-        response_format={"type": "json_object"},
-    )
-    return clean_json(response.choices[0].message.content or "{}")
 
-def bearer():
-    value = request.headers.get("Authorization", "")
-    if not value.lower().startswith("bearer "):
+def generar_contenido_gemini(prompt):
+    """Genera respuesta de Gemini usando la lista de modelos configurados."""
+    if not GEMINI_KEY or not client:
+        print("Falta la API Key de Gemini o el cliente no está inicializado.")
         return None
-    return value.split(" ", 1)[1].strip() or None
 
-def authenticated_user(required=True):
+    for model_name in MODELOS_GEMINI:
+        try:
+            response = client.models.generate_content(model=model_name, contents=prompt)
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            print(f"[ERROR REAL GEMINI] Falló el modelo {model_name}: {str(e)}")
+            continue
+
+    return None
+
+
+def obtener_usuario_autenticado_y_suscrito():
+    """Valida token JWT de Supabase y verifica suscripción activa."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None, "Acceso denegado: Token no proporcionado."
+    token = auth_header.split(" ")[1]
     if not supabase:
-        return None, "Supabase no está configurado."
-    token = bearer()
-    if not token:
-        return None, "Sesión requerida."
+        return None, "Error: Supabase no está configurado."
     try:
-        result = supabase.auth.get_user(token)
-        user = getattr(result, "user", None)
-        if not user:
-            return None, "La sesión no es válida o ha expirado."
-        if required:
-            profile = (
-                supabase.table("profiles")
-                .select("is_subscribed")
-                .eq("id", user.id)
-                .maybe_single()
-                .execute()
-            )
-            if not profile.data or not profile.data.get("is_subscribed", False):
-                return None, "Tu cuenta todavía no tiene acceso activo."
-        return user, None
-    except Exception as exc:
-        print("[ERROR AUTH]", exc)
-        return None, f"No fue posible validar la sesión: {exc}"
+        user_res = supabase.auth.get_user(token)
+        if not user_res or not user_res.user:
+            return None, "Sesión inválida o expirada."
+        user_id = user_res.user.id
+        res = supabase.table('profiles').select('is_subscribed').eq('id', user_id).execute()
+        if res.data and len(res.data) > 0 and res.data[0].get('is_subscribed', False):
+            return user_id, None
+        return None, "Acceso restringido: Tu cuenta no tiene el acceso de práctica activo."
+    except Exception as e:
+        return None, f"Error de autenticación: {str(e)}"
 
-def err(message, status=400):
-    return jsonify({"error": message}), status
 
-def speech_config():
-    if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
-        raise RuntimeError("El servicio de voz no está configurado.")
-    cfg = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
-    cfg.speech_recognition_language = "en-US"
-    return cfg
+# =============================================================
+# RUTAS DE GENERACIÓN INFINITA DE CONTENIDO (GEMINI)
+# =============================================================
 
-def convert_audio(upload):
-    webm = wav = None
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp:
-        upload.save(temp.name)
-        webm = temp.name
-    try:
-        wav = webm + "_16k.wav"
-        audio = AudioSegment.from_file(webm)
-        audio.set_frame_rate(16000).set_channels(1).set_sample_width(2).export(wav, format="wav")
-        return webm, wav
-    except Exception:
-        cleanup(webm, wav)
-        raise
-
-def cleanup(*paths):
-    for path in paths:
-        if path:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-
-def word_details(result):
-    raw = result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
-    payload = json.loads(raw) if raw else {}
-    words = ((payload.get("NBest") or [{}])[0]).get("Words") or []
-    inspection = {
-        "omisiones": 0, "pronunciaciones_incoherentes": 0, "inserciones": 0,
-        "interrupcion_inesperada": 0, "falta_un_descanso": 0, "monotona": 0,
-    }
-    details = []
-    for item in words:
-        pa = item.get("PronunciationAssessment") or {}
-        error_type = pa.get("ErrorType", "None")
-        score = round(float(pa.get("AccuracyScore", 0) or 0))
-        if error_type == "Omission": inspection["omisiones"] += 1
-        elif error_type == "Mispronunciation": inspection["pronunciaciones_incoherentes"] += 1
-        elif error_type == "Insertion": inspection["inserciones"] += 1
-        prosody = (pa.get("Feedback") or {}).get("Prosody") or {}
-        breaks = prosody.get("Break") or {}
-        errors = ((prosody.get("Intonation") or {}).get("ErrorTypes") or [])
-        if "UnexpectedBreak" in breaks: inspection["interrupcion_inesperada"] += 1
-        if "MissingBreak" in breaks: inspection["falta_un_descanso"] += 1
-        if "Monotone" in errors: inspection["monotona"] += 1
-        phonemes = []
-        for p in item.get("Phonemes") or []:
-            ppa = p.get("PronunciationAssessment") or {}
-            phonemes.append({"fonema": p.get("Phoneme", ""), "precision": round(float(ppa.get("AccuracyScore", 0) or 0))})
-        details.append({
-            "palabra": item.get("Word", ""),
-            "precision": score,
-            "puntuacion": score,
-            "error_type": error_type,
-            "fonemas": phonemes,
-        })
-    return inspection, details
-
-def assess_audio(wav, reference=None):
-    recognizer_cfg = speech_config()
-    audio_cfg = speechsdk.audio.AudioConfig(filename=wav)
-    pa_cfg = speechsdk.PronunciationAssessmentConfig(
-        reference_text=reference,
-        grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
-        granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
-        enable_miscue=bool(reference),
-    )
-    try:
-        pa_cfg.enable_prosody_assessment()
-    except Exception:
-        pass
-    recognizer = speechsdk.SpeechRecognizer(speech_config=recognizer_cfg, audio_config=audio_cfg)
-    pa_cfg.apply_to(recognizer)
-    result = recognizer.recognize_once_async().get()
-    if result.reason == speechsdk.ResultReason.Canceled:
-        details = speechsdk.CancellationDetails(result)
-        raise RuntimeError(details.error_details or str(details.reason))
-    if result.reason == speechsdk.ResultReason.NoMatch:
-        raise ValueError("No se detectó una voz clara. Habla cerca del micrófono.")
-    pr = speechsdk.PronunciationAssessmentResult(result)
-    data = {
-        "transcription": result.text or "",
-        "puntuacion_global": round(float(pr.pronunciation_score or 0)),
-        "pronunciation_score": round(float(pr.pronunciation_score or 0)),
-        "precision": round(float(pr.accuracy_score or 0)),
-        "accuracy_score": round(float(pr.accuracy_score or 0)),
-        "fluidez": round(float(pr.fluency_score or 0)),
-        "fluency_score": round(float(pr.fluency_score or 0)),
-        "completitud": round(float(pr.completeness_score or 0)),
-        "prosodia": round(float(pr.prosody_score or 0)),
-    }
-    if reference:
-        data["inspeccion"], data["palabras"] = word_details(result)
-    else:
-        data["inspeccion"], data["palabras"] = {}, []
-    return data
-
-def save_pron_history(user_id, phrase, data):
-    if not supabase:
-        return
-    try:
-        supabase.table("historial_pronunciacion").insert({
-            "user_id": user_id,
-            "frase_esperada": phrase,
-            "precision_fonemas": int(data.get("precision", 0)),
-            "fluidez": int(data.get("fluidez", 0)),
-            "completitud": int(data.get("completitud", 0)),
-            "puntuacion_global": int(data.get("puntuacion_global", 0)),
-        }).execute()
-    except Exception as exc:
-        print("[WARN HISTORY]", exc)
-
-@app.get("/health")
-def health():
-    return jsonify({
-        "ok": True,
-        "ai_configured": bool(ai_client),
-        "speech_configured": bool(AZURE_SPEECH_KEY and AZURE_SPEECH_REGION),
-        "supabase_configured": bool(supabase),
-    })
-
-@app.get("/api/session")
-def api_session():
-    user, error = authenticated_user(False)
-    if error:
-        return jsonify({"authenticated": False, "error": error})
-    profile = supabase.table("profiles").select("is_subscribed").eq("id", user.id).maybe_single().execute()
-    return jsonify({
-        "authenticated": True,
-        "email": user.email,
-        "user_id": user.id,
-        "is_subscribed": bool(profile.data and profile.data.get("is_subscribed")),
-    })
-
-@app.get("/nueva-frase")
+@app.route('/nueva-frase', methods=['GET'])
 def nueva_frase():
-    fallback = random.choice(FRASES_BASE)
-    try:
-        return jsonify(ai_json(
-            "Create useful English learning content. Return JSON only.",
-            'Generate one everyday English sentence for an A2-B2 learner. Return {"frase":"English sentence","traduccion":"Spanish translation"}.',
-            fallback,
-        ))
-    except Exception:
-        return jsonify(fallback)
+    """Genera frases cortas y útiles infinitas sin repetición."""
+    prompt = """Genera una frase cotidiana en inglés para estudiantes (nivel A2-B2) con su traducción al español.
+    Devuelve ÚNICAMENTE un JSON válido con este formato exacto, sin etiquetas markdown:
+    {"frase": "English sentence here", "traduccion": "Traducción en español aquí"}"""
 
-@app.get("/nuevo-tema-libre")
-def nuevo_tema():
-    fallback = {"tema": random.choice(TOPICS), "instrucciones": "Habla durante 20 a 30 segundos y desarrolla al menos tres ideas."}
-    try:
-        return jsonify(ai_json(
-            "Create concise English speaking prompts. Return JSON only.",
-            'Generate one natural speaking prompt. Return {"tema":"English prompt","instrucciones":"Short practice instructions"}.',
-            fallback,
-        ))
-    except Exception:
-        return jsonify(fallback)
-
-@app.get("/nuevo-trabalenguas")
-def nuevo_trabalenguas():
-    fallback = random.choice(TWISTERS)
-    try:
-        return jsonify(ai_json(
-            "Create concise pronunciation practice. Return JSON only.",
-            'Generate one English tongue twister and its target sound. Return {"trabalenguas":"Sentence","enfoque":"Sound"}.',
-            fallback,
-        ))
-    except Exception:
-        return jsonify(fallback)
-
-@app.get("/nuevo-texto-lectura")
-def nuevo_texto_lectura():
-    _, error = authenticated_user()
-    if error: return err(error, 401)
-    fallback = {
-        "titulo": "Why small habits matter",
-        "texto": "Small daily habits can have a surprising effect on long-term goals. A few minutes of reading, exercise, or language practice may seem insignificant, but repeating those actions creates steady progress over time.",
-    }
-    try:
-        return jsonify(ai_json(
-            "You are an English reading teacher. Create informative real-world style material for an intermediate learner. Never include a Spanish translation or questions. Return JSON only.",
-            'Generate a 70-110 word informative English text about technology, travel, science, culture, work, environment, or everyday life. Return {"titulo":"Short title","texto":"English text"}.',
-            fallback,
-        ))
-    except Exception:
-        return jsonify(fallback)
-
-@app.get("/nuevo-dictado")
-def nuevo_dictado():
-    _, error = authenticated_user()
-    if error: return err(error, 401)
-    fallback = {"frase": random.choice(FRASES_BASE)["frase"]}
-    try:
-        return jsonify(ai_json(
-            "Create short listening practice. Return JSON only.",
-            'Generate one natural English sentence of 7-14 words. Return {"frase":"English sentence"}.',
-            fallback,
-        ))
-    except Exception:
-        return jsonify(fallback)
-
-@app.post("/analizar-audio-real")
-@app.post("/api/assess-reading")
-def analizar_audio_real():
-    user, error = authenticated_user()
-    if error: return err(error, 401)
-    upload = request.files.get("audio")
-    phrase = (request.form.get("frase_esperada") or request.form.get("reference_text") or "").strip()
-    if not upload: return err("No se recibió el audio.")
-    if not phrase: return err("Falta la frase de referencia.")
-    webm = wav = None
-    try:
-        webm, wav = convert_audio(upload)
-        data = assess_audio(wav, phrase)
-        save_pron_history(user.id, phrase, data)
-        return jsonify({"calificacion": round(data["puntuacion_global"] / 10, 1), **data})
-    except ValueError as exc: return err(str(exc), 400)
-    except Exception as exc:
-        print("[ERROR PRON]", exc)
-        return err(f"No fue posible analizar el audio: {exc}", 500)
-    finally: cleanup(webm, wav)
-
-@app.post("/api/assess-unscripted")
-def assess_unscripted():
-    _, error = authenticated_user()
-    if error: return err(error, 401)
-    upload = request.files.get("audio")
-    topic = (request.form.get("topic") or request.form.get("tema") or "General conversation").strip()
-    if not upload: return err("No se recibió el audio.")
-    webm = wav = None
-    try:
-        webm, wav = convert_audio(upload)
-        speech = assess_audio(wav, None)
-        report = ai_json(
-            "You are a supportive native English speaking coach. Analyze grammar, vocabulary and relevance from the transcript. Return JSON only.",
-            json.dumps({"topic": topic, "transcript": speech["transcription"]}, ensure_ascii=False),
-            {"grammar_score": 0, "vocabulary_score": 0, "topic_score": 0, "grammar_feedback": "", "vocabulary_feedback": "", "topic_feedback": "", "next_step": "Keep practicing."},
-        ) if ai_client and speech["transcription"] else {}
-        return jsonify({
-            **speech,
-            "content_assessment": report,
-            "gramatica": int(report.get("grammar_score", 0) or 0),
-            "vocabulario": int(report.get("vocabulary_score", 0) or 0),
-            "coherencia": int(report.get("topic_score", 0) or 0),
-        })
-    except Exception as exc:
-        print("[ERROR FREE TALK]", exc)
-        return err(f"No fue posible analizar tu conversación: {exc}", 500)
-    finally: cleanup(webm, wav)
-
-@app.post("/analizar-escritura")
-def analizar_escritura():
-    _, error = authenticated_user()
-    if error: return err(error, 401)
-    text = ((request.get_json(silent=True) or {}).get("texto") or "").strip()
-    if not text: return err("Escribe primero tu texto.")
-    fallback = {"calificacion": 5, "gramatica": 5, "vocabulario": 5, "naturalidad": 5, "analisis": "", "correcciones": [], "version_natural": text, "siguiente_paso": "Add more detail."}
-    try:
-        report = ai_json(
-            "You are a professional English teacher. Evaluate writing precisely and kindly. Return JSON only in Spanish with scores from 0 to 10.",
-            json.dumps({"texto": text, "required_fields": ["calificacion","gramatica","vocabulario","naturalidad","analisis","correcciones","version_natural","siguiente_paso"]}, ensure_ascii=False),
-            fallback,
-        )
-        return jsonify(report)
-    except Exception as exc:
-        return err(f"No fue posible evaluar tu escritura: {exc}", 500)
-
-@app.post("/evaluar-lectura")
-def evaluar_lectura():
-    user, error = authenticated_user()
-    if error: return err(error, 401)
-    data = request.get_json(silent=True) or {}
-    title = (data.get("titulo") or "").strip()
-    text = (data.get("texto") or "").strip()
-    answer = (data.get("respuesta") or "").strip()
-    if not text or not answer: return err("Necesitamos el texto y tu explicación en inglés.")
-    fallback = {"calificacion": 5, "idea_principal": 50, "detalles": 50, "vocabulario": 50, "nivel_estimado": "B1", "resumen_evaluacion": "", "aciertos": [], "faltantes": [], "vocabulario_util": [], "recomendacion": "Include the main idea and two supporting details."}
-    try:
-        report = ai_json(
-            "You are an English reading-comprehension teacher. The learner explains the text in English from memory. Evaluate comprehension, not memorization. Return JSON only.",
-            json.dumps({"titulo": title, "texto": text, "respuesta_del_estudiante": answer}, ensure_ascii=False),
-            fallback,
-        )
+    res = generar_contenido_gemini(prompt)
+    if res:
         try:
-            supabase.table("historial_lectura").insert({
-                "user_id": user.id, "titulo": title, "texto": text, "respuesta": answer,
-                "calificacion": float(report.get("calificacion", 0) or 0),
-                "nivel_estimado": report.get("nivel_estimado"), "reporte": report,
-            }).execute()
-        except Exception as exc:
-            print("[WARN READING HISTORY]", exc)
-        return jsonify(report)
-    except Exception as exc:
-        return err(f"No fue posible evaluar tu comprensión: {exc}", 500)
+            clean_json = res.replace('```json', '').replace('```', '').strip()
+            return jsonify(json.loads(clean_json))
+        except Exception:
+            pass
+    return jsonify(random.choice(FRASES_BASE))
 
-@app.post("/evaluar-dictado")
-def evaluar_dictado():
-    _, error = authenticated_user()
-    if error: return err(error, 401)
-    data = request.get_json(silent=True) or {}
-    original = (data.get("original") or "").strip()
-    student = (data.get("usuario") or "").strip()
-    if not original or not student: return err("Escribe primero lo que escuchaste.")
-    normalize = lambda s: re.sub(r"[^a-z0-9]+", "", s.lower())
-    if normalize(original) == normalize(student):
-        return jsonify({"calificacion": 10, "analisis": "¡Excelente! Escribiste la frase correctamente.", "aciertos": ["La frase coincide con el audio."], "errores": [], "consejo": "Try it again at a natural speed."})
+
+@app.route('/nuevo-texto-lectura', methods=['GET'])
+def nuevo_texto_lectura():
+    """Genera un texto de lectura intermedio único, sin preguntas de opción múltiple
+    (la comprensión ahora se evalúa con la respuesta libre del estudiante, ver /evaluar-lectura)."""
     try:
-        return jsonify(ai_json(
-            "You are a listening teacher. Compare the original English sentence with the student's transcription. Return JSON only.",
-            json.dumps({"original": original, "student": student}, ensure_ascii=False),
-            {"calificacion": 5, "analisis": "Hay diferencias.", "aciertos": [], "errores": ["Revisa las palabras que cambiaron."], "consejo": "Listen again."},
-        ))
-    except Exception as exc:
-        return err(f"No fue posible evaluar el dictado: {exc}", 500)
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
 
-@app.get("/obtener-historial")
-def historial():
-    user, error = authenticated_user()
-    if error: return err(error, 401)
-    try:
-        result = supabase.table("historial_pronunciacion").select("*").eq("user_id", user.id).order("created_at", desc=True).limit(30).execute()
-        return jsonify(result.data or [])
-    except Exception as exc:
-        return err(f"No fue posible cargar tu progreso: {exc}", 500)
+        prompt = """Genera un texto de lectura informativo en inglés de nivel intermedio (aprox 35-45 palabras)
+        sobre temas variados (tecnología, viajes, cultura, ciencia, estilo de vida). Debe ser un texto real y
+        con contenido específico (no genérico), para que un estudiante deba leerlo con atención.
+        Devuelve ÚNICAMENTE un objeto JSON válido con este formato exacto, sin marcas de código Markdown:
+        {"titulo": "Título corto", "texto": "Texto en inglés"}"""
 
-@app.get("/api/progreso")
-def progreso():
-    user, error = authenticated_user()
-    if error: return err(error, 401)
-    rows = supabase.table("historial_pronunciacion").select("precision_fonemas,fluidez,completitud,puntuacion_global,created_at").eq("user_id", user.id).order("created_at", desc=True).limit(100).execute().data or []
-    if not rows:
-        return jsonify({"sesiones":0,"promedio":0,"mejor":0,"precision_promedio":0,"fluidez_promedio":0,"completitud_promedio":0,"evolucion":[]})
-    avg = lambda key: round(sum(float(x.get(key,0) or 0) for x in rows)/len(rows))
+        res_text = generar_contenido_gemini(prompt)
+        if res_text:
+            try:
+                clean_json = res_text.replace('```json', '').replace('```', '').strip()
+                data = json.loads(clean_json)
+                # Por diseño, nunca se envía traducción al frontend: el estudiante debe
+                # explicar lo que entendió en inglés, no traducir.
+                data.pop('traduccion', None)
+                data.pop('preguntas', None)
+                return jsonify(data)
+            except Exception:
+                pass
+        return jsonify(LECTURA_RESPALDO)
+    except Exception:
+        return jsonify(LECTURA_RESPALDO)
+
+
+@app.route('/nuevo-trabalenguas', methods=['GET'])
+def nuevo_trabalenguas():
+    """Genera trabalenguas en inglés únicos para practicar fonética."""
+    prompt = """Genera un trabalenguas (tongue twister) en inglés desafiante pero claro para practicar
+    pronunciación y articulación.
+    Devuelve ÚNICAMENTE un objeto JSON válido sin formato Markdown:
+    {"trabalenguas": "Sentence here", "traduccion": "Traducción al español", "enfoque": "Fonema o sonido clave a practicar (ej: /s/ and /sh/)"}"""
+
+    res = generar_contenido_gemini(prompt)
+    if res:
+        try:
+            clean_json = res.replace('```json', '').replace('```', '').strip()
+            return jsonify(json.loads(clean_json))
+        except Exception:
+            pass
     return jsonify({
-        "sesiones": len(rows),
-        "promedio": avg("puntuacion_global"),
-        "mejor": max(int(x.get("puntuacion_global",0) or 0) for x in rows),
-        "precision_promedio": avg("precision_fonemas"),
-        "fluidez_promedio": avg("fluidez"),
-        "completitud_promedio": avg("completitud"),
-        "evolucion": [{"fecha":x.get("created_at"),"score":int(x.get("puntuacion_global",0) or 0)} for x in reversed(rows[:20])],
+        "trabalenguas": "Peter Piper picked a peck of pickled peppers.",
+        "traduccion": "Peter Piper recogió un bocado de pimientos encurtidos.",
+        "enfoque": "Sonido consonántico /p/"
     })
 
-@app.post("/api/tutor")
-def tutor():
-    user, error = authenticated_user()
-    if error: return err(error, 401)
-    data = request.get_json(silent=True) or {}
-    message = (data.get("message") or "").strip()
-    history = data.get("history") or []
-    score = data.get("pronunciation_score")
-    if not message: return err("Escribe o di algo para comenzar.")
-    safe = [{"role":x.get("role"),"content":str(x.get("content",""))[:1500]} for x in history[-10:] if x.get("role") in {"user","assistant"}]
-    try:
-        report = ai_json(
-            """You are the English Academy conversation coach.
-Keep the conversation natural, encourage the learner to speak, adapt to level,
-correct only the most useful error gently, and ask one clear follow-up question.
-Never mention internal services or implementation. Return JSON only:
-{"reply":"...","correction":"...","next_question":"..."}""",
-            json.dumps({"message":message,"history":safe,"pronunciation_score":score}, ensure_ascii=False),
-        )
-        reply = str(report.get("reply") or "Tell me more.")
-        correction = str(report.get("correction") or "").strip()
-        question = str(report.get("next_question") or "").strip()
-        combined = reply + (f"\n\nSmall correction: {correction}" if correction else "") + (f"\n\n{question}" if question else "")
-        try:
-            supabase.table("historial_tutor").insert({"user_id":user.id,"mensaje_usuario":message,"respuesta_tutor":combined,"pronunciation_score":score}).execute()
-        except Exception as exc:
-            print("[WARN TUTOR HISTORY]", exc)
-        return jsonify({"reply": combined})
-    except Exception as exc:
-        return err(f"No fue posible continuar la conversación: {exc}", 500)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT","5000")), debug=False)
+@app.route('/nuevo-tema-libre', methods=['GET'])
+def nuevo_tema_libre():
+    """Genera temas de conversación para el modo habla libre."""
+    prompt = """Genera una consigna o pregunta en inglés para una práctica de habla libre (Unscripted speech).
+    Devuelve ÚNICAMENTE un JSON válido sin markdown:
+    {"tema": "Describe your favorite childhood memory.", "instrucciones": "Habla durante 20 a 30 segundos explicando los detalles.", "traduccion": "Describe tu recuerdo favorito de la infancia."}"""
+
+    res = generar_contenido_gemini(prompt)
+    if res:
+        try:
+            clean_json = res.replace('```json', '').replace('```', '').strip()
+            return jsonify(json.loads(clean_json))
+        except Exception:
+            pass
+    return jsonify({
+        "tema": "Talk about your favorite hobbies and why you enjoy them.",
+        "instrucciones": "Habla libremente en inglés sobre tus pasatiempos.",
+        "traduccion": "Habla sobre tus pasatiempos favoritos y por qué los disfrutas."
+    })
+
+
+@app.route('/nuevo-dictado', methods=['GET'])
+def nuevo_dictado():
+    """Genera frase única para ejercicio de dictado."""
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+
+        prompt = """Genera una frase auditiva en inglés de nivel intermedio (6 a 12 palabras).
+        Devuelve ÚNICAMENTE un JSON con este formato: {"frase": "Sentence in English"}"""
+
+        res = generar_contenido_gemini(prompt)
+        if res:
+            try:
+                clean_json = res.replace('```json', '').replace('```', '').strip()
+                return jsonify(json.loads(clean_json))
+            except Exception:
+                pass
+        return jsonify({'frase': random.choice(FRASES_BASE)['frase']})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================
+# EVALUACIÓN DE PRONUNCIACIÓN (AZURE SPEECH, 3 MODOS)
+# =============================================================
+
+@app.route('/analizar-audio-real', methods=['POST'])
+@app.route('/api/assess-reading', methods=['POST'])
+def analizar_audio_lectura():
+    """Modo 1 y 3: Evaluación de lectura guiada y trabalenguas."""
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No se envió archivo de audio.'}), 400
+        audio_file = request.files['audio']
+        frase_esperada = request.form.get('frase_esperada', request.form.get('reference_text', '')).strip()
+        if not AZURE_KEY or not AZURE_REGION:
+            return jsonify({'error': 'Motor de voz no configurado.'}), 500
+
+        temp_webm_path = None
+        converted_wav_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_webm:
+                audio_file.save(temp_webm.name)
+                temp_webm_path = temp_webm.name
+            converted_wav_path = temp_webm_path + "_16k.wav"
+            sound = AudioSegment.from_file(temp_webm_path)
+            sound = sound.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+            sound.export(converted_wav_path, format="wav")
+
+            speech_config = speechsdk.SpeechConfig(subscription=AZURE_KEY, region=AZURE_REGION)
+            speech_config.speech_recognition_language = "en-US"
+            audio_config = speechsdk.audio.AudioConfig(filename=converted_wav_path)
+
+            pron_config = speechsdk.PronunciationAssessmentConfig(
+                reference_text=frase_esperada,
+                grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+                granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
+                enable_miscue=True
+            )
+            pron_config.enable_prosody_assessment()
+
+            recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+            pron_config.apply_to(recognizer)
+            result = recognizer.recognize_once_async().get()
+
+            if result.reason == speechsdk.ResultReason.Canceled:
+                cancellation = speechsdk.CancellationDetails(result)
+                return jsonify({'error': f'Error del motor de voz: {cancellation.reason} {cancellation.error_details}'}), 500
+            if result.reason == speechsdk.ResultReason.NoMatch:
+                return jsonify({'error': 'No se detectó voz. Habla claro y cerca del micrófono.'}), 400
+
+            pron_result = speechsdk.PronunciationAssessmentResult(result)
+            precision = round(pron_result.accuracy_score)
+            fluidez = round(pron_result.fluency_score)
+            completitud = round(pron_result.completeness_score)
+            prosodia = round(pron_result.prosody_score)
+            puntuacion_global = round(pron_result.pronunciation_score)
+
+            json_str = result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
+            azure_json = json.loads(json_str) if json_str else {}
+            nbest = azure_json.get("NBest", [{}])[0]
+            words_detail_json = nbest.get("Words", [])
+
+            inspeccion = {
+                "omisiones": 0,
+                "pronunciaciones_incoherentes": 0,
+                "inserciones": 0,
+                "interrupcion_inesperada": 0,
+                "falta_un_descanso": 0,
+                "monotona": 0
+            }
+            palabras_detalle = []
+            for w in words_detail_json:
+                word_text = w.get("Word", "")
+                pa = w.get("PronunciationAssessment", {})
+                error_type = pa.get("ErrorType", "None")
+                acc_score = round(pa.get("AccuracyScore", 0))
+                feedback = pa.get("Feedback", {})
+                prosody_feedback = feedback.get("Prosody", {})
+                break_errors = prosody_feedback.get("Break", {})
+                intonation_errors = prosody_feedback.get("Intonation", {}).get("ErrorTypes", [])
+
+                if error_type == "Omission":
+                    inspeccion["omisiones"] += 1
+                elif error_type == "Mispronunciation":
+                    inspeccion["pronunciaciones_incoherentes"] += 1
+                elif error_type == "Insertion":
+                    inspeccion["inserciones"] += 1
+                if "UnexpectedBreak" in break_errors:
+                    inspeccion["interrupcion_inesperada"] += 1
+                if "MissingBreak" in break_errors:
+                    inspeccion["falta_un_descanso"] += 1
+                if "Monotone" in intonation_errors:
+                    inspeccion["monotona"] += 1
+
+                fonemas = []
+                for p in w.get("Phonemes", []):
+                    p_pa = p.get("PronunciationAssessment", {})
+                    fonemas.append({"fonema": p.get("Phoneme", ""), "precision": round(p_pa.get("AccuracyScore", 0))})
+
+                palabras_detalle.append({
+                    "palabra": word_text,
+                    "puntuacion": acc_score,
+                    "precision": acc_score,
+                    "error_type": error_type,
+                    "fonemas": fonemas
+                })
+
+            if prosodia < 60 and inspeccion["monotona"] == 0:
+                inspeccion["monotona"] = 1
+
+            if supabase:
+                try:
+                    registro = {
+                        'frase_esperada': frase_esperada,
+                        'precision_fonemas': precision,
+                        'fluidez': fluidez,
+                        'completitud': completitud,
+                        'puntuacion_global': puntuacion_global,
+                        'user_id': user_id
+                    }
+                    supabase.table('historial_pronunciacion').insert(registro).execute()
+                except Exception as e:
+                    print(f"Error al guardar en Supabase: {e}")
+
+            return jsonify({
+                'calificacion': round(puntuacion_global / 10.0, 1),
+                'puntuacion_global': puntuacion_global,
+                'precision': precision,
+                'fluidez': fluidez,
+                'completitud': completitud,
+                'prosodia': prosodia,
+                'inspeccion': inspeccion,
+                'palabras': palabras_detalle
+            })
+        finally:
+            if temp_webm_path and os.path.exists(temp_webm_path):
+                try:
+                    os.remove(temp_webm_path)
+                except Exception:
+                    pass
+            if converted_wav_path and os.path.exists(converted_wav_path):
+                try:
+                    os.remove(converted_wav_path)
+                except Exception:
+                    pass
+    except Exception as e:
+        return jsonify({'error': f'Error procesando audio: {str(e)}'}), 500
+
+
+@app.route('/api/assess-unscripted', methods=['POST'])
+def assess_unscripted():
+    """Modo 2: Evaluación de Habla Libre (Pronunciación + Gramática, Vocabulario y Coherencia)."""
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No se envió archivo de audio.'}), 400
+        audio_file = request.files['audio']
+        topic = request.form.get('topic', 'General Conversation').strip()
+        if not AZURE_KEY or not AZURE_REGION:
+            return jsonify({'error': 'Motor de voz no configurado.'}), 500
+
+        temp_webm_path = None
+        converted_wav_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_webm:
+                audio_file.save(temp_webm.name)
+                temp_webm_path = temp_webm.name
+            converted_wav_path = temp_webm_path + "_16k.wav"
+            sound = AudioSegment.from_file(temp_webm_path)
+            sound = sound.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+            sound.export(converted_wav_path, format="wav")
+
+            speech_config = speechsdk.SpeechConfig(subscription=AZURE_KEY, region=AZURE_REGION)
+            speech_config.speech_recognition_language = "en-US"
+            audio_config = speechsdk.audio.AudioConfig(filename=converted_wav_path)
+
+            json_config = {"GradingSystem": "HundredMark", "Granularity": "Phoneme", "EnableMiscue": False}
+            pron_config = speechsdk.PronunciationAssessmentConfig(json_string=json.dumps(json_config))
+            pron_config.enable_prosody_assessment()
+            pron_config.enable_content_assessment_with_topic(topic)
+
+            recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+            pron_config.apply_to(recognizer)
+            result = recognizer.recognize_once_async().get()
+
+            if result.reason == speechsdk.ResultReason.Canceled:
+                cancellation = speechsdk.CancellationDetails(result)
+                return jsonify({'error': f'Error del motor de voz: {cancellation.reason} {cancellation.error_details}'}), 500
+            if result.reason == speechsdk.ResultReason.NoMatch:
+                return jsonify({'error': 'No se detectó voz clara.'}), 400
+
+            pron_result = speechsdk.PronunciationAssessmentResult(result)
+            content_result = pron_result.content_assessment_result
+
+            precision = round(pron_result.accuracy_score)
+            fluidez = round(pron_result.fluency_score)
+            puntuacion_global = round(pron_result.pronunciation_score)
+
+            response = {
+                "transcription": result.text,
+                "puntuacion_global": puntuacion_global,
+                "precision": precision,
+                "fluidez": fluidez,
+                "prosodia": round(pron_result.prosody_score),
+                "accuracy_score": precision,
+                "fluency_score": fluidez,
+                "content_assessment": {
+                    "grammar_score": round(content_result.grammar_score) if content_result and content_result.grammar_score is not None else None,
+                    "vocabulary_score": round(content_result.vocabulary_score) if content_result and content_result.vocabulary_score is not None else None,
+                    "topic_score": round(content_result.topic_score) if content_result and content_result.topic_score is not None else None
+                },
+                "inspeccion": {}
+            }
+            return jsonify(response)
+        finally:
+            if temp_webm_path and os.path.exists(temp_webm_path):
+                try:
+                    os.remove(temp_webm_path)
+                except Exception:
+                    pass
+            if converted_wav_path and os.path.exists(converted_wav_path):
+                try:
+                    os.remove(converted_wav_path)
+                except Exception:
+                    pass
+    except Exception as e:
+        return jsonify({'error': f'Error procesando habla libre: {str(e)}'}), 500
+
+
+# =============================================================
+# ESCRITURA Y DICTADO
+# =============================================================
+
+@app.route('/analizar-escritura', methods=['POST'])
+def analizar_escritura():
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+
+        data = request.json or {}
+        texto = data.get('texto', '').strip()
+        if not texto:
+            return jsonify({'error': 'Escribe una frase antes de enviar.'}), 400
+
+        prompt = f"""Actúa como un profesor nativo de inglés. Evalúa esta redacción: "{texto}"
+        Devuelve ÚNICAMENTE un JSON válido, sin markdown, con este formato exacto:
+        {{"calificacion": 0, "gramatica": 0, "vocabulario": 0, "naturalidad": 0,
+        "analisis": "explicación general en español", "version_natural": "versión mejorada en inglés",
+        "siguiente_paso": "una recomendación breve en español",
+        "correcciones": [{{"original": "...", "corregido": "...", "explicacion": "..."}}]}}
+        calificacion es sobre 10. gramatica, vocabulario y naturalidad son porcentajes 0-100."""
+
+        res_text = generar_contenido_gemini(prompt)
+        if not res_text:
+            return jsonify({'error': 'No se pudo conectar con el modelo de IA.'}), 500
+        try:
+            clean_json = res_text.replace('```json', '').replace('```', '').strip()
+            return jsonify(json.loads(clean_json))
+        except Exception:
+            return jsonify({'calificacion': 7, 'gramatica': 70, 'vocabulario': 70, 'naturalidad': 70,
+                             'analisis': res_text, 'version_natural': '', 'siguiente_paso': '', 'correcciones': []})
+    except Exception as e:
+        return jsonify({'error': f'Error procesando escritura: {str(e)}'}), 500
+
+
+@app.route('/evaluar-lectura', methods=['POST'])
+def evaluar_lectura():
+    """Evalúa lo que el estudiante entendió del texto (respuesta libre en inglés),
+    sin haberle mostrado nunca la traducción al español."""
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+
+        data = request.json or {}
+        titulo = data.get('titulo', '')
+        texto = data.get('texto', '')
+        respuesta = data.get('respuesta', '').strip()
+        if not respuesta:
+            return jsonify({'error': 'Escribe lo que entendiste.'}), 400
+
+        prompt = f"""Eres profesor de inglés evaluando comprensión lectora.
+        Texto original (título: "{titulo}"): "{texto}"
+        Explicación del estudiante, escrita en inglés: "{respuesta}"
+        Evalúa qué tan bien comprendió el texto. No debes revelar la traducción al español.
+        Devuelve ÚNICAMENTE un JSON válido, sin markdown, con este formato exacto:
+        {{"calificacion": 0, "idea_principal": 0, "detalles": 0, "vocabulario": 0,
+        "resumen_evaluacion": "evaluación breve en español", "nivel_estimado": "A2/B1/B2/C1",
+        "recomendacion": "consejo breve en español",
+        "aciertos": ["punto que sí entendió"], "faltantes": ["punto importante que no mencionó"],
+        "vocabulario_util": [{{"palabra": "...", "significado": "...", "ejemplo": "..."}}]}}
+        calificacion es sobre 10. idea_principal, detalles y vocabulario son porcentajes 0-100."""
+
+        res_text = generar_contenido_gemini(prompt)
+        if res_text:
+            try:
+                clean_json = res_text.replace('```json', '').replace('```', '').strip()
+                return jsonify(json.loads(clean_json))
+            except Exception:
+                pass
+        return jsonify({'error': 'No se pudo evaluar la lectura, intenta de nuevo.'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/evaluar-dictado', methods=['POST'])
+def evaluar_dictado():
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+        data = request.json or {}
+        original = data.get('original', '').strip().lower()
+        usuario = data.get('usuario', '').strip().lower()
+        if not usuario:
+            return jsonify({'error': 'Escribe lo que escuchaste.'}), 400
+        if original == usuario:
+            return jsonify({'calificacion': 10, 'analisis': '### ¡Excelente oído!\nEscribiste la frase exactamente como se pronunció.', 'aciertos': [], 'errores': [], 'consejo': ''})
+
+        prompt = f"""El usuario escuchó: "{original}". Su respuesta escrita fue: "{usuario}".
+        Compara ambas frases en español:
+        1. Indica qué palabras omitió, confundió o escribió mal.
+        2. Proporciona una sugerencia ortográfica o auditiva breve.
+        Responde en Markdown."""
+        res_text = generar_contenido_gemini(prompt)
+        if res_text:
+            return jsonify({'calificacion': 6, 'analisis': res_text})
+        return jsonify({'calificacion': 5, 'analisis': f"**Texto Correcto:** {original}\n**Escribiste:** {usuario}"})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================
+# AI TUTOR (conversación de práctica)
+# =============================================================
+
+@app.route('/api/tutor', methods=['POST'])
+def api_tutor():
+    """Chat de práctica con un tutor de IA. Usa el mismo modelo de lenguaje que el
+    resto de la app (no expone qué proveedor se usa)."""
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+
+        data = request.json or {}
+        mensaje = data.get('message', '').strip()
+        historial = data.get('history', [])
+        puntuacion = data.get('pronunciation_score', '')
+        if not mensaje:
+            return jsonify({'error': 'Escribe un mensaje.'}), 400
+
+        contexto = "\n".join(
+            f"{h.get('role', 'user')}: {h.get('content', '')}" for h in historial[-10:]
+        )
+
+        prompt = f"""Eres un tutor nativo de inglés, cálido, paciente y motivador, dentro de una app de práctica de idioma.
+        Mantén la conversación en inglés (a menos que el estudiante escriba en español y pida ayuda puntual en español).
+        Corrige con suavidad solo el error más importante de gramática o vocabulario, sin sonar como un examen,
+        y continúa la conversación de forma natural con una pregunta de seguimiento.
+        Si es útil, considera que la última puntuación de pronunciación del estudiante fue: {puntuacion or 'sin datos aún'}.
+
+        Conversación reciente:
+        {contexto}
+
+        Estudiante: {mensaje}
+
+        Responde solo con tu respuesta como tutor, en 2 a 4 frases, en inglés."""
+
+        respuesta = generar_contenido_gemini(prompt)
+        if not respuesta:
+            return jsonify({'error': 'No se pudo conectar con el tutor en este momento.'}), 500
+        return jsonify({'reply': respuesta.strip()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================
+# HISTORIAL Y PROGRESO
+# =============================================================
+
+@app.route('/obtener-historial', methods=['GET'])
+def obtener_historial():
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+        if not supabase:
+            return jsonify([])
+        res = (supabase.table('historial_pronunciacion')
+               .select('*')
+               .eq('user_id', user_id)
+               .order('created_at', desc=True)
+               .limit(10)
+               .execute())
+        return jsonify(res.data if res.data else [])
+    except Exception:
+        return jsonify([])
+
+
+@app.route('/api/progreso', methods=['GET'])
+def api_progreso():
+    """Estadísticas agregadas para la sección 'My Progress' (antes no existía esta ruta,
+    por eso la sección siempre fallaba)."""
+    try:
+        user_id, err = obtener_usuario_autenticado_y_suscrito()
+        if err:
+            return jsonify({'error': err}), 401
+        if not supabase:
+            return jsonify({'sesiones': 0, 'promedio': 0, 'mejor': 0, 'precision_promedio': 0, 'evolucion': []})
+
+        res = (supabase.table('historial_pronunciacion')
+               .select('*')
+               .eq('user_id', user_id)
+               .order('created_at', desc=False)
+               .execute())
+        filas = res.data or []
+        sesiones = len(filas)
+        if sesiones == 0:
+            return jsonify({'sesiones': 0, 'promedio': 0, 'mejor': 0, 'precision_promedio': 0, 'evolucion': []})
+
+        puntuaciones = [f.get('puntuacion_global', 0) or 0 for f in filas]
+        precisiones = [f.get('precision_fonemas', 0) or 0 for f in filas]
+        promedio = round(sum(puntuaciones) / sesiones)
+        mejor = max(puntuaciones)
+        precision_promedio = round(sum(precisiones) / sesiones)
+        evolucion = [{'score': p} for p in puntuaciones[-14:]]
+
+        return jsonify({
+            'sesiones': sesiones,
+            'promedio': promedio,
+            'mejor': mejor,
+            'precision_promedio': precision_promedio,
+            'evolucion': evolucion
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
