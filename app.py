@@ -7,7 +7,7 @@ import tempfile
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from openai import AzureOpenAI
+from openai import OpenAI
 from pydub import AudioSegment
 import azure.cognitiveservices.speech as speechsdk
 from supabase import Client, create_client
@@ -51,13 +51,12 @@ if SUPABASE_URL and SUPABASE_SERVICE_KEY:
     except Exception as exc:
         print(f"[WARN] Supabase admin no pudo conectarse: {exc}")
 
-ai_client: AzureOpenAI | None = None
+ai_client: OpenAI | None = None
 if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY:
     try:
-        ai_client = AzureOpenAI(
+        ai_client = OpenAI(
             api_key=AZURE_OPENAI_API_KEY,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_version=AZURE_OPENAI_API_VERSION,
+            base_url=f"{AZURE_OPENAI_ENDPOINT}/openai/v1/",
         )
         print("[OK] Azure OpenAI configurado.")
     except Exception as exc:
@@ -578,4 +577,3 @@ def root():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
     app.run(host="0.0.0.0", port=port, debug=False)
-    
