@@ -7,7 +7,7 @@ import tempfile
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from openai import OpenAI
+from openai import AzureOpenAI
 from pydub import AudioSegment
 import azure.cognitiveservices.speech as speechsdk
 from supabase import Client, create_client
@@ -25,6 +25,7 @@ AZURE_SPEECH_REGION = env("AZURE_SPEECH_REGION", "westus3")
 AZURE_OPENAI_ENDPOINT = env("AZURE_OPENAI_ENDPOINT").rstrip("/")
 AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+AZURE_OPENAI_API_VERSION = env("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
 SUPABASE_URL = env("SUPABASE_URL").rstrip("/")
 SUPABASE_KEY = env("SUPABASE_KEY")
 # Service role key: SOLO se usa en el servidor, nunca se envía al frontend.
@@ -50,12 +51,13 @@ if SUPABASE_URL and SUPABASE_SERVICE_KEY:
     except Exception as exc:
         print(f"[WARN] Supabase admin no pudo conectarse: {exc}")
 
-ai_client: OpenAI | None = None
+ai_client: AzureOpenAI | None = None
 if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY:
     try:
-        ai_client = OpenAI(
+        ai_client = AzureOpenAI(
             api_key=AZURE_OPENAI_API_KEY,
-            base_url=f"{AZURE_OPENAI_ENDPOINT}/openai/v1/",
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            api_version=AZURE_OPENAI_API_VERSION,
         )
         print("[OK] Azure OpenAI configurado.")
     except Exception as exc:
@@ -576,3 +578,4 @@ def root():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
     app.run(host="0.0.0.0", port=port, debug=False)
+    
