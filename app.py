@@ -232,6 +232,45 @@ def assess_pronunciation(wav_path, reference_text=None):
     }
 
 
+ERROR_TYPE_TO_KEY = {
+    "Omission": "omisiones",
+    "Insertion": "inserciones",
+    "Mispronunciation": "pronunciaciones_incoherentes",
+    "UnexpectedBreak": "interrupcion_inesperada",
+    "MissingBreak": "falta_un_descanso",
+    "Monotone": "monotona",
+}
+
+
+def build_pron_payload(result):
+    """Convierte el resultado (claves en inglés) al formato en español que usa el frontend."""
+    inspeccion = {key: 0 for key in ERROR_TYPE_TO_KEY.values()}
+    palabras = []
+    for word in result["words"]:
+        error_key = ERROR_TYPE_TO_KEY.get(word.get("error_type"))
+        if error_key:
+            inspeccion[error_key] += 1
+        palabras.append({
+            "palabra": word.get("word", ""),
+            "precision": word.get("accuracy", 0),
+            "fonemas": [
+                {"fonema": p.get("phoneme", ""), "precision": p.get("accuracy", 0)}
+                for p in word.get("phonemes", [])
+            ],
+        })
+
+    return {
+        "transcript": result.get("transcript", ""),
+        "puntuacion_global": result.get("pronunciation_score", 0),
+        "precision": result.get("accuracy_score", 0),
+        "fluidez": result.get("fluency_score", 0),
+        "completitud": result.get("completeness_score", 0),
+        "prosodia": result.get("prosody_score", 0),
+        "palabras": palabras,
+        "inspeccion": inspeccion,
+    }
+
+
 @app.get("/health")
 def health():
     return jsonify({
@@ -278,7 +317,7 @@ def new_phrase():
         return json_error(error[0], error[1])
     try:
         data = ai_json(
-            "Create one natural English sentence for pronunciation practice. Return JSON with phrase and level.",
+            "Create one natural English sentence for pronunciation practice. Return JSON only with exact keys: frase (the English sentence), traduccion (Spanish translation).",
             "Generate a useful sentence between 8 and 18 words. Avoid slang and proper names.",
         )
         return jsonify({"ok": True, **data})
@@ -293,7 +332,7 @@ def new_free_topic():
         return json_error(error[0], error[1])
     try:
         data = ai_json(
-            "Create a speaking practice topic for an English learner. Return JSON with topic, prompt, and level.",
+            "Create a speaking practice topic for an English learner. Return JSON only with exact keys: tema (the topic, in English), instrucciones (short instructions in Spanish on what to talk about and for how long).",
             "Give a practical topic that encourages 45-90 seconds of speaking.",
         )
         return jsonify({"ok": True, **data})
@@ -308,7 +347,7 @@ def new_twister():
         return json_error(error[0], error[1])
     try:
         data = ai_json(
-            "Create a short English tongue twister suitable for pronunciation practice. Return JSON with text and difficulty.",
+            "Create a short English tongue twister suitable for pronunciation practice. Return JSON only with exact keys: trabalenguas (the tongue twister, in English), enfoque (short description in Spanish of which sounds it targets).",
             "Generate one original tongue twister, 8-18 words, challenging but pronounceable.",
         )
         return jsonify({"ok": True, **data})
@@ -323,8 +362,8 @@ def new_reading():
         return json_error(error[0], error[1])
     try:
         data = ai_json(
-            "Create an informational English reading passage for a learner. Return JSON only.",
-            "Create 180-260 words about a real-world topic. Include title, level, passage, and 5 useful vocabulary words with brief English definitions. Do not include questions or Spanish translation.",
+            "Create an informational English reading passage for a learner. Return JSON only with exact keys: texto (the reading passage, in English, 180-260 words), titulo (short title), nivel (CEFR level), vocabulario (array of 5 objects with keys 'palabra' and 'significado', useful vocabulary words with brief English definitions).",
+            "Create 180-260 words about a real-world topic. Do not include questions or Spanish translation in the passage itself.",
         )
         return jsonify({"ok": True, **data})
     except Exception as exc:
@@ -338,8 +377,8 @@ def new_dictation():
         return json_error(error[0], error[1])
     try:
         data = ai_json(
-            "Create an English dictation sentence for an intermediate learner. Return JSON only.",
-            "Create one natural sentence of 12-22 words. Include text and level.",
+            "Create an English dictation sentence for an intermediate learner. Return JSON only with exact keys: texto (the sentence, in English, 12-22 words), nivel (CEFR level).",
+            "Create one natural sentence of 12-22 words.",
         )
         return jsonify({"ok": True, **data})
     except Exception as exc:
@@ -352,31 +391,47 @@ def analyze_real_audio():
     if error:
         return json_error(error[0], error[1])
     upload = request.files.get("audio")
-    reference = (request.form.get("reference") or "").strip()
+    reference = (request.form.get("frase_esperada") or request.form.get("reference") or "").strip()
+    mode = (request.form.get("modo") or "").strip()
+    topic = (request.form.get("topic") or "").strip()
     if not upload:
         return json_error("No se recibió audio.")
     wav_path = None
     try:
         wav_path = convert_audio_to_wav(upload)
-        result = assess_pronunciation(wav_path, reference or None)
-        if result["transcript"]:
+        raw_result = assess_pronunciation(wav_path, reference or None)
+        payload = build_pron_payload(raw_result)
+        if payload["transcript"]:
             try:
                 coach = ai_json(
-                    "You are a supportive English pronunciation coach. Return concise JSON.",
-                    f"Transcript: {result['transcript']}\nReference: {reference}\nScores: {json.dumps(result, ensure_ascii=False)}\nGive 3 actionable tips and a short encouraging comment.",
+                    "You are a supportive English pronunciation coach. Return concise JSON with keys 'consejos' (array of 3 short tips, in Spanish) and 'comentario' (short encouraging comment, in Spanish).",
+                    f"Transcript: {payload['transcript']}\nReference: {reference}\nScores: {json.dumps(payload, ensure_ascii=False)}\nGive 3 actionable tips and a short encouraging comment, all in Spanish.",
                     temperature=0.4,
                 )
-                result["coach"] = coach
+                payload["coach"] = coach
             except Exception as exc:
                 print(f"[AI COACH] {exc}")
+            if mode == "habla_libre":
+                try:
+                    content = ai_json(
+                        "You grade the content of unscripted spoken English. Return JSON only with exact keys: grammar_score (0-100 number), vocabulary_score (0-100 number).",
+                        f"Topic: {topic}\nTranscript: {payload['transcript']}\nGrade grammar_score and vocabulary_score.",
+                        temperature=0.3,
+                    )
+                    payload["content_assessment"] = content
+                    payload["gramatica"] = content.get("grammar_score")
+                    payload["vocabulario"] = content.get("vocabulary_score")
+                except Exception as exc:
+                    print(f"[CONTENT ASSESSMENT] {exc}")
         save_history("historial_pronunciacion", user.id, {
-            "mode": "guided" if reference else "free",
-            "reference_text": reference,
-            "transcript": result["transcript"],
-            "score": result["pronunciation_score"],
-            "details": result,
+            "frase_esperada": reference,
+            "puntuacion_global": payload["puntuacion_global"],
+            "precision_fonemas": payload["precision"],
+            "fluidez": payload["fluidez"],
+            "completitud": payload["completitud"],
+            "detalles_json": payload,
         })
-        return jsonify({"ok": True, **result})
+        return jsonify({"ok": True, **payload})
     except Exception as exc:
         return json_error(f"No se pudo analizar el audio: {exc}", 500)
     finally:
@@ -399,19 +454,24 @@ def analyze_writing():
     user, error = authenticated_user()
     if error:
         return json_error(error[0], error[1])
-    text = (request.get_json(silent=True) or {}).get("text", "").strip()
+    text = (request.get_json(silent=True) or {}).get("texto", "") or (request.get_json(silent=True) or {}).get("text", "")
+    text = text.strip()
     if not text:
         return json_error("Escribe algo antes de evaluar.")
     try:
         data = ai_json(
-            "You are an expert but encouraging English writing teacher. Return JSON only.",
-            f"Analyze this learner text:\n{text}\nReturn score out of 100, CEFR level, corrected version, strengths, errors with corrections and explanations, and 3 next-step recommendations.",
+            "You are an expert but encouraging English writing teacher. Return JSON only with exact keys: puntuacion (0-100 number), gramatica (0-100 number), vocabulario (0-100 number), coherencia (0-100 number), resumen (short summary in Spanish), correcciones (array of short strings in Spanish describing each error and its correction), version_mejorada (corrected version of the text, in English).",
+            f"Analyze this learner text:\n{text}",
             temperature=0.3,
         )
         save_history("historial_escritura", user.id, {
             "texto": text,
-            "score": data.get("score"),
-            "resultado": data,
+            "calificacion": data.get("puntuacion"),
+            "gramatica": data.get("gramatica"),
+            "vocabulario": data.get("vocabulario"),
+            "coherencia": data.get("coherencia"),
+            "resumen": data.get("resumen"),
+            "version_mejorada": data.get("version_mejorada"),
         })
         return jsonify({"ok": True, **data})
     except Exception as exc:
@@ -424,19 +484,26 @@ def evaluate_reading():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    passage = (body.get("passage") or "").strip()
-    answer = (body.get("answer") or "").strip()
+    passage = (body.get("texto_original") or body.get("passage") or "").strip()
+    answer = (body.get("respuesta") or body.get("answer") or "").strip()
     if not passage or not answer:
         return json_error("Faltan la lectura o tu respuesta.")
     try:
         data = ai_json(
-            "You evaluate English reading comprehension. Return JSON only and be constructive.",
-            f"Passage:\n{passage}\n\nLearner's explanation in English:\n{answer}\n\nReturn score out of 100, what was understood correctly, missed ideas, language feedback, and a concise model answer.",
+            "You evaluate English reading comprehension. Return JSON only and be constructive, with exact keys: puntuacion (0-100 overall score), idea_principal (0-100, how well the main idea was understood), detalles (0-100, how well supporting details were understood), vocabulario (0-100, vocabulary usage), claridad (0-100, clarity of the learner's English), resumen (short summary in Spanish), aciertos (array of short strings in Spanish, what was understood correctly), mejoras (array of short strings in Spanish, missed ideas or things to improve), vocabulario_sugerido (array of 3-5 objects with keys 'palabra' and 'significado', useful vocabulary from the passage).",
+            f"Passage:\n{passage}\n\nLearner's explanation in English:\n{answer}",
             temperature=0.3,
         )
+        data.setdefault("precision", data.get("idea_principal"))
+        data.setdefault("calidad_ingles", data.get("claridad"))
         save_history("historial_lectura", user.id, {
-            "score": data.get("score"),
-            "resultado": data,
+            "titulo": passage[:80],
+            "calificacion": data.get("puntuacion"),
+            "idea_principal": data.get("idea_principal"),
+            "detalles": data.get("detalles"),
+            "vocabulario": data.get("vocabulario"),
+            "claridad": data.get("claridad"),
+            "respuesta": answer,
         })
         return jsonify({"ok": True, **data})
     except Exception as exc:
@@ -449,19 +516,23 @@ def evaluate_dictation():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    expected = (body.get("expected") or "").strip()
-    answer = (body.get("answer") or "").strip()
+    expected = (body.get("texto_original") or body.get("expected") or "").strip()
+    answer = (body.get("respuesta") or body.get("answer") or "").strip()
     if not expected or not answer:
         return json_error("Faltan el texto esperado o tu respuesta.")
     try:
         data = ai_json(
-            "You are an English dictation teacher. Return JSON only.",
-            f"Expected sentence:\n{expected}\n\nLearner transcription:\n{answer}\n\nReturn score out of 100, corrected transcription, missing/incorrect words, and 3 brief tips.",
+            "You are an English dictation teacher. Return JSON only with exact keys: puntuacion (0-100 number), palabras_correctas (integer count of correctly transcribed words), diferencias (integer count of incorrect/missing words), nivel (CEFR level as a short string), feedback (short feedback in Spanish with 2-3 brief tips).",
+            f"Expected sentence:\n{expected}\n\nLearner transcription:\n{answer}",
             temperature=0.2,
         )
         save_history("historial_dictado", user.id, {
-            "score": data.get("score"),
-            "resultado": data,
+            "texto_esperado": expected,
+            "respuesta": answer,
+            "calificacion": data.get("puntuacion"),
+            "palabras_correctas": data.get("palabras_correctas"),
+            "diferencias": data.get("diferencias"),
+            "nivel": data.get("nivel"),
         })
         return jsonify({"ok": True, **data})
     except Exception as exc:
@@ -474,7 +545,7 @@ def tutor():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    message = (body.get("message") or "").strip()
+    message = (body.get("mensaje") or body.get("message") or "").strip()
     history = body.get("history") or []
     if not message:
         return json_error("Escribe o di algo al tutor.")
@@ -504,7 +575,7 @@ def tutor():
             "mensaje_usuario": message,
             "respuesta_tutor": reply,
         })
-        return jsonify({"ok": True, "reply": reply})
+        return jsonify({"ok": True, "respuesta": reply})
     except Exception as exc:
         return json_error(f"El tutor no pudo responder: {exc}", 500)
 
@@ -521,8 +592,14 @@ def history():
         ("dictation", "historial_dictado"),
         ("tutor", "historial_tutor"),
     ]
+    SCORE_COLUMN = {
+        "pronunciation": "puntuacion_global",
+        "writing": "calificacion",
+        "reading": "calificacion",
+        "dictation": "calificacion",
+    }
     client = supabase_admin or supabase
-    result = {}
+    combined = []
     for key, table in tables:
         try:
             rows = (
@@ -533,11 +610,16 @@ def history():
                 .limit(30)
                 .execute()
             ).data or []
-            result[key] = rows
+            score_col = SCORE_COLUMN.get(key)
+            for row in rows:
+                row["tipo"] = key
+                if score_col and row.get(score_col) is not None:
+                    row["puntuacion"] = row[score_col]
+            combined.extend(rows)
         except Exception as exc:
             print(f"[HISTORY READ:{table}] {exc}")
-            result[key] = []
-    return jsonify({"ok": True, **result})
+    combined.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    return jsonify({"ok": True, "historial": combined[:30]})
 
 
 @app.get("/api/progreso")
@@ -545,28 +627,43 @@ def progress():
     user, error = authenticated_user()
     if error:
         return json_error(error[0], error[1])
-    data = {"pronunciation": [], "writing": [], "reading": [], "dictation": []}
     table_map = {
-        "pronunciation": "historial_pronunciacion",
-        "writing": "historial_escritura",
-        "reading": "historial_lectura",
-        "dictation": "historial_dictado",
+        "pronunciacion": ("historial_pronunciacion", "puntuacion_global"),
+        "escritura": ("historial_escritura", "calificacion"),
+        "lectura": ("historial_lectura", "calificacion"),
+        "dictado": ("historial_dictado", "calificacion"),
     }
     client = supabase_admin or supabase
-    for key, table in table_map.items():
+    counts = {}
+    all_rows = []
+    for key, (table, score_col) in table_map.items():
         try:
             rows = (
                 client.table(table)
-                .select("created_at,score")
+                .select(f"created_at,{score_col}")
                 .eq("user_id", user.id)
                 .order("created_at", desc=False)
                 .limit(50)
                 .execute()
             ).data or []
-            data[key] = rows
+            counts[key] = len(rows)
+            for row in rows:
+                all_rows.append({"created_at": row.get("created_at"), "score": row.get(score_col)})
         except Exception as exc:
             print(f"[PROGRESS:{table}] {exc}")
-    return jsonify({"ok": True, **data})
+            counts[key] = 0
+
+    all_rows.sort(key=lambda r: r.get("created_at") or "")
+    scores = [r.get("score") for r in all_rows[-20:] if r.get("score") is not None]
+
+    return jsonify({
+        "ok": True,
+        "total_actividades": sum(counts.values()),
+        "pronunciacion": counts.get("pronunciacion", 0),
+        "escritura": counts.get("escritura", 0),
+        "lectura": counts.get("lectura", 0),
+        "puntuaciones_recientes": scores,
+    })
 
 
 @app.get("/")
