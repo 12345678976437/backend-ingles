@@ -634,6 +634,63 @@ def recent_tutor_context(user_id, limit=6):
     return "Summary of earlier sessions with this student (for continuity, do not repeat verbatim):\n" + "\n".join(lines)
 
 
+@app.post("/api/transcribir-audio")
+def transcribe_audio():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    upload = request.files.get("audio")
+    if not upload:
+        return json_error("No se recibió audio.")
+    wav_path = None
+    try:
+        wav_path = convert_audio_to_wav(upload)
+        config = speech_config()
+        audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
+        recognizer = speechsdk.SpeechRecognizer(speech_config=config, audio_config=audio_config)
+        result = recognizer.recognize_once()
+        if result.reason != speechsdk.ResultReason.RecognizedSpeech:
+            return jsonify({"ok": True, "texto": ""})
+        return jsonify({"ok": True, "texto": result.text})
+    except Exception as exc:
+        return json_error(f"No se pudo transcribir el audio: {exc}", 500)
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            os.remove(wav_path)
+
+
+@app.post("/api/resumen-llamada")
+def call_summary():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    history = body.get("history") or []
+    transcript_lines = []
+    for item in history:
+        role = item.get("role") if isinstance(item, dict) else None
+        content = item.get("content") if isinstance(item, dict) else None
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            speaker = "Student" if role == "user" else "Tutor"
+            transcript_lines.append(f"{speaker}: {content.strip()}")
+    if not transcript_lines:
+        return json_error("No hay conversación para resumir.")
+
+    try:
+        data = ai_json(
+            "You are an English teacher reviewing a call-practice transcript between a student and their AI tutor. Return JSON only, in Spanish, with exact keys: resumen_general (2-3 sentences), fortalezas (array of short strings), errores_comunes (array of short strings describing recurring mistakes, in Spanish, with a brief English example each), vocabulario_recomendado (array of 3-6 objects with keys 'palabra' and 'significado'), siguiente_paso (1-2 sentences suggesting what to practice next).",
+            "\n".join(transcript_lines),
+            temperature=0.3,
+        )
+        save_history("historial_tutor", user.id, {
+            "mensaje_usuario": "[Resumen de llamada]",
+            "respuesta_tutor": json.dumps(data, ensure_ascii=False),
+        })
+        return jsonify({"ok": True, **data})
+    except Exception as exc:
+        return json_error(f"No se pudo generar el resumen: {exc}", 500)
+
+
 @app.post("/api/tutor")
 def tutor():
     user, error = authenticated_user()
@@ -642,6 +699,7 @@ def tutor():
     body = request.get_json(silent=True) or {}
     message = (body.get("mensaje") or body.get("message") or "").strip()
     history = body.get("history") or []
+    modo = (body.get("modo") or "").strip()
     if not message:
         return json_error("Escribe o di algo al tutor.")
 
@@ -656,6 +714,12 @@ def tutor():
     level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
     prior_context = recent_tutor_context(user.id)
 
+    call_line = (
+        "\n\nThis is a LIVE VOICE CALL, not a text chat: reply in 1-3 short spoken sentences, "
+        "no lists, no markdown, no emojis — just natural words that sound good read aloud."
+        if modo == "llamada" else ""
+    )
+
     system_prompt = (
         "You are Alex, the personal English conversation tutor at English Academy. "
         "Your job is to have a real, engaging conversation in English — not to interrogate or lecture. "
@@ -666,6 +730,7 @@ def tutor():
         "Conversation flow: always end your reply with one genuine follow-up question that keeps the conversation going and invites the student to speak more.\n\n"
         f"{level_line}\n\n"
         f"{prior_context}"
+        f"{call_line}"
     )
 
     try:
