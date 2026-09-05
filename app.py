@@ -5,7 +5,7 @@ import re
 import tempfile
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from openai import OpenAI
 from pydub import AudioSegment
@@ -310,6 +310,39 @@ def session_info():
     })
 
 
+@app.post("/api/sintetizar-audio")
+def synthesize_audio():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
+        return json_error("El servicio de voz no está configurado en el servidor.", 500)
+
+    body = request.get_json(silent=True) or {}
+    text = (body.get("texto") or body.get("text") or "").strip()
+    if not text:
+        return json_error("No hay texto para convertir a audio.")
+    if len(text) > 600:
+        text = text[:600]
+
+    voice = (body.get("voz") or "en-US-AvaMultilingualNeural").strip()
+
+    config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
+    config.speech_synthesis_voice_name = voice
+    config.set_speech_synthesis_output_format(
+        speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3
+    )
+    synthesizer = speechsdk.SpeechSynthesizer(speech_config=config, audio_config=None)
+    result = synthesizer.speak_text_async(text).get()
+
+    if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
+        detail = getattr(result, "cancellation_details", None)
+        message = detail.error_details if detail else "No se pudo generar el audio."
+        return json_error(f"No se pudo generar el audio: {message}", 500)
+
+    return Response(result.audio_data, mimetype="audio/mpeg")
+
+
 @app.get("/nueva-frase")
 def new_phrase():
     user, error = authenticated_user()
@@ -539,6 +572,68 @@ def evaluate_dictation():
         return json_error(f"No se pudo evaluar el dictado: {exc}", 500)
 
 
+def estimate_level(user_id):
+    """Estima el nivel CEFR del alumno con base en el promedio de sus calificaciones recientes."""
+    client = supabase_admin or supabase
+    if not client:
+        return None
+    scores = []
+    for table, col in [
+        ("historial_escritura", "calificacion"),
+        ("historial_lectura", "calificacion"),
+        ("historial_dictado", "calificacion"),
+        ("historial_pronunciacion", "puntuacion_global"),
+    ]:
+        try:
+            rows = (
+                client.table(table)
+                .select(col)
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(10)
+                .execute()
+            ).data or []
+            scores.extend(r[col] for r in rows if r.get(col) is not None)
+        except Exception as exc:
+            print(f"[LEVEL:{table}] {exc}")
+    if not scores:
+        return None
+    avg = sum(scores) / len(scores)
+    if avg >= 90:
+        return "C1-C2"
+    if avg >= 75:
+        return "B2"
+    if avg >= 60:
+        return "B1"
+    if avg >= 40:
+        return "A2"
+    return "A1"
+
+
+def recent_tutor_context(user_id, limit=6):
+    """Trae un resumen breve de conversaciones anteriores con el tutor, para darle memoria entre sesiones."""
+    client = supabase_admin or supabase
+    if not client:
+        return ""
+    try:
+        rows = (
+            client.table("historial_tutor")
+            .select("mensaje_usuario,respuesta_tutor,created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        print(f"[TUTOR CONTEXT] {exc}")
+        return ""
+    if not rows:
+        return ""
+    rows.reverse()
+    lines = [f"- Student said: \"{r['mensaje_usuario'][:150]}\" | You replied: \"{r['respuesta_tutor'][:150]}\"" for r in rows]
+    return "Summary of earlier sessions with this student (for continuity, do not repeat verbatim):\n" + "\n".join(lines)
+
+
 @app.post("/api/tutor")
 def tutor():
     user, error = authenticated_user()
@@ -551,24 +646,37 @@ def tutor():
         return json_error("Escribe o di algo al tutor.")
 
     safe_history = []
-    for item in history[-8:]:
+    for item in history[-14:]:
         role = item.get("role") if isinstance(item, dict) else None
         content = item.get("content") if isinstance(item, dict) else None
         if role in {"user", "assistant"} and isinstance(content, str):
             safe_history.append({"role": role, "content": content[:2000]})
 
+    level = estimate_level(user.id)
+    level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
+    prior_context = recent_tutor_context(user.id)
+
+    system_prompt = (
+        "You are Alex, the personal English conversation tutor at English Academy. "
+        "Your job is to have a real, engaging conversation in English — not to interrogate or lecture. "
+        "Style: warm, encouraging, a little informal, like a good friend who happens to be a great teacher. Keep replies short (2-4 sentences), never a wall of text.\n\n"
+        "How to correct mistakes: never list errors or break character to give a grammar lecture. "
+        "Instead, use natural 'recasting' — if the student makes a mistake, weave the corrected form naturally into your own next sentence, the way a native speaker would casually rephrase, without pointing it out directly. "
+        "Only explicitly flag a mistake if it is a significant, repeated pattern, and even then do it briefly and kindly, then move on.\n\n"
+        "Conversation flow: always end your reply with one genuine follow-up question that keeps the conversation going and invites the student to speak more.\n\n"
+        f"{level_line}\n\n"
+        f"{prior_context}"
+    )
+
     try:
         response = ai_client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT,
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are the English Academy personal English tutor. Speak naturally in English, correct important mistakes gently, ask useful follow-up questions, and adapt to the learner's level. Keep responses concise and conversational.",
-                },
+                {"role": "system", "content": system_prompt},
                 *safe_history,
                 {"role": "user", "content": message},
             ],
-            temperature=0.7,
+            temperature=0.8,
         )
         reply = response.choices[0].message.content or "Let's keep practicing. Tell me more."
         save_history("historial_tutor", user.id, {
