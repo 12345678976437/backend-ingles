@@ -27,6 +27,9 @@ AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 SUPABASE_URL = env("SUPABASE_URL").rstrip("/")
 SUPABASE_KEY = env("SUPABASE_KEY")
+# Service role key: SOLO se usa en el servidor, nunca se envía al frontend.
+# Se consigue en Supabase > Project Settings > API > service_role secret.
+SUPABASE_SERVICE_KEY = env("SUPABASE_SERVICE_KEY", SUPABASE_KEY)
 
 supabase: Client | None = None
 if SUPABASE_URL and SUPABASE_KEY:
@@ -35,6 +38,17 @@ if SUPABASE_URL and SUPABASE_KEY:
         print("[OK] Supabase conectado.")
     except Exception as exc:
         print(f"[WARN] Supabase no pudo conectarse: {exc}")
+
+# Cliente "admin": usa la service_role key, que ignora RLS.
+# Lo usamos SOLO después de haber verificado la identidad del usuario
+# con supabase.auth.get_user(token), así que es seguro consultar por user.id.
+supabase_admin: Client | None = None
+if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+    try:
+        supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        print("[OK] Supabase (admin/service_role) conectado.")
+    except Exception as exc:
+        print(f"[WARN] Supabase admin no pudo conectarse: {exc}")
 
 ai_client: OpenAI | None = None
 if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY:
@@ -81,8 +95,9 @@ def authenticated_user(require_subscription=True):
 
     if require_subscription:
         try:
+            client = supabase_admin or supabase
             profile = (
-                supabase.table("profiles")
+                client.table("profiles")
                 .select("is_subscribed")
                 .eq("id", user.id)
                 .maybe_single()
@@ -116,10 +131,11 @@ def ai_json(system_prompt, user_prompt, temperature=0.7):
 
 
 def save_history(table, user_id, payload):
-    if not supabase:
+    client = supabase_admin or supabase
+    if not client:
         return
     try:
-        supabase.table(table).insert({"user_id": user_id, **payload}).execute()
+        client.table(table).insert({"user_id": user_id, **payload}).execute()
     except Exception as exc:
         print(f"[HISTORY:{table}] {exc}")
 
@@ -484,11 +500,12 @@ def history():
         ("dictation", "historial_dictado"),
         ("tutor", "historial_tutor"),
     ]
+    client = supabase_admin or supabase
     result = {}
     for key, table in tables:
         try:
             rows = (
-                supabase.table(table)
+                client.table(table)
                 .select("*")
                 .eq("user_id", user.id)
                 .order("created_at", desc=True)
@@ -514,10 +531,11 @@ def progress():
         "reading": "historial_lectura",
         "dictation": "historial_dictado",
     }
+    client = supabase_admin or supabase
     for key, table in table_map.items():
         try:
             rows = (
-                supabase.table(table)
+                client.table(table)
                 .select("created_at,score")
                 .eq("user_id", user.id)
                 .order("created_at", desc=False)
