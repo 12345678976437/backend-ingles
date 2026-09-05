@@ -247,7 +247,27 @@ def session_info():
     user, error = authenticated_user(require_subscription=False)
     if error:
         return jsonify({"authenticated": False, "error": error[0]}), error[1]
-    return jsonify({"authenticated": True, "user": {"id": user.id, "email": user.email}})
+
+    is_subscribed = False
+    client = supabase_admin or supabase
+    if client:
+        try:
+            profile = (
+                client.table("profiles")
+                .select("is_subscribed")
+                .eq("id", user.id)
+                .maybe_single()
+                .execute()
+            )
+            is_subscribed = bool((profile.data or {}).get("is_subscribed"))
+        except Exception as exc:
+            print(f"[SESSION PROFILE] {exc}")
+
+    return jsonify({
+        "authenticated": True,
+        "is_subscribed": is_subscribed,
+        "user": {"id": user.id, "email": user.email},
+    })
 
 
 @app.get("/nueva-frase")
