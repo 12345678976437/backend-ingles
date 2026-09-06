@@ -3,6 +3,7 @@ import os
 import random
 import re
 import tempfile
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, Response
@@ -76,6 +77,20 @@ def get_bearer_token():
     return header.split(" ", 1)[1].strip() or None
 
 
+def has_active_access(profile_data):
+    """True si el usuario pagó, o si sigue dentro de su periodo de prueba de 7 días."""
+    if profile_data.get("is_subscribed"):
+        return True
+    trial_ends_at = profile_data.get("trial_ends_at")
+    if not trial_ends_at:
+        return False
+    try:
+        deadline = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) < deadline
+
+
 def authenticated_user(require_subscription=True):
     if not supabase:
         return None, ("Supabase no está configurado.", 500)
@@ -99,13 +114,13 @@ def authenticated_user(require_subscription=True):
             client = supabase_admin or supabase
             profile = (
                 client.table("profiles")
-                .select("is_subscribed")
+                .select("is_subscribed,trial_ends_at")
                 .eq("id", user.id)
                 .maybe_single()
                 .execute()
             )
             data = profile.data or {}
-            if not data.get("is_subscribed"):
+            if not has_active_access(data):
                 return None, ("Tu acceso todavía no está activo.", 403)
         except Exception as exc:
             print(f"[PROFILE] {exc}")
@@ -289,23 +304,39 @@ def session_info():
         return jsonify({"authenticated": False, "error": error[0]}), error[1]
 
     is_subscribed = False
+    trial_dias_restantes = 0
+    en_prueba = False
     client = supabase_admin or supabase
     if client:
         try:
             profile = (
                 client.table("profiles")
-                .select("is_subscribed")
+                .select("is_subscribed,trial_ends_at")
                 .eq("id", user.id)
                 .maybe_single()
                 .execute()
             )
-            is_subscribed = bool((profile.data or {}).get("is_subscribed"))
+            data = profile.data or {}
+            is_paid = bool(data.get("is_subscribed"))
+            trial_ends_at = data.get("trial_ends_at")
+            if trial_ends_at:
+                try:
+                    deadline = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+                    remaining = deadline - datetime.now(timezone.utc)
+                    if remaining.total_seconds() > 0:
+                        en_prueba = True
+                        trial_dias_restantes = max(1, round(remaining.total_seconds() / 86400))
+                except ValueError:
+                    pass
+            is_subscribed = is_paid or en_prueba
         except Exception as exc:
             print(f"[SESSION PROFILE] {exc}")
 
     return jsonify({
         "authenticated": True,
         "is_subscribed": is_subscribed,
+        "en_prueba": en_prueba,
+        "trial_dias_restantes": trial_dias_restantes,
         "user": {"id": user.id, "email": user.email},
     })
 
