@@ -3,6 +3,7 @@ import os
 import random
 import re
 import tempfile
+import requests
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -23,6 +24,9 @@ def env(name, default=""):
 
 AZURE_SPEECH_KEY = env("AZURE_SPEECH_KEY")
 AZURE_SPEECH_REGION = env("AZURE_SPEECH_REGION", "westus3")
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "")
+ADMIN_EMAIL = env("ADMIN_EMAIL", "").lower()
 AZURE_OPENAI_ENDPOINT = env("AZURE_OPENAI_ENDPOINT").rstrip("/")
 AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
@@ -290,7 +294,7 @@ def build_pron_payload(result):
 def health():
     return jsonify({
         "ok": True,
-        "service": "English Academy",
+        "service": "Talvo English",
         "ai": bool(ai_client),
         "speech": bool(AZURE_SPEECH_KEY and AZURE_SPEECH_REGION),
         "supabase": bool(supabase),
@@ -337,7 +341,8 @@ def session_info():
         "is_subscribed": is_subscribed,
         "en_prueba": en_prueba,
         "trial_dias_restantes": trial_dias_restantes,
-        "user": {"id": user.id, "email": user.email},
+        "es_admin": bool(ADMIN_EMAIL) and (user.email or "").lower() == ADMIN_EMAIL,
+        "user": {"id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None)},
     })
 
 
@@ -722,6 +727,113 @@ def call_summary():
         return json_error(f"No se pudo generar el resumen: {exc}", 500)
 
 
+def notify_telegram(text):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": text},
+            timeout=5,
+        )
+    except Exception as exc:
+        print(f"[TELEGRAM] {exc}")
+
+
+@app.post("/api/soporte")
+def soporte():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    tipo = (body.get("tipo") or "otro").strip()
+    mensaje = (body.get("mensaje") or "").strip()
+    if not mensaje:
+        return json_error("Escribe tu mensaje antes de enviar.")
+
+    save_history("soporte_mensajes", user.id, {
+        "email": user.email,
+        "tipo": tipo,
+        "mensaje": mensaje,
+    })
+    notify_telegram(f"🛟 Nuevo mensaje de soporte ({tipo})\nDe: {user.email}\n\n{mensaje}")
+    return jsonify({"ok": True})
+
+
+@app.get("/api/admin/actividad")
+def admin_activity():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    if not ADMIN_EMAIL or (user.email or "").lower() != ADMIN_EMAIL:
+        return json_error("No autorizado.", 403)
+
+    client = supabase_admin or supabase
+    tables = [
+        ("pronunciación", "historial_pronunciacion", "frase_esperada"),
+        ("escritura", "historial_escritura", "texto"),
+        ("lectura", "historial_lectura", "respuesta"),
+        ("dictado", "historial_dictado", "respuesta"),
+        ("tutor", "historial_tutor", "mensaje_usuario"),
+    ]
+    emails_by_id = {}
+    try:
+        profiles = client.table("profiles").select("id,email").execute().data or []
+        emails_by_id = {p["id"]: p.get("email") for p in profiles}
+    except Exception as exc:
+        print(f"[ADMIN PROFILES] {exc}")
+
+    events = []
+    for label, table, preview_col in tables:
+        try:
+            rows = (
+                client.table(table)
+                .select(f"user_id,created_at,{preview_col}")
+                .order("created_at", desc=True)
+                .limit(20)
+                .execute()
+            ).data or []
+            for r in rows:
+                events.append({
+                    "tipo": label,
+                    "email": emails_by_id.get(r.get("user_id"), r.get("user_id")),
+                    "fecha": r.get("created_at"),
+                    "detalle": (r.get(preview_col) or "")[:80],
+                })
+        except Exception as exc:
+            print(f"[ADMIN:{table}] {exc}")
+
+    events.sort(key=lambda e: e.get("fecha") or "", reverse=True)
+
+    total_usuarios = len(emails_by_id)
+    try:
+        active_trials = (
+            client.table("profiles")
+            .select("id", count="exact")
+            .gt("trial_ends_at", datetime.now(timezone.utc).isoformat())
+            .execute()
+        ).count or 0
+    except Exception:
+        active_trials = 0
+    try:
+        pagados = (
+            client.table("profiles")
+            .select("id", count="exact")
+            .eq("is_subscribed", True)
+            .execute()
+        ).count or 0
+    except Exception:
+        pagados = 0
+
+    return jsonify({
+        "ok": True,
+        "total_usuarios": total_usuarios,
+        "en_prueba": active_trials,
+        "pagados": pagados,
+        "eventos": events[:40],
+    })
+
+
 @app.post("/api/tutor")
 def tutor():
     user, error = authenticated_user()
@@ -752,7 +864,7 @@ def tutor():
     )
 
     system_prompt = (
-        "You are Alex, the personal English conversation tutor at English Academy. "
+        "You are Alex, the personal English conversation tutor at Talvo English. "
         "Your job is to have a real, engaging conversation in English — not to interrogate or lecture. "
         "Style: warm, encouraging, a little informal, like a good friend who happens to be a great teacher. Keep replies short (2-4 sentences), never a wall of text.\n\n"
         "How to correct mistakes: never list errors or break character to give a grammar lecture. "
@@ -872,7 +984,7 @@ def progress():
 
 @app.get("/")
 def root():
-    return jsonify({"ok": True, "service": "English Academy API"})
+    return jsonify({"ok": True, "service": "Talvo English API"})
 
 
 if __name__ == "__main__":
