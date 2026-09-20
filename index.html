@@ -72,7 +72,32 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background-ima
 @media(max-width:1000px){.sidebar{width:220px!important}.main{margin-left:220px!important}.dashboard-hero,.dash-grid{grid-template-columns:1fr}.quick-grid{grid-template-columns:repeat(2,1fr)}.library-grid,.achievement-grid,.vocab-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:720px){.sidebar{position:relative!important;width:100%!important;height:auto!important;inset:auto!important}.main{margin-left:0!important}.topbar{padding:0 18px!important}.page{width:calc(100% - 28px)!important}.dashboard-hero,.dash-grid,.settings-grid{grid-template-columns:1fr}.quick-grid,.library-grid,.achievement-grid,.vocab-grid{grid-template-columns:1fr}.dash-welcome h1{font-size:30px}.userbar:before{display:none}.sidebar .nav{display:grid;grid-template-columns:1fr 1fr}.sidebar .label{margin-top:10px}.side-account{display:none}}
 </style>
-</head>
+<style id="talvo-dashboard-v2">
+/* Talvo 2.0 polish */
+.sidebar{overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(124,131,255,.25) transparent}
+.sidebar::-webkit-scrollbar{width:5px}.sidebar::-webkit-scrollbar-thumb{background:rgba(124,131,255,.22);border-radius:10px}
+.nav button{display:flex;align-items:center;gap:9px}.nav button span{display:inline-flex;align-items:center}
+.dashboard-hero{margin-top:6px}
+.dash-welcome{min-height:278px;display:flex;flex-direction:column;justify-content:center}
+.dash-welcome h1{max-width:640px}
+.dash-actions .btn{min-height:43px}
+.dash-stat{position:relative;overflow:hidden}
+.dash-stat:after{content:"";position:absolute;inset:auto -30px -45px auto;width:110px;height:110px;border-radius:50%;background:rgba(124,131,255,.06);filter:blur(3px)}
+.dash-stat strong,.dash-stat small,.dash-stat .stat-icon{position:relative;z-index:1}
+.continue-card{min-height:92px}
+.quick{border:1px solid rgba(255,255,255,.065)}
+.skill-row{grid-template-columns:110px 1fr 46px}
+.path-hero{position:relative;overflow:hidden}
+.path-hero:after{content:"";position:absolute;width:180px;height:180px;right:-60px;top:-70px;border-radius:50%;background:rgba(85,216,255,.08);filter:blur(8px)}
+.unit:not(.locked):hover .unit-dot{transform:scale(1.05);box-shadow:0 0 0 7px rgba(7,10,18,.8),0 0 28px rgba(124,131,255,.16)}
+.unit-dot{transition:.2s ease}
+@media(max-width:720px){
+ .dash-welcome{min-height:0;padding:26px}
+ .dash-stats{grid-template-columns:1fr 1fr}
+ .continue-card{grid-template-columns:44px 1fr}.continue-card .btn{grid-column:1/-1;width:100%}
+ .skill-row{grid-template-columns:92px 1fr 38px}
+}
+</style></head>
 <body>
 <div class="app">
 <aside class="sidebar">
@@ -129,7 +154,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background-ima
 <div class="eyebrow">Talvo English</div>
 <div class="dashboard-hero">
   <div class="dash-welcome"><div class="dash-kicker">✦ YOUR DAILY ENGLISH WORKSPACE</div><h1>Keep building your English confidence.</h1><p>Practice a little every day, track your progress, and turn what you learn into real conversations.</p><div class="dash-actions"><button type="button" class="btn primary" data-section-jump="pronunciacion">Start speaking →</button><button type="button" class="btn" data-section-jump="path">View learning path</button></div></div>
-  <div class="dash-stats"><div class="dash-stat"><span class="stat-icon streak">🔥</span><strong id="home-streak">7</strong><small>day streak</small></div><div class="dash-stat"><span class="stat-icon xp">✦</span><strong id="home-xp">1,240</strong><small>XP earned</small></div><div class="dash-stat"><span class="stat-icon goal">✓</span><strong id="home-goal">80%</strong><small>daily goal</small></div><div class="dash-stat"><span class="stat-icon level">B1</span><strong id="home-level">12</strong><small>current level</small></div></div>
+  <div class="dash-stats"><div class="dash-stat"><span class="stat-icon streak">✓</span><strong id="home-activities">0</strong><small>activities completed</small></div><div class="dash-stat"><span class="stat-icon xp">✦</span><strong id="home-xp">0</strong><small>XP earned</small></div><div class="dash-stat"><span class="stat-icon level">LV</span><strong id="home-level">1</strong><small>learning level</small></div><div class="dash-stat"><span class="stat-icon goal">→</span><strong id="home-focus">Speaking</strong><small>recommended focus</small></div></div>
 </div>
 <div class="dash-grid">
  <div class="dash-panel"><div class="panel-head"><h3>Continue learning</h3><span>Pick up where you left off</span></div><div class="continue-card"><div class="continue-icon">🗣️</div><div><b>Speaking · Everyday conversations</b><p>Practice natural phrases and improve your fluency.</p><div class="mini-progress"><i></i></div></div><button type="button" class="btn primary" data-section-jump="pronunciacion">Continue</button></div><div class="quick-grid"><button class="quick" type="button" data-section-jump="escucha"><span class="quick-icon">🎧</span><b>Listening</b><small>Train your ear</small></button><button class="quick" type="button" data-section-jump="lectura"><span class="quick-icon">📖</span><b>Reading</b><small>Build comprehension</small></button><button class="quick" type="button" data-section-jump="escritura"><span class="quick-icon">✍️</span><b>Writing</b><small>Write naturally</small></button><button class="quick" type="button" data-section-jump="tutor"><span class="quick-icon">🤖</span><b>AI Tutor</b><small>Practice freely</small></button></div></div>
@@ -206,7 +231,7 @@ async function getSession(){const r=await sb.auth.getSession();if(r.error)throw 
 async function authFetch(path,options={}){let s=await getSession();if(!s){showAuth();throw new Error('Please sign in to continue.')}const headers=new Headers(options.headers||{});headers.set('Authorization','Bearer '+s.access_token);let r=await fetch(API_URL+path,{...options,headers});if(r.status===401){const refreshed=await sb.auth.refreshSession();if(refreshed.data.session){headers.set('Authorization','Bearer '+refreshed.data.session.access_token);r=await fetch(API_URL+path,{...options,headers})}}return r}
 async function jsonFetch(path,options={}){const r=await authFetch(path,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('Request failed ('+r.status+')'));return d}
 async function syncUser(user){state.user=user;const content=$('app-content'),locked=$('locked-view');if(!user){$('user-display').textContent='Sign in to practice';$('side-email').textContent='Talvo English';$('side-status').textContent='Sign in required';$('login-btn').style.display='inline-block';$('logout-btn').style.display='none';content.style.display='none';locked.style.display='none';showAuth();return}$('user-display').textContent=user.email||'Signed in';$('side-email').textContent=user.email||'Student';$('login-btn').style.display='none';$('logout-btn').style.display='inline-block';try{const d=await jsonFetch('/api/session');if(!d.authenticated)throw new Error('The session is not recognized by the server.');state.subscribed=!!d.is_subscribed;renderAccountInfo(user,d);if(d.es_admin){$('nav-admin').style.display='inline-block'}if(d.en_prueba){$('side-status').textContent=`Free trial · ${d.trial_dias_restantes} day(s) left`}else{$('side-status').textContent=state.subscribed?'Practice access active':'Trial ended · subscribe to continue'}content.style.display=state.subscribed?'block':'none';locked.style.display=state.subscribed?'none':'block';if(state.subscribed){closeAuth();loadReading().catch(()=>{});loadDictation().catch(()=>{});section('home');}}catch(e){console.error('[SESSION]',e);state.subscribed=false;content.style.display='none';locked.style.display='block';$('side-status').textContent='Access check failed';toast('We could not verify your access. Please sign in again.')}}
-async function loadHome(){try{const d=await jsonFetch('/api/progreso');const total=Number(d.total_actividades||0);$('home-xp').textContent=total?Math.max(0,total*40).toLocaleString():'0';$('home-goal').textContent=total?Math.min(100,Math.round(total%16/15*100))+'%':'0%';}catch(e){console.debug('[HOME]',e.message)}}
+async function loadHome(){try{const d=await jsonFetch('/api/progreso');const total=Number(d.total_actividades||0);const level=Math.max(1,Math.floor(total/10)+1);$('home-activities').textContent=total.toLocaleString();$('home-xp').textContent=Math.max(0,total*40).toLocaleString();$('home-level').textContent=level;$('home-focus').textContent=total===0?'Speaking':(Number(d.pronunciacion||0)<=Number(d.lectura||0)?'Speaking':'Reading');}catch(e){console.debug('[HOME]',e.message)}}
 function section(name,button){if(!state.user||!state.subscribed){showAuth();return}$$('.section').forEach(s=>s.classList.toggle('active',s.id==='sec-'+name));$$('#main-nav button').forEach(b=>b.classList.remove('active'));const nav=$(`#main-nav button[data-section="${name}"]`);if(nav)nav.classList.add('active');if(button&&button.closest('#main-nav'))button.classList.add('active');if(name==='lectura')loadReading().catch(e=>toast(e.message));if(name==='escucha')loadDictation().catch(e=>toast(e.message));if(name==='historial')loadProgress().catch(e=>toast(e.message));if(name==='admin')loadAdminActivity();if(name==='home')loadHome().catch(()=>{});setTimeout(showCardPeek,600);window.scrollTo({top:0,behavior:'smooth'})}
 function pronMode(mode){state.pron=mode;$$('.mode[data-pron]').forEach(b=>b.classList.toggle('active',b.dataset.pron===mode));['lectura','habla_libre','trabalenguas'].forEach(x=>{const el=$('panel-'+x);if(el)el.classList.toggle('active',x===mode)});if(mode==='tutor'){section('tutor');return}$('pron-result').style.display='none'}
 function speak(text,rate=1){if(!('speechSynthesis'in window))return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(text||''));u.lang='en-US';u.rate=rate;speechSynthesis.speak(u)}
