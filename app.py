@@ -981,6 +981,110 @@ def history():
     return jsonify({"ok": True, "historial": combined[:30]})
 
 
+@app.get("/api/vocabulario/diario")
+def vocab_daily():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    client = supabase_admin or supabase
+    today = datetime.now(timezone.utc).date().isoformat()
+    try:
+        existing = (
+            client.table("vocabulario_usuario")
+            .select("id,palabra,significado,ejemplo,aprendida")
+            .eq("user_id", user.id)
+            .eq("origen", "diario")
+            .eq("fecha", today)
+            .execute()
+        ).data or []
+        if existing:
+            return jsonify({"ok": True, "palabras": existing})
+
+        level = estimate_level(user.id) or "B1"
+        data = ai_json(
+            "You create a short daily English vocabulary list for a learner. Return JSON only with exact key: palabras, an array of exactly 5 objects each with keys 'palabra' (the English word), 'significado' (short definition in Spanish), 'ejemplo' (one example sentence in English using the word).",
+            f"Student level: {level}. Give 5 useful, varied everyday words appropriate for this level.",
+            temperature=0.6,
+        )
+        words = data.get("palabras", [])[:5]
+        inserted = []
+        for w in words:
+            row = {
+                "user_id": user.id,
+                "palabra": w.get("palabra", ""),
+                "significado": w.get("significado", ""),
+                "ejemplo": w.get("ejemplo", ""),
+                "origen": "diario",
+                "fecha": today,
+            }
+            try:
+                res = client.table("vocabulario_usuario").insert(row).execute()
+                inserted.append((res.data or [row])[0])
+            except Exception as exc:
+                print(f"[VOCAB INSERT] {exc}")
+                inserted.append(row)
+        return jsonify({"ok": True, "palabras": inserted})
+    except Exception as exc:
+        return json_error(f"No se pudieron generar las palabras del día: {exc}", 500)
+
+
+@app.post("/api/vocabulario/guardar")
+def vocab_save():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    palabra = (body.get("palabra") or "").strip()
+    if not palabra:
+        return json_error("Falta la palabra.")
+    save_history("vocabulario_usuario", user.id, {
+        "palabra": palabra,
+        "significado": (body.get("significado") or "").strip(),
+        "ejemplo": (body.get("ejemplo") or "").strip(),
+        "origen": body.get("origen") or "manual",
+    })
+    return jsonify({"ok": True})
+
+
+@app.post("/api/vocabulario/marcar")
+def vocab_mark():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    word_id = body.get("id")
+    aprendida = bool(body.get("aprendida"))
+    if not word_id:
+        return json_error("Falta el identificador de la palabra.")
+    client = supabase_admin or supabase
+    try:
+        client.table("vocabulario_usuario").update({"aprendida": aprendida}).eq("id", word_id).eq("user_id", user.id).execute()
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return json_error(f"No se pudo actualizar: {exc}", 500)
+
+
+@app.get("/api/vocabulario")
+def vocab_list():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    client = supabase_admin or supabase
+    try:
+        rows = (
+            client.table("vocabulario_usuario")
+            .select("id,palabra,significado,ejemplo,origen,aprendida,created_at")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        ).data or []
+        learned = sum(1 for r in rows if r.get("aprendida"))
+        return jsonify({"ok": True, "palabras": rows, "total": len(rows), "aprendidas": learned})
+    except Exception as exc:
+        return json_error(f"No se pudo cargar tu vocabulario: {exc}", 500)
+
+
 @app.get("/api/achievements")
 def achievements():
     user, error = authenticated_user()
