@@ -981,6 +981,81 @@ def history():
     return jsonify({"ok": True, "historial": combined[:30]})
 
 
+@app.get("/api/achievements")
+def achievements():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    client = supabase_admin or supabase
+
+    streak = 0
+    try:
+        profile = (
+            client.table("profiles")
+            .select("streak_days")
+            .eq("id", user.id)
+            .maybe_single()
+            .execute()
+        )
+        streak = (profile.data or {}).get("streak_days") or 0
+    except Exception as exc:
+        print(f"[ACHIEVEMENTS PROFILE] {exc}")
+
+    counts = {}
+    bests = {}
+    for key, (table, col) in {
+        "pronunciacion": ("historial_pronunciacion", "puntuacion_global"),
+        "escritura": ("historial_escritura", "calificacion"),
+        "lectura": ("historial_lectura", "calificacion"),
+        "dictado": ("historial_dictado", "calificacion"),
+        "tutor": ("historial_tutor", None),
+    }.items():
+        try:
+            select_cols = col if col else "id"
+            rows = (
+                client.table(table)
+                .select(select_cols)
+                .eq("user_id", user.id)
+                .execute()
+            ).data or []
+            counts[key] = len(rows)
+            if col:
+                vals = [r[col] for r in rows if r.get(col) is not None]
+                bests[key] = max(vals) if vals else 0
+        except Exception as exc:
+            print(f"[ACHIEVEMENTS:{table}] {exc}")
+            counts[key] = 0
+            bests[key] = 0
+
+    total = sum(counts.get(k, 0) for k in ["pronunciacion", "escritura", "lectura", "dictado"])
+
+    def pct(value, target):
+        return min(100, round(value / target * 100)) if target else 0
+
+    items = [
+        {"code": "first_lesson", "title": "First Lesson", "icon": "🏆",
+         "unlocked": total >= 1, "progress": pct(total, 1)},
+        {"code": "streak_7", "title": "7 Day Streak", "icon": "🔥",
+         "unlocked": streak >= 7, "progress": pct(streak, 7)},
+        {"code": "streak_30", "title": "30 Day Streak", "icon": "🎯",
+         "unlocked": streak >= 30, "progress": pct(streak, 30)},
+        {"code": "first_conversation", "title": "First Conversation", "icon": "🗣️",
+         "unlocked": counts.get("tutor", 0) >= 1, "progress": pct(counts.get("tutor", 0), 1)},
+        {"code": "writing_master", "title": "Writing Master", "icon": "✍️",
+         "unlocked": counts.get("escritura", 0) >= 10 or bests.get("escritura", 0) >= 90,
+         "progress": max(pct(counts.get("escritura", 0), 10), pct(bests.get("escritura", 0), 90))},
+        {"code": "listening_pro", "title": "Listening Pro", "icon": "🎧",
+         "unlocked": counts.get("dictado", 0) >= 10, "progress": pct(counts.get("dictado", 0), 10)},
+        {"code": "reading_explorer", "title": "Reading Explorer", "icon": "📖",
+         "unlocked": counts.get("lectura", 0) >= 10, "progress": pct(counts.get("lectura", 0), 10)},
+        {"code": "speaking_star", "title": "Speaking Star", "icon": "⭐",
+         "unlocked": counts.get("pronunciacion", 0) >= 10 or bests.get("pronunciacion", 0) >= 90,
+         "progress": max(pct(counts.get("pronunciacion", 0), 10), pct(bests.get("pronunciacion", 0), 90))},
+    ]
+
+    return jsonify({"ok": True, "achievements": items, "unlocked_count": sum(1 for i in items if i["unlocked"])})
+
+
 @app.get("/api/dashboard")
 def dashboard():
     user, error = authenticated_user()
