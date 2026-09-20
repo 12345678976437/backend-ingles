@@ -4,7 +4,7 @@ import random
 import re
 import tempfile
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, Response
@@ -158,6 +158,43 @@ def save_history(table, user_id, payload):
         client.table(table).insert({"user_id": user_id, **payload}).execute()
     except Exception as exc:
         print(f"[HISTORY:{table}] {exc}")
+
+
+def award_xp(user_id, amount):
+    """Suma XP y actualiza la racha de días consecutivos practicando."""
+    client = supabase_admin or supabase
+    if not client:
+        return
+    try:
+        profile = (
+            client.table("profiles")
+            .select("xp,streak_days,last_activity_date")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        data = profile.data or {}
+        today = datetime.now(timezone.utc).date()
+        last = data.get("last_activity_date")
+        streak = data.get("streak_days") or 0
+        if last:
+            last_date = datetime.fromisoformat(last).date()
+            if last_date == today:
+                pass  # ya contó hoy
+            elif last_date == today - timedelta(days=1):
+                streak += 1
+            else:
+                streak = 1
+        else:
+            streak = 1
+        new_xp = (data.get("xp") or 0) + amount
+        client.table("profiles").update({
+            "xp": new_xp,
+            "streak_days": streak,
+            "last_activity_date": today.isoformat(),
+        }).eq("id", user_id).execute()
+    except Exception as exc:
+        print(f"[XP] {exc}")
 
 
 def speech_config():
@@ -500,6 +537,7 @@ def analyze_real_audio():
             "completitud": payload["completitud"],
             "detalles_json": payload,
         })
+        award_xp(user.id, 15)
         return jsonify({"ok": True, **payload})
     except Exception as exc:
         return json_error(f"No se pudo analizar el audio: {exc}", 500)
@@ -542,6 +580,7 @@ def analyze_writing():
             "resumen": data.get("resumen"),
             "version_mejorada": data.get("version_mejorada"),
         })
+        award_xp(user.id, 20)
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo evaluar el texto: {exc}", 500)
@@ -574,6 +613,7 @@ def evaluate_reading():
             "claridad": data.get("claridad"),
             "respuesta": answer,
         })
+        award_xp(user.id, 20)
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo evaluar la lectura: {exc}", 500)
@@ -603,6 +643,7 @@ def evaluate_dictation():
             "diferencias": data.get("diferencias"),
             "nivel": data.get("nivel"),
         })
+        award_xp(user.id, 15)
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo evaluar el dictado: {exc}", 500)
@@ -722,6 +763,7 @@ def call_summary():
             "mensaje_usuario": "[Resumen de llamada]",
             "respuesta_tutor": json.dumps(data, ensure_ascii=False),
         })
+        award_xp(user.id, 25)
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo generar el resumen: {exc}", 500)
@@ -937,6 +979,80 @@ def history():
             print(f"[HISTORY READ:{table}] {exc}")
     combined.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     return jsonify({"ok": True, "historial": combined[:30]})
+
+
+@app.get("/api/dashboard")
+def dashboard():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    client = supabase_admin or supabase
+
+    xp, streak = 0, 0
+    try:
+        profile = (
+            client.table("profiles")
+            .select("xp,streak_days,last_activity_date")
+            .eq("id", user.id)
+            .maybe_single()
+            .execute()
+        )
+        pdata = profile.data or {}
+        xp = pdata.get("xp") or 0
+        streak = pdata.get("streak_days") or 0
+        last = pdata.get("last_activity_date")
+        if last:
+            last_date = datetime.fromisoformat(last).date()
+            today = datetime.now(timezone.utc).date()
+            if last_date < today - timedelta(days=1):
+                streak = 0  # la racha se rompió, aunque el contador guardado aún no lo refleje
+    except Exception as exc:
+        print(f"[DASHBOARD PROFILE] {exc}")
+
+    xp_per_level = 150
+    level = xp // xp_per_level + 1
+    xp_into_level = xp % xp_per_level
+
+    skill_tables = {
+        "speaking": ("historial_pronunciacion", "puntuacion_global"),
+        "listening": ("historial_dictado", "calificacion"),
+        "reading": ("historial_lectura", "calificacion"),
+        "writing": ("historial_escritura", "calificacion"),
+    }
+    skills = {}
+    today_count = 0
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    for key, (table, col) in skill_tables.items():
+        try:
+            rows = (
+                client.table(table)
+                .select(f"{col},created_at")
+                .eq("user_id", user.id)
+                .order("created_at", desc=True)
+                .limit(10)
+                .execute()
+            ).data or []
+            vals = [r[col] for r in rows if r.get(col) is not None]
+            skills[key] = round(sum(vals) / len(vals)) if vals else 0
+            today_count += sum(1 for r in rows if (r.get("created_at") or "").startswith(today_str))
+        except Exception as exc:
+            print(f"[DASHBOARD:{table}] {exc}")
+            skills[key] = 0
+
+    daily_goal_activities = 3
+    daily_goal_pct = min(100, round(today_count / daily_goal_activities * 100))
+
+    return jsonify({
+        "ok": True,
+        "xp": xp,
+        "level": level,
+        "xp_into_level": xp_into_level,
+        "xp_per_level": xp_per_level,
+        "streak_days": streak,
+        "skills": skills,
+        "daily_goal_pct": daily_goal_pct,
+        "today_activities": today_count,
+    })
 
 
 @app.get("/api/progreso")
