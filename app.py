@@ -327,6 +327,178 @@ def build_pron_payload(result):
     }
 
 
+PASS_THRESHOLD = 60  # puntuación mínima para marcar un tema como completado
+
+# Estructura fija de unidades. El contenido de cada lección (frase, texto, prompt...)
+# se genera con IA en el momento, ajustado al tema de la unidad.
+LEARNING_UNITS = [
+    {
+        "code": "everyday_english",
+        "order": 1,
+        "title": "Everyday English",
+        "description": "Greetings, routines, and small talk.",
+        "icon": "🏠",
+        "xp_required": 0,
+        "topics": [
+            {"id": "greetings", "title": "Greetings & introductions"},
+            {"id": "routines", "title": "Daily routines"},
+            {"id": "family", "title": "Family & friends"},
+            {"id": "smalltalk", "title": "Small talk"},
+            {"id": "numbers_time", "title": "Numbers & time"},
+        ],
+    },
+    {
+        "code": "at_the_restaurant",
+        "order": 2,
+        "title": "At the Restaurant",
+        "description": "Order food, talk about flavors, and handle the bill.",
+        "icon": "🍽️",
+        "xp_required": 150,
+        "topics": [
+            {"id": "ordering", "title": "Ordering food"},
+            {"id": "menu", "title": "Understanding a menu"},
+            {"id": "preferences", "title": "Likes & dislikes"},
+            {"id": "complaints", "title": "Complaints & requests"},
+            {"id": "paying", "title": "Paying the bill"},
+        ],
+    },
+    {
+        "code": "travel_and_tourism",
+        "order": 3,
+        "title": "Travel & Tourism",
+        "description": "Airports, hotels, directions, and sightseeing.",
+        "icon": "✈️",
+        "xp_required": 400,
+        "topics": [
+            {"id": "airport", "title": "At the airport"},
+            {"id": "hotel", "title": "Checking into a hotel"},
+            {"id": "directions", "title": "Asking for directions"},
+            {"id": "sightseeing", "title": "Sightseeing"},
+            {"id": "emergencies", "title": "Travel emergencies"},
+        ],
+    },
+    {
+        "code": "work_and_business",
+        "order": 4,
+        "title": "Work & Business",
+        "description": "Meetings, emails, interviews, and office talk.",
+        "icon": "💼",
+        "xp_required": 700,
+        "topics": [
+            {"id": "interview", "title": "Job interviews"},
+            {"id": "meetings", "title": "Meetings"},
+            {"id": "emails", "title": "Writing emails"},
+            {"id": "smalltalk_office", "title": "Office small talk"},
+            {"id": "presentations", "title": "Presentations"},
+        ],
+    },
+]
+
+LEARNING_TOOL_LABELS = {
+    "pronunciation": "Pronunciation",
+    "writing": "Writing",
+    "reading": "Reading",
+    "dictado": "Listening",
+}
+
+
+def get_unit(code):
+    return next((u for u in LEARNING_UNITS if u["code"] == code), None)
+
+
+def get_topic(unit, topic_id):
+    return next((t for t in (unit or {}).get("topics", []) if t["id"] == topic_id), None)
+
+
+def fetch_learning_progress(user_id):
+    """Devuelve un dict {(unit_code, topic_id): fila} solo con los temas completados."""
+    client = supabase_admin or supabase
+    if not client:
+        return {}
+    try:
+        rows = (
+            client.table("learning_progress")
+            .select("unit_code,topic_id,tool,score,completed")
+            .eq("user_id", user_id)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        print(f"[LEARNING PROGRESS] {exc}")
+        return {}
+    return {(r["unit_code"], r["topic_id"]): r for r in rows if r.get("completed")}
+
+
+def record_learning_progress(user_id, unit_code, topic_id, tool, score):
+    """Guarda el intento de un tema del Learning Path y calcula si se completó la unidad.
+    Devuelve None si no venía asociado a ningún tema del Learning Path (uso normal de la herramienta)."""
+    if not unit_code or not topic_id:
+        return None
+    unit = get_unit(unit_code)
+    if not unit:
+        return None
+    topic = get_topic(unit, topic_id)
+    if not topic:
+        return None
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        return None
+
+    client = supabase_admin or supabase
+    if not client:
+        return None
+
+    passed = score >= PASS_THRESHOLD
+    already_done = False
+    try:
+        existing = (
+            client.table("learning_progress")
+            .select("id,completed,score")
+            .eq("user_id", user_id)
+            .eq("unit_code", unit_code)
+            .eq("topic_id", topic_id)
+            .maybe_single()
+            .execute()
+        )
+        row = existing.data
+        if row:
+            already_done = bool(row.get("completed"))
+            best_score = max(score, row.get("score") or 0)
+            client.table("learning_progress").update({
+                "tool": tool,
+                "score": best_score,
+                "completed": already_done or passed,
+            }).eq("id", row["id"]).execute()
+        else:
+            client.table("learning_progress").insert({
+                "user_id": user_id,
+                "unit_code": unit_code,
+                "topic_id": topic_id,
+                "tool": tool,
+                "score": score,
+                "completed": passed,
+            }).execute()
+    except Exception as exc:
+        print(f"[LEARNING PROGRESS SAVE] {exc}")
+        return None
+
+    newly_completed = passed and not already_done
+    if newly_completed:
+        award_xp(user_id, 30)
+
+    progress = fetch_learning_progress(user_id)
+    total = len(unit["topics"])
+    completed_count = sum(1 for t in unit["topics"] if (unit_code, t["id"]) in progress)
+
+    return {
+        "passed": passed,
+        "newly_completed": newly_completed,
+        "unit_completed": completed_count == total,
+        "completed_topics": completed_count,
+        "total_topics": total,
+    }
+
+
 @app.get("/health")
 def health():
     return jsonify({
@@ -500,6 +672,8 @@ def analyze_real_audio():
     reference = (request.form.get("frase_esperada") or request.form.get("reference") or "").strip()
     mode = (request.form.get("modo") or "").strip()
     topic = (request.form.get("topic") or "").strip()
+    lp_unit_code = (request.form.get("unit_code") or "").strip()
+    lp_topic_id = (request.form.get("topic_id") or "").strip()
     if not upload:
         return json_error("No se recibió audio.")
     wav_path = None
@@ -538,6 +712,9 @@ def analyze_real_audio():
             "detalles_json": payload,
         })
         award_xp(user.id, 15)
+        lp_result = record_learning_progress(user.id, lp_unit_code, lp_topic_id, "pronunciation", payload["puntuacion_global"])
+        if lp_result:
+            payload["learning_path"] = lp_result
         return jsonify({"ok": True, **payload})
     except Exception as exc:
         return json_error(f"No se pudo analizar el audio: {exc}", 500)
@@ -561,8 +738,10 @@ def analyze_writing():
     user, error = authenticated_user()
     if error:
         return json_error(error[0], error[1])
-    text = (request.get_json(silent=True) or {}).get("texto", "") or (request.get_json(silent=True) or {}).get("text", "")
-    text = text.strip()
+    body = request.get_json(silent=True) or {}
+    text = (body.get("texto") or body.get("text") or "").strip()
+    lp_unit_code = (body.get("unit_code") or "").strip()
+    lp_topic_id = (body.get("topic_id") or "").strip()
     if not text:
         return json_error("Escribe algo antes de evaluar.")
     try:
@@ -581,6 +760,9 @@ def analyze_writing():
             "version_mejorada": data.get("version_mejorada"),
         })
         award_xp(user.id, 20)
+        lp_result = record_learning_progress(user.id, lp_unit_code, lp_topic_id, "writing", data.get("puntuacion"))
+        if lp_result:
+            data["learning_path"] = lp_result
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo evaluar el texto: {exc}", 500)
@@ -614,6 +796,15 @@ def evaluate_reading():
             "respuesta": answer,
         })
         award_xp(user.id, 20)
+        lp_result = record_learning_progress(
+            user.id,
+            (body.get("unit_code") or "").strip(),
+            (body.get("topic_id") or "").strip(),
+            "reading",
+            data.get("puntuacion"),
+        )
+        if lp_result:
+            data["learning_path"] = lp_result
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo evaluar la lectura: {exc}", 500)
@@ -644,6 +835,15 @@ def evaluate_dictation():
             "nivel": data.get("nivel"),
         })
         award_xp(user.id, 15)
+        lp_result = record_learning_progress(
+            user.id,
+            (body.get("unit_code") or "").strip(),
+            (body.get("topic_id") or "").strip(),
+            "dictado",
+            data.get("puntuacion"),
+        )
+        if lp_result:
+            data["learning_path"] = lp_result
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo evaluar el dictado: {exc}", 500)
@@ -1062,6 +1262,152 @@ def vocab_mark():
         return jsonify({"ok": True})
     except Exception as exc:
         return json_error(f"No se pudo actualizar: {exc}", 500)
+
+
+def _unit_xp_and_progress(user_id):
+    client = supabase_admin or supabase
+    xp = 0
+    if client:
+        try:
+            profile = client.table("profiles").select("xp").eq("id", user_id).maybe_single().execute()
+            xp = (profile.data or {}).get("xp") or 0
+        except Exception as exc:
+            print(f"[LEARNING PATH XP] {exc}")
+    return xp, fetch_learning_progress(user_id)
+
+
+@app.get("/api/learning-path")
+def learning_path():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+
+    xp, progress = _unit_xp_and_progress(user.id)
+
+    units_out = []
+    prev_completed = True
+    for unit in sorted(LEARNING_UNITS, key=lambda u: u["order"]):
+        total = len(unit["topics"])
+        completed = sum(1 for t in unit["topics"] if (unit["code"], t["id"]) in progress)
+        unit_completed = total > 0 and completed == total
+        unlocked = xp >= unit["xp_required"] and prev_completed
+        units_out.append({
+            "code": unit["code"],
+            "order": unit["order"],
+            "title": unit["title"],
+            "description": unit["description"],
+            "icon": unit["icon"],
+            "xp_required": unit["xp_required"],
+            "total_topics": total,
+            "completed_topics": completed,
+            "completed": unit_completed,
+            "unlocked": unlocked,
+        })
+        prev_completed = unit_completed
+
+    return jsonify({"ok": True, "xp": xp, "units": units_out})
+
+
+@app.get("/api/learning-path/<unit_code>")
+def learning_path_unit(unit_code):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+
+    unit = get_unit(unit_code)
+    if not unit:
+        return json_error("Unidad no encontrada.", 404)
+
+    xp, progress = _unit_xp_and_progress(user.id)
+
+    prev_completed = True
+    unlocked = False
+    for u in sorted(LEARNING_UNITS, key=lambda u: u["order"]):
+        total = len(u["topics"])
+        completed = sum(1 for t in u["topics"] if (u["code"], t["id"]) in progress)
+        u_completed = total > 0 and completed == total
+        u_unlocked = xp >= u["xp_required"] and prev_completed
+        if u["code"] == unit_code:
+            unlocked = u_unlocked
+            break
+        prev_completed = u_completed
+
+    if not unlocked:
+        return json_error("Esta unidad todavía está bloqueada.", 403)
+
+    topics_out = []
+    for t in unit["topics"]:
+        row = progress.get((unit_code, t["id"]))
+        topics_out.append({
+            "id": t["id"],
+            "title": t["title"],
+            "completed": bool(row),
+            "tool": row.get("tool") if row else None,
+            "score": row.get("score") if row else None,
+        })
+
+    return jsonify({
+        "ok": True,
+        "unit": {
+            "code": unit["code"],
+            "title": unit["title"],
+            "description": unit["description"],
+            "icon": unit["icon"],
+        },
+        "topics": topics_out,
+    })
+
+
+@app.post("/api/learning-path/practice")
+def learning_path_practice():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+
+    body = request.get_json(silent=True) or {}
+    unit_code = (body.get("unit_code") or "").strip()
+    topic_id = (body.get("topic_id") or "").strip()
+    tool = (body.get("tool") or "").strip()
+
+    unit = get_unit(unit_code)
+    if not unit:
+        return json_error("Unidad no encontrada.", 404)
+    topic = get_topic(unit, topic_id)
+    if not topic:
+        return json_error("Tema no encontrado.", 404)
+    if tool not in LEARNING_TOOL_LABELS:
+        return json_error("Herramienta no válida.")
+
+    theme_line = f'Topic/context: "{topic["title"]}" (part of the unit "{unit["title"]}").'
+
+    try:
+        if tool == "pronunciation":
+            data = ai_json(
+                "You create a short English sentence for a pronunciation exercise, tied to a specific real-life topic. Return JSON only with exact keys: texto (6-14 words, natural spoken English), nivel (CEFR level).",
+                f"{theme_line} Create one natural sentence someone would actually say in this situation.",
+            )
+        elif tool == "dictado":
+            data = ai_json(
+                "Create an English dictation sentence for an intermediate learner, tied to a specific real-life topic. Return JSON only with exact keys: texto (12-22 words), nivel (CEFR level).",
+                f"{theme_line} Create one natural sentence of 12-22 words for this situation.",
+            )
+        elif tool == "reading":
+            data = ai_json(
+                "You create short English reading passages for learners, tied to a specific real-life topic. Return JSON only with exact keys: texto (180-260 words), titulo (short title), nivel (CEFR level).",
+                f"{theme_line} Create a passage about this situation.",
+            )
+        else:  # writing
+            data = ai_json(
+                "You create English writing prompts for learners, tied to a specific real-life topic. Return JSON only with exact keys: prompt (a one or two sentence writing challenge, in English), nivel (CEFR level).",
+                f"{theme_line} Create a writing challenge about this situation.",
+            )
+        data["unit_code"] = unit_code
+        data["topic_id"] = topic_id
+        data["topic_title"] = topic["title"]
+        data["tool"] = tool
+        return jsonify({"ok": True, **data})
+    except Exception as exc:
+        return json_error(f"No se pudo generar el ejercicio: {exc}", 500)
 
 
 @app.get("/api/vocabulario")
