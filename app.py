@@ -633,6 +633,50 @@ def new_twister():
         return json_error(f"No se pudo generar el trabalenguas: {exc}", 500)
 
 
+READING_LIBRARY = [
+    {"id": "ny_day", "title": "A Day in New York", "level": "intermediate", "topic": "a typical day exploring New York City", "minutes": 6},
+    {"id": "travel_alone", "title": "Traveling Alone", "level": "beginner", "topic": "the experience of traveling alone for the first time", "minutes": 4},
+    {"id": "future_tech", "title": "The Future of Technology", "level": "advanced", "topic": "how technology might change everyday life in the future", "minutes": 8},
+    {"id": "healthy_habits", "title": "Healthy Habits", "level": "intermediate", "topic": "building healthy daily habits", "minutes": 5},
+    {"id": "power_of_habits", "title": "The Power of Habits", "level": "advanced", "topic": "how small habits shape our lives, in a reflective tone", "minutes": 7},
+    {"id": "environment", "title": "Environment and You", "level": "intermediate", "topic": "small everyday actions that help the environment", "minutes": 5},
+]
+
+
+def get_reading_entry(entry_id):
+    return next((x for x in READING_LIBRARY if x["id"] == entry_id), None)
+
+
+@app.get("/api/reading/library")
+def reading_library():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    return jsonify({"ok": True, "items": [
+        {"id": x["id"], "title": x["title"], "level": x["level"], "minutes": x["minutes"]}
+        for x in READING_LIBRARY
+    ]})
+
+
+@app.get("/api/reading/library/<entry_id>")
+def reading_library_item(entry_id):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    entry = get_reading_entry(entry_id)
+    if not entry:
+        return json_error("Lectura no encontrada.", 404)
+    try:
+        data = ai_json(
+            "Create an informational English reading passage for a learner. Return JSON only with exact keys: texto (the reading passage, in English, 180-260 words), titulo (short title), nivel (CEFR level), vocabulario (array of 5 objects with keys 'palabra' and 'significado', useful vocabulary words with brief English definitions).",
+            f"Create 180-260 words about {entry['topic']}, at a {entry['level']} level. Do not include questions or Spanish translation in the passage itself.",
+        )
+        data["entry_id"] = entry_id
+        return jsonify({"ok": True, **data})
+    except Exception as exc:
+        return json_error(f"No se pudo generar la lectura: {exc}", 500)
+
+
 @app.get("/nuevo-texto-lectura")
 def new_reading():
     user, error = authenticated_user()
@@ -646,6 +690,50 @@ def new_reading():
         return jsonify({"ok": True, **data})
     except Exception as exc:
         return json_error(f"No se pudo generar la lectura: {exc}", 500)
+
+
+LISTENING_LIBRARY = [
+    {"id": "daily_conv", "title": "Daily Conversations", "level": "beginner", "topic": "a casual daily conversation between friends"},
+    {"id": "restaurant", "title": "At the Restaurant", "level": "intermediate", "topic": "ordering food at a restaurant"},
+    {"id": "airport", "title": "At the Airport", "level": "intermediate", "topic": "checking in and going through security at an airport"},
+    {"id": "meeting_people", "title": "Meeting New People", "level": "beginner", "topic": "introducing yourself to someone new"},
+    {"id": "job_interview", "title": "Job Interview", "level": "advanced", "topic": "answering a question in a job interview"},
+    {"id": "business_meeting", "title": "Business Meeting", "level": "advanced", "topic": "a short update given during a business meeting"},
+]
+
+
+def get_listening_entry(entry_id):
+    return next((x for x in LISTENING_LIBRARY if x["id"] == entry_id), None)
+
+
+@app.get("/api/listening/library")
+def listening_library():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    return jsonify({"ok": True, "items": [
+        {"id": x["id"], "title": x["title"], "level": x["level"]}
+        for x in LISTENING_LIBRARY
+    ]})
+
+
+@app.get("/api/listening/library/<entry_id>")
+def listening_library_item(entry_id):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    entry = get_listening_entry(entry_id)
+    if not entry:
+        return json_error("Audio no encontrado.", 404)
+    try:
+        data = ai_json(
+            "Create an English dictation sentence for a learner. Return JSON only with exact keys: texto (the sentence, in English, 12-22 words), nivel (CEFR level).",
+            f"Create one natural sentence of 12-22 words about {entry['topic']}, at a {entry['level']} level.",
+        )
+        data["entry_id"] = entry_id
+        return jsonify({"ok": True, **data})
+    except Exception as exc:
+        return json_error(f"No se pudo generar el audio: {exc}", 500)
 
 
 @app.get("/nuevo-dictado")
@@ -731,6 +819,31 @@ def assess_reading_audio():
 @app.post("/api/assess-unscripted")
 def assess_unscripted_audio():
     return analyze_real_audio()
+
+
+WRITING_LEVEL_LABELS = {
+    "easy": "A2 beginner-friendly",
+    "intermediate": "B1-B2 intermediate",
+    "advanced": "C1 advanced",
+}
+
+
+@app.get("/api/writing/challenge")
+def writing_challenge():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    nivel = (request.args.get("nivel") or "intermediate").strip().lower()
+    if nivel not in WRITING_LEVEL_LABELS:
+        nivel = "intermediate"
+    try:
+        data = ai_json(
+            "You create short, engaging English writing challenges/prompts for language learners. Return JSON only with exact key: prompt (one or two sentences, in English, appropriate for the requested level).",
+            f"Create a writing challenge for a {WRITING_LEVEL_LABELS[nivel]} learner. Make it concrete and specific, not generic.",
+        )
+        return jsonify({"ok": True, "prompt": data.get("prompt"), "nivel": nivel})
+    except Exception as exc:
+        return json_error(f"No se pudo generar el reto: {exc}", 500)
 
 
 @app.post("/analizar-escritura")
