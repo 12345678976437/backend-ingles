@@ -1068,7 +1068,7 @@ def call_summary():
 
     try:
         data = ai_json(
-            "You are an English teacher reviewing a call-practice transcript between a student and their AI tutor. Return JSON only, in Spanish, with exact keys: resumen_general (2-3 sentences), fortalezas (array of short strings), errores_comunes (array of short strings describing recurring mistakes, in Spanish, with a brief English example each), vocabulario_recomendado (array of 3-6 objects with keys 'palabra' and 'significado'), siguiente_paso (1-2 sentences suggesting what to practice next).",
+            "You are an English teacher reviewing a call-practice transcript between a student and their AI tutor. Return JSON only, in Spanish (except the numeric keys), with exact keys: puntuacion_general (0-100 overall speaking score), fluidez (0-100), gramatica (0-100), vocabulario (0-100), pronunciacion_estimada (0-100, your best estimate of likely pronunciation quality based on word choice and phrasing patterns in the transcript), resumen_general (2-3 sentences), fortalezas (array of short strings), errores_comunes (array of short strings describing recurring mistakes, in Spanish, with a brief English example each), vocabulario_recomendado (array of 3-6 objects with keys 'palabra' and 'significado'), siguiente_paso (1-2 sentences suggesting what to practice next).",
             "\n".join(transcript_lines),
             temperature=0.3,
         )
@@ -1198,6 +1198,7 @@ def tutor():
     message = (body.get("mensaje") or body.get("message") or "").strip()
     history = body.get("history") or []
     modo = (body.get("modo") or "").strip()
+    categoria = (body.get("categoria") or "").strip()
     if not message:
         return json_error("Escribe o di algo al tutor.")
 
@@ -1217,6 +1218,13 @@ def tutor():
         "no lists, no markdown, no emojis — just natural words that sound good read aloud."
         if modo == "llamada" else ""
     )
+    category_lines = {
+        "grammar": "\n\nFocus this session on grammar: naturally work grammar points into the conversation, invite the student to build full sentences, and be a bit more explicit (but still kind) when correcting grammar patterns.",
+        "vocabulary": "\n\nFocus this session on vocabulary: introduce a couple of useful new English words naturally in context each reply, and check that the student understood them.",
+        "pronunciation": "\n\nFocus this session on pronunciation: ask the student to say or type short phrases, and since you cannot hear audio, give general tips on how tricky words or sounds in their message are typically pronounced.",
+        "free": "\n\nThis is free-form conversation: follow the student's lead on whatever topic they bring up.",
+    }
+    category_line = category_lines.get(categoria, "")
 
     system_prompt = (
         "You are Palanqueta, the friendly hen mascot and personal English conversation tutor at Talvo English. "
@@ -1230,6 +1238,7 @@ def tutor():
         f"{level_line}\n\n"
         f"{prior_context}"
         f"{call_line}"
+        f"{category_line}"
     )
 
     try:
