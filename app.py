@@ -499,6 +499,59 @@ def record_learning_progress(user_id, unit_code, topic_id, tool, score):
     }
 
 
+ALLOWED_AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+@app.post("/api/perfil")
+def update_profile():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    if not (2 <= len(username) <= 30):
+        return json_error("El nombre debe tener entre 2 y 30 caracteres.")
+    client = supabase_admin or supabase
+    if not client:
+        return json_error("Supabase no está configurado.", 500)
+    try:
+        client.table("profiles").update({"username": username}).eq("id", user.id).execute()
+        return jsonify({"ok": True, "username": username})
+    except Exception as exc:
+        return json_error(f"No se pudo guardar el nombre: {exc}", 500)
+
+
+@app.post("/api/perfil/avatar")
+def upload_avatar():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    file = request.files.get("avatar")
+    if not file:
+        return json_error("Selecciona una imagen.")
+    mime = (file.mimetype or "").lower()
+    ext = ALLOWED_AVATAR_TYPES.get(mime)
+    if not ext:
+        return json_error("Solo se permiten imágenes JPG, PNG o WEBP.")
+    client = supabase_admin or supabase
+    if not client:
+        return json_error("Supabase no está configurado.", 500)
+    try:
+        file_bytes = file.read()
+        if len(file_bytes) > 4 * 1024 * 1024:
+            return json_error("La imagen no debe pesar más de 4 MB.")
+        path = f"{user.id}/avatar.{ext}"
+        client.storage.from_("avatars").upload(
+            path, file_bytes, {"content-type": mime, "upsert": "true"}
+        )
+        public_url = client.storage.from_("avatars").get_public_url(path)
+        public_url = f"{public_url.split('?')[0]}?v={int(datetime.now(timezone.utc).timestamp())}"
+        client.table("profiles").update({"avatar_url": public_url}).eq("id", user.id).execute()
+        return jsonify({"ok": True, "avatar_url": public_url})
+    except Exception as exc:
+        return json_error(f"No se pudo subir la foto: {exc}", 500)
+
+
 @app.get("/health")
 def health():
     return jsonify({
@@ -519,18 +572,22 @@ def session_info():
     is_subscribed = False
     trial_dias_restantes = 0
     en_prueba = False
+    username = None
+    avatar_url = None
     client = supabase_admin or supabase
     if client:
         try:
             profile = (
                 client.table("profiles")
-                .select("is_subscribed,trial_ends_at")
+                .select("is_subscribed,trial_ends_at,username,avatar_url")
                 .eq("id", user.id)
                 .maybe_single()
                 .execute()
             )
             data = profile.data or {}
             is_paid = bool(data.get("is_subscribed"))
+            username = data.get("username")
+            avatar_url = data.get("avatar_url")
             trial_ends_at = data.get("trial_ends_at")
             if trial_ends_at:
                 try:
@@ -551,7 +608,7 @@ def session_info():
         "en_prueba": en_prueba,
         "trial_dias_restantes": trial_dias_restantes,
         "es_admin": bool(ADMIN_EMAIL) and (user.email or "").lower() == ADMIN_EMAIL,
-        "user": {"id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None)},
+        "user": {"id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None), "username": username, "avatar_url": avatar_url},
     })
 
 
