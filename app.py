@@ -1746,7 +1746,40 @@ def dashboard():
     daily_goal_activities = 3
     daily_goal_pct = min(100, round(today_count / daily_goal_activities * 100))
 
+    today_date = datetime.now(timezone.utc).date()
+    week_start = today_date - timedelta(days=6)
+    active_days = set()
+    for table, _col in skill_tables.values():
+        try:
+            rows_week = (
+                client.table(table)
+                .select("created_at")
+                .eq("user_id", user.id)
+                .gte("created_at", week_start.isoformat())
+                .execute()
+            ).data or []
+            for r in rows_week:
+                ca = r.get("created_at")
+                if not ca:
+                    continue
+                try:
+                    active_days.add(datetime.fromisoformat(ca.replace("Z", "+00:00")).date().isoformat())
+                except Exception:
+                    pass
+        except Exception as exc:
+            print(f"[DASHBOARD WEEK:{table}] {exc}")
+    week = []
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        week.append({
+            "date": d.isoformat(),
+            "weekday": d.strftime("%a"),
+            "active": d.isoformat() in active_days,
+            "is_today": d == today_date,
+        })
+
     return jsonify({
+        "week": week,
         "ok": True,
         "xp": xp,
         "level": level,
