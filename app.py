@@ -274,8 +274,18 @@ def assess_pronunciation(wav_path, reference_text=None):
             "word": word.get("Word", ""),
             "accuracy": round(float(wa.get("AccuracyScore", 0) or 0), 1),
             "error_type": wa.get("ErrorType", "None"),
+            "offset": word.get("Offset", 0),
+            "duration": word.get("Duration", 0),
             "phonemes": phonemes,
         })
+
+    speaking_rate_wpm = 0
+    if words:
+        first_offset = words[0].get("offset", 0) or 0
+        last_word = words[-1]
+        last_end = (last_word.get("offset", 0) or 0) + (last_word.get("duration", 0) or 0)
+        speaking_seconds = max(0.1, (last_end - first_offset) / 10_000_000)
+        speaking_rate_wpm = round(len(words) / speaking_seconds * 60)
 
     return {
         "transcript": nbest.get("Display", ""),
@@ -284,6 +294,7 @@ def assess_pronunciation(wav_path, reference_text=None):
         "fluency_score": round(float(assessment_raw.get("FluencyScore", 0) or 0), 1),
         "completeness_score": round(float(assessment_raw.get("CompletenessScore", 0) or 0), 1),
         "prosody_score": round(float(assessment_raw.get("ProsodyScore", 0) or 0), 1),
+        "speaking_rate_wpm": speaking_rate_wpm,
         "words": words,
     }
 
@@ -322,6 +333,7 @@ def build_pron_payload(result):
         "fluidez": result.get("fluency_score", 0),
         "completitud": result.get("completeness_score", 0),
         "prosodia": result.get("prosody_score", 0),
+        "velocidad_wpm": result.get("speaking_rate_wpm", 0),
         "palabras": palabras,
         "inspeccion": inspeccion,
     }
