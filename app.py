@@ -575,6 +575,45 @@ def health():
     })
 
 
+CEFR_LEVELS = {"beginner", "elementary", "intermediate", "advanced"}
+LEARNING_GOALS = {"work", "travel", "study", "exams", "personal"}
+
+
+@app.post("/api/onboarding")
+def save_onboarding():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    goal = (body.get("learning_goal") or "").strip().lower()
+    level = (body.get("cefr_level") or "").strip().lower()
+    minutes = body.get("daily_goal_minutes")
+    if goal not in LEARNING_GOALS:
+        return json_error("Selecciona un objetivo válido.")
+    if level not in CEFR_LEVELS:
+        return json_error("Selecciona un nivel válido.")
+    try:
+        minutes = int(minutes)
+        if minutes not in (5, 10, 15, 20, 30):
+            raise ValueError
+    except (TypeError, ValueError):
+        return json_error("Selecciona una meta diaria válida.")
+
+    client = supabase_admin or supabase
+    if not client:
+        return json_error("Supabase no está configurado.", 500)
+    try:
+        client.table("profiles").update({
+            "learning_goal": goal,
+            "cefr_level": level,
+            "daily_goal_minutes": minutes,
+            "onboarded": True,
+        }).eq("id", user.id).execute()
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return json_error(f"No se pudo guardar tu información: {exc}", 500)
+
+
 @app.get("/api/session")
 def session_info():
     user, error = authenticated_user(require_subscription=False)
@@ -586,12 +625,16 @@ def session_info():
     en_prueba = False
     username = None
     avatar_url = None
+    onboarded = False
+    cefr_level = None
+    learning_goal = None
+    daily_goal_minutes = None
     client = supabase_admin or supabase
     if client:
         try:
             profile = (
                 client.table("profiles")
-                .select("is_subscribed,trial_ends_at,username,avatar_url")
+                .select("is_subscribed,trial_ends_at,username,avatar_url,onboarded,cefr_level,learning_goal,daily_goal_minutes")
                 .eq("id", user.id)
                 .maybe_single()
                 .execute()
@@ -600,6 +643,10 @@ def session_info():
             is_paid = bool(data.get("is_subscribed"))
             username = data.get("username")
             avatar_url = data.get("avatar_url")
+            onboarded = bool(data.get("onboarded"))
+            cefr_level = data.get("cefr_level")
+            learning_goal = data.get("learning_goal")
+            daily_goal_minutes = data.get("daily_goal_minutes")
             trial_ends_at = data.get("trial_ends_at")
             if trial_ends_at:
                 try:
@@ -620,7 +667,11 @@ def session_info():
         "en_prueba": en_prueba,
         "trial_dias_restantes": trial_dias_restantes,
         "es_admin": bool(ADMIN_EMAIL) and (user.email or "").lower() == ADMIN_EMAIL,
-        "user": {"id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None), "username": username, "avatar_url": avatar_url},
+        "user": {
+            "id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None),
+            "username": username, "avatar_url": avatar_url, "onboarded": onboarded,
+            "cefr_level": cefr_level, "learning_goal": learning_goal, "daily_goal_minutes": daily_goal_minutes,
+        },
     })
 
 
@@ -1056,7 +1107,13 @@ def estimate_level(user_id):
         except Exception as exc:
             print(f"[LEVEL:{table}] {exc}")
     if not scores:
-        return None
+        try:
+            profile = client.table("profiles").select("cefr_level").eq("id", user_id).maybe_single().execute()
+            self_level = (profile.data or {}).get("cefr_level")
+            return {"beginner": "A1", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(self_level)
+        except Exception as exc:
+            print(f"[LEVEL:self-reported] {exc}")
+            return None
     avg = sum(scores) / len(scores)
     if avg >= 90:
         return "C1-C2"
