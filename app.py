@@ -3,6 +3,9 @@ import os
 import random
 import re
 import tempfile
+import threading
+import time
+from collections import defaultdict, deque
 import requests
 from datetime import datetime, timezone, timedelta
 
@@ -18,6 +21,7 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "12")) * 1024 * 1024
 
 def env(name, default=""):
     return (os.getenv(name) or default).strip()
@@ -95,6 +99,48 @@ def has_active_access(profile_data):
     return datetime.now(timezone.utc) < deadline
 
 
+
+# ---------------------------------------------------------------------------
+# Límites de uso por usuario para los endpoints que gastan IA / voz (Azure).
+# Protege tu crédito: si alguien abusa, recibe un 429 en vez de generar costo.
+# Se pueden ajustar con variables de entorno en Render, sin tocar el código.
+# Nota: el contador vive en memoria; con 1 solo proceso (plan gratis) es exacto.
+# ---------------------------------------------------------------------------
+AI_PATH_PREFIXES = (
+    "/api/sintetizar-audio", "/nueva-frase", "/nuevo-tema-libre", "/nuevo-trabalenguas",
+    "/nuevo-texto-lectura", "/nuevo-dictado", "/analizar-audio-real", "/api/assess-",
+    "/api/writing/challenge", "/analizar-escritura", "/evaluar-lectura", "/evaluar-dictado",
+    "/api/transcribir-audio", "/api/resumen-llamada", "/api/tutor",
+    "/api/learning-path/practice",
+)
+RATE_LIMITS = (  # (ventana en segundos, máximo de peticiones, nombre)
+    (60, int(os.environ.get("RATE_LIMIT_PER_MIN", "15")), "minuto"),
+    (3600, int(os.environ.get("RATE_LIMIT_PER_HOUR", "120")), "hora"),
+    (86400, int(os.environ.get("RATE_LIMIT_PER_DAY", "400")), "día"),
+)
+_rate_hits = defaultdict(deque)
+_rate_lock = threading.Lock()
+
+
+def check_rate_limit(user_id):
+    """Devuelve None si puede continuar, o un mensaje en español si superó un límite."""
+    now = time.time()
+    longest = max(w for w, _, _ in RATE_LIMITS)
+    with _rate_lock:
+        hits = _rate_hits[user_id]
+        while hits and now - hits[0] > longest:
+            hits.popleft()
+        for window, limit, name in RATE_LIMITS:
+            recent = sum(1 for t in hits if now - t <= window)
+            if recent >= limit:
+                return f"Has hecho muchas prácticas en poco tiempo (límite por {name}). Espera un momento e inténtalo de nuevo."
+        hits.append(now)
+        if len(_rate_hits) > 5000:  # limpieza de usuarios inactivos
+            for uid in [u for u, d in _rate_hits.items() if not d or now - d[-1] > longest]:
+                _rate_hits.pop(uid, None)
+    return None
+
+
 def authenticated_user(require_subscription=True):
     if not supabase:
         return None, ("Supabase no está configurado.", 500)
@@ -112,6 +158,11 @@ def authenticated_user(require_subscription=True):
 
     if not user:
         return None, ("Sesión inválida.", 401)
+
+    if request.path.startswith(AI_PATH_PREFIXES):
+        limit_message = check_rate_limit(user.id)
+        if limit_message:
+            return None, (limit_message, 429)
 
     if require_subscription:
         try:
@@ -1523,6 +1574,102 @@ def vocab_mark():
         return jsonify({"ok": True})
     except Exception as exc:
         return json_error(f"No se pudo actualizar: {exc}", 500)
+
+
+# ---------------------------------------------------------------------------
+# Repaso espaciado de vocabulario: las palabras regresan a los 1, 3, 7, 14 y 30 días.
+# Requiere las columnas repaso_nivel y proximo_repaso (ver migracion_repaso_espaciado.sql).
+# ---------------------------------------------------------------------------
+REVIEW_INTERVALS = [1, 3, 7, 14, 30]
+REVIEW_MAX_LEVEL = len(REVIEW_INTERVALS)
+REVIEW_SESSION_SIZE = 10
+
+
+def _parse_day(value):
+    try:
+        return datetime.fromisoformat(str(value)[:10]).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _review_is_due(row, today):
+    level = row.get("repaso_nivel") or 0
+    if level >= REVIEW_MAX_LEVEL:
+        return False
+    scheduled = _parse_day(row.get("proximo_repaso"))
+    if scheduled:
+        return scheduled <= today
+    if row.get("aprendida"):  # marcada a mano como aprendida, sin programar
+        return False
+    learned_on = _parse_day(row.get("fecha") or row.get("created_at"))
+    return bool(learned_on and learned_on < today)
+
+
+@app.get("/api/vocabulario/repaso")
+def vocab_review_due():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    client = supabase_admin or supabase
+    today = datetime.now(timezone.utc).date()
+    try:
+        rows = (
+            client.table("vocabulario_usuario").select("*").eq("user_id", user.id).limit(500).execute()
+        ).data or []
+    except Exception as exc:
+        return json_error(f"No se pudo cargar el repaso: {exc}", 500)
+    if rows and "repaso_nivel" not in rows[0]:
+        return jsonify({"ok": True, "palabras": [], "pendientes": 0, "needs_migration": True})
+    due = [r for r in rows if _review_is_due(r, today)]
+    due.sort(key=lambda r: (_parse_day(r.get("proximo_repaso")) or _parse_day(r.get("fecha")) or today))
+    session = [
+        {k: r.get(k) for k in ("id", "palabra", "significado", "ejemplo", "repaso_nivel")}
+        for r in due[:REVIEW_SESSION_SIZE]
+    ]
+    return jsonify({"ok": True, "palabras": session, "pendientes": len(due)})
+
+
+@app.post("/api/vocabulario/repasar")
+def vocab_review_answer():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    word_id = body.get("id")
+    remembered = bool(body.get("recordada"))
+    if not word_id:
+        return json_error("Falta el identificador de la palabra.")
+    client = supabase_admin or supabase
+    today = datetime.now(timezone.utc).date()
+    try:
+        row = (
+            client.table("vocabulario_usuario").select("*")
+            .eq("id", word_id).eq("user_id", user.id).maybe_single().execute()
+        ).data
+        if not row:
+            return json_error("Palabra no encontrada.", 404)
+        level = row.get("repaso_nivel") or 0
+        level = min(level + 1, REVIEW_MAX_LEVEL) if remembered else 0
+        if level >= REVIEW_MAX_LEVEL:
+            next_day = None
+        else:
+            next_day = (today + timedelta(days=REVIEW_INTERVALS[level])).isoformat()
+        client.table("vocabulario_usuario").update({
+            "repaso_nivel": level,
+            "proximo_repaso": next_day,
+            "aprendida": level >= 3,
+        }).eq("id", word_id).eq("user_id", user.id).execute()
+    except Exception as exc:
+        text = str(exc)
+        if "repaso_nivel" in text or "proximo_repaso" in text:
+            return json_error("Falta ejecutar la migración SQL del repaso espaciado en Supabase.", 500)
+        return json_error(f"No se pudo guardar el repaso: {text}", 500)
+    if remembered:
+        try:
+            award_xp(user.id, 1)
+        except Exception as exc:
+            print(f"[REVIEW XP] {exc}")
+    return jsonify({"ok": True, "nivel": level, "proximo_repaso": next_day})
 
 
 def _unit_xp_and_progress(user_id):
