@@ -161,14 +161,14 @@ def save_history(table, user_id, payload):
 
 
 def award_xp(user_id, amount):
-    """Suma XP y actualiza la racha de días consecutivos practicando."""
+    """Suma XP y gemas, y actualiza la racha de días consecutivos practicando."""
     client = supabase_admin or supabase
     if not client:
         return
     try:
         profile = (
             client.table("profiles")
-            .select("xp,streak_days,last_activity_date")
+            .select("xp,streak_days,last_activity_date,gems,streak_freezes")
             .eq("id", user_id)
             .maybe_single()
             .execute()
@@ -177,20 +177,28 @@ def award_xp(user_id, amount):
         today = datetime.now(timezone.utc).date()
         last = data.get("last_activity_date")
         streak = data.get("streak_days") or 0
+        freezes = data.get("streak_freezes") or 0
         if last:
             last_date = datetime.fromisoformat(last).date()
             if last_date == today:
                 pass  # ya contó hoy
             elif last_date == today - timedelta(days=1):
                 streak += 1
+            elif last_date == today - timedelta(days=2) and freezes > 0:
+                # Se saltó exactamente un día, pero tiene una racha congelada guardada.
+                freezes -= 1
+                streak += 1
             else:
                 streak = 1
         else:
             streak = 1
         new_xp = (data.get("xp") or 0) + amount
+        new_gems = (data.get("gems") or 0) + max(1, amount // 10)
         client.table("profiles").update({
             "xp": new_xp,
+            "gems": new_gems,
             "streak_days": streak,
+            "streak_freezes": freezes,
             "last_activity_date": today.isoformat(),
         }).eq("id", user_id).execute()
     except Exception as exc:
@@ -629,12 +637,14 @@ def session_info():
     cefr_level = None
     learning_goal = None
     daily_goal_minutes = None
+    gems = 0
+    avatar_frame = None
     client = supabase_admin or supabase
     if client:
         try:
             profile = (
                 client.table("profiles")
-                .select("is_subscribed,trial_ends_at,username,avatar_url,onboarded,cefr_level,learning_goal,daily_goal_minutes")
+                .select("is_subscribed,trial_ends_at,username,avatar_url,onboarded,cefr_level,learning_goal,daily_goal_minutes,gems,avatar_frame")
                 .eq("id", user.id)
                 .maybe_single()
                 .execute()
@@ -647,6 +657,8 @@ def session_info():
             cefr_level = data.get("cefr_level")
             learning_goal = data.get("learning_goal")
             daily_goal_minutes = data.get("daily_goal_minutes")
+            gems = data.get("gems") or 0
+            avatar_frame = data.get("avatar_frame")
             trial_ends_at = data.get("trial_ends_at")
             if trial_ends_at:
                 try:
@@ -671,6 +683,7 @@ def session_info():
             "id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None),
             "username": username, "avatar_url": avatar_url, "onboarded": onboarded,
             "cefr_level": cefr_level, "learning_goal": learning_goal, "daily_goal_minutes": daily_goal_minutes,
+            "gems": gems, "avatar_frame": avatar_frame,
         },
     })
 
@@ -1515,13 +1528,150 @@ def vocab_mark():
 def _unit_xp_and_progress(user_id):
     client = supabase_admin or supabase
     xp = 0
+    gem_unlocked = set()
     if client:
         try:
             profile = client.table("profiles").select("xp").eq("id", user_id).maybe_single().execute()
             xp = (profile.data or {}).get("xp") or 0
         except Exception as exc:
             print(f"[LEARNING PATH XP] {exc}")
-    return xp, fetch_learning_progress(user_id)
+        try:
+            rows = client.table("gem_unit_unlocks").select("unit_code").eq("user_id", user_id).execute().data or []
+            gem_unlocked = {r["unit_code"] for r in rows}
+        except Exception as exc:
+            print(f"[LEARNING PATH GEM UNLOCKS] {exc}")
+    return xp, fetch_learning_progress(user_id), gem_unlocked
+
+
+AVATAR_FRAMES = {
+    "gold": {"name": "Gold", "price": 100, "gradient": "linear-gradient(135deg,#f5c542,#ffb37a)"},
+    "fire": {"name": "Fire", "price": 80, "gradient": "linear-gradient(135deg,#ff6b4a,#ff3d6e)"},
+    "ocean": {"name": "Ocean", "price": 80, "gradient": "linear-gradient(135deg,#4ad0ff,#7180ff)"},
+}
+UNIT_UNLOCK_PRICES = {"at_the_restaurant": 60, "travel_and_tourism": 120, "work_and_business": 200}
+STREAK_FREEZE_PRICE = 50
+
+
+def get_wallet(client, user_id):
+    profile = (
+        client.table("profiles")
+        .select("gems,streak_freezes,avatar_frame,owned_frames")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    return profile.data or {}
+
+
+@app.get("/api/shop")
+def shop_catalog():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    client = supabase_admin or supabase
+    if not client:
+        return json_error("Supabase no está configurado.", 500)
+
+    wallet = get_wallet(client, user.id)
+    gems = wallet.get("gems") or 0
+    owned_frames = wallet.get("owned_frames") or []
+
+    xp = 0
+    try:
+        p = client.table("profiles").select("xp").eq("id", user.id).maybe_single().execute()
+        xp = (p.data or {}).get("xp") or 0
+    except Exception as exc:
+        print(f"[SHOP XP] {exc}")
+
+    already_unlocked = set()
+    try:
+        rows = client.table("gem_unit_unlocks").select("unit_code").eq("user_id", user.id).execute().data or []
+        already_unlocked = {r["unit_code"] for r in rows}
+    except Exception as exc:
+        print(f"[SHOP UNLOCKS] {exc}")
+
+    progress = fetch_learning_progress(user.id)
+    prev_completed = True
+    unit_offers = []
+    for u in sorted(LEARNING_UNITS, key=lambda u: u["order"]):
+        total = len(u["topics"])
+        completed = sum(1 for t in u["topics"] if (u["code"], t["id"]) in progress)
+        u_completed = total > 0 and completed == total
+        price = UNIT_UNLOCK_PRICES.get(u["code"])
+        if price and prev_completed and xp < u["xp_required"] and u["code"] not in already_unlocked:
+            unit_offers.append({"unit_code": u["code"], "title": u["title"], "price": price})
+        prev_completed = u_completed
+
+    frames = [{"id": k, "name": v["name"], "price": v["price"], "gradient": v["gradient"], "owned": k in owned_frames} for k, v in AVATAR_FRAMES.items()]
+
+    return jsonify({
+        "ok": True,
+        "gems": gems,
+        "streak_freezes": wallet.get("streak_freezes") or 0,
+        "avatar_frame": wallet.get("avatar_frame"),
+        "streak_freeze_price": STREAK_FREEZE_PRICE,
+        "frames": frames,
+        "unit_offers": unit_offers,
+    })
+
+
+@app.post("/api/shop/buy")
+def shop_buy():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    item = (body.get("item") or "").strip()
+    client = supabase_admin or supabase
+    if not client:
+        return json_error("Supabase no está configurado.", 500)
+
+    wallet = get_wallet(client, user.id)
+    gems = wallet.get("gems") or 0
+
+    if item == "streak_freeze":
+        if gems < STREAK_FREEZE_PRICE:
+            return json_error("No tienes suficientes gemas.")
+        client.table("profiles").update({
+            "gems": gems - STREAK_FREEZE_PRICE,
+            "streak_freezes": (wallet.get("streak_freezes") or 0) + 1,
+        }).eq("id", user.id).execute()
+        return jsonify({"ok": True, "gems": gems - STREAK_FREEZE_PRICE})
+
+    if item.startswith("frame:"):
+        frame_id = item.split(":", 1)[1]
+        frame = AVATAR_FRAMES.get(frame_id)
+        if not frame:
+            return json_error("Marco no encontrado.", 404)
+        owned = wallet.get("owned_frames") or []
+        if frame_id not in owned:
+            if gems < frame["price"]:
+                return json_error("No tienes suficientes gemas.")
+            owned = owned + [frame_id]
+            gems -= frame["price"]
+        client.table("profiles").update({
+            "gems": gems,
+            "owned_frames": owned,
+            "avatar_frame": frame_id,
+        }).eq("id", user.id).execute()
+        return jsonify({"ok": True, "gems": gems, "avatar_frame": frame_id})
+
+    if item.startswith("unlock_unit:"):
+        unit_code = item.split(":", 1)[1]
+        unit = get_unit(unit_code)
+        price = UNIT_UNLOCK_PRICES.get(unit_code)
+        if not unit or not price:
+            return json_error("Unidad no disponible para desbloquear con gemas.", 404)
+        if gems < price:
+            return json_error("No tienes suficientes gemas.")
+        try:
+            client.table("gem_unit_unlocks").insert({"user_id": user.id, "unit_code": unit_code}).execute()
+        except Exception as exc:
+            return json_error(f"No se pudo desbloquear la unidad: {exc}", 500)
+        client.table("profiles").update({"gems": gems - price}).eq("id", user.id).execute()
+        return jsonify({"ok": True, "gems": gems - price})
+
+    return json_error("Artículo no reconocido.")
 
 
 @app.get("/api/learning-path")
@@ -1530,7 +1680,7 @@ def learning_path():
     if error:
         return json_error(error[0], error[1])
 
-    xp, progress = _unit_xp_and_progress(user.id)
+    xp, progress, gem_unlocked = _unit_xp_and_progress(user.id)
 
     units_out = []
     prev_completed = True
@@ -1538,7 +1688,7 @@ def learning_path():
         total = len(unit["topics"])
         completed = sum(1 for t in unit["topics"] if (unit["code"], t["id"]) in progress)
         unit_completed = total > 0 and completed == total
-        unlocked = xp >= unit["xp_required"] and prev_completed
+        unlocked = (xp >= unit["xp_required"] or unit["code"] in gem_unlocked) and prev_completed
         units_out.append({
             "code": unit["code"],
             "order": unit["order"],
@@ -1566,7 +1716,7 @@ def learning_path_unit(unit_code):
     if not unit:
         return json_error("Unidad no encontrada.", 404)
 
-    xp, progress = _unit_xp_and_progress(user.id)
+    xp, progress, gem_unlocked = _unit_xp_and_progress(user.id)
 
     prev_completed = True
     unlocked = False
@@ -1574,7 +1724,7 @@ def learning_path_unit(unit_code):
         total = len(u["topics"])
         completed = sum(1 for t in u["topics"] if (u["code"], t["id"]) in progress)
         u_completed = total > 0 and completed == total
-        u_unlocked = xp >= u["xp_required"] and prev_completed
+        u_unlocked = (xp >= u["xp_required"] or u["code"] in gem_unlocked) and prev_completed
         if u["code"] == unit_code:
             unlocked = u_unlocked
             break
