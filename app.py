@@ -1374,7 +1374,7 @@ def soporte():
 
 
 # =============================================================================
-# PANEL DE ADMINISTRACIÓN (solo lectura)
+# PANEL DE ADMINISTRACIÓN
 # Todos los números salen de tus tablas reales. Si algo no se puede leer, el panel
 # lo avisa en "warnings" en lugar de mostrar un 0 engañoso.
 # =============================================================================
@@ -1394,6 +1394,7 @@ ACTIVITY_TABLES = [
     ("tutor", "historial_tutor", None, "mensaje_usuario"),
 ]
 CALL_MARK = "[Resumen de llamada]"
+LOG_TABLE = "admin_acciones"   # registro de cada cambio de acceso (ver admin_acciones.sql)
 
 
 def _parse_ts(v):
@@ -1539,6 +1540,17 @@ def _build_admin_dataset():
     except Exception as exc:
         warnings.append(f"No se pudo leer vocabulario_usuario ({exc}).")
 
+    # Registro de acciones del admin (si la tabla existe): permite saber cuándo vence cada pago.
+    log_ok, ult_accion, ult_pago = True, {}, {}
+    try:
+        for r in _fetch_all(client, LOG_TABLE, "user_id,created_at,accion,vence_at", max_rows=5000):
+            uid = str(r.get("user_id") or "")
+            if uid and uid not in ult_accion:          # las filas vienen de la más reciente a la más antigua
+                ult_accion[uid] = r.get("accion")
+                ult_pago[uid] = _parse_ts(r.get("vence_at"))
+    except Exception:
+        log_ok = False
+
     by_user = defaultdict(list)
     for e in events:
         by_user[e["uid"]].append(e)
@@ -1559,6 +1571,10 @@ def _build_admin_dataset():
         else:
             estado = "vencido"
         evs = by_user.get(uid, [])
+        vence_pago, dias_renovar = None, None
+        if estado == "pagado" and ult_accion.get(uid) in ("activar", "renovar") and ult_pago.get(uid):
+            vence_pago = ult_pago[uid]
+            dias_renovar = math.ceil((vence_pago - now).total_seconds() / 86400)
         scores = [e["score"] for e in evs if e["score"] is not None]
         tipos = defaultdict(int)
         for e in evs:
@@ -1577,8 +1593,9 @@ def _build_admin_dataset():
             "prom_score": round(sum(scores) / len(scores), 1) if scores else None,
             "tipos": dict(tipos), "palabras": vocab.get(uid, 0),
             "racha": _streak({_day(e["ts"]) for e in evs}, today),
+            "vence_pago": vence_pago, "dias_renovar": dias_renovar,
         }
-    return {"now": now, "users": users, "events": events, "warnings": warnings}
+    return {"now": now, "users": users, "events": events, "warnings": warnings, "log_ok": log_ok}
 
 
 _admin_cache = {"t": 0.0, "data": None}
@@ -1604,6 +1621,25 @@ def _user_json(u):
         "total": u["total"], "act_7d": u["act_7d"], "act_30d": u["act_30d"],
         "last_activity": _iso(u["last_activity"]), "prom_score": u["prom_score"],
         "tipos": u["tipos"], "palabras": u["palabras"], "racha": u["racha"],
+        "vence_pago": _iso(u["vence_pago"]), "dias_renovar": u["dias_renovar"],
+    }
+
+
+def _soporte_resumen(client, now):
+    try:
+        try:
+            rows = client.table("soporte_mensajes").select("*").order("created_at", desc=True).limit(200).execute().data or []
+        except Exception:
+            rows = client.table("soporte_mensajes").select("*").limit(200).execute().data or []
+    except Exception:
+        return None
+    sem = now - timedelta(days=7)
+    rec = [r for r in rows if (_parse_ts(r.get("created_at")) or now) >= sem]
+    return {
+        "total_7d": len(rec),
+        "pago_7d": sum(1 for r in rec if str(r.get("tipo") or "") == "pago"),
+        "recientes": [{"email": r.get("email"), "tipo": r.get("tipo"), "fecha": r.get("created_at"),
+                       "mensaje": str(r.get("mensaje") or "")[:140]} for r in rec[:5]],
     }
 
 
@@ -1657,8 +1693,17 @@ def _admin_overview(ds):
     top = sorted([u for u in users if u["act_7d"] > 0], key=lambda u: (-u["act_7d"], -u["total"]))[:10]
     sin_act = [u for u in users if u["total"] == 0 and u["created_at"] and u["created_at"] <= now - timedelta(days=3)]
 
+    pagados = [u for u in users if u["estado"] == "pagado"]
+    por_renovar = sorted([u for u in pagados if u["dias_renovar"] is not None and u["dias_renovar"] <= 5],
+                         key=lambda u: u["dias_renovar"])
     return {
         "ok": True, "generado": _iso(now), "precio_mxn": PRICE_MXN,
+        "pagos": {
+            "registro_activo": ds.get("log_ok", False),
+            "por_renovar": [{"id": u["id"], "email": u["email"], "dias": u["dias_renovar"]} for u in por_renovar[:20]],
+            "sin_fecha": sum(1 for u in pagados if u["dias_renovar"] is None),
+        },
+        "soporte": _soporte_resumen(supabase_admin or supabase, now),
         "usuarios": {
             "total": len(users), "confirmados": sum(1 for u in users if u["confirmado"]),
             "nuevos_24h": nuevos(d1), "nuevos_7d": nuevos(d7), "nuevos_30d": nuevos(d30),
@@ -1696,6 +1741,8 @@ def _admin_users(ds, q, estado, orden, limit, offset):
         rows = [u for u in rows if u["estado"] == estado]
     elif estado == "inactivo":
         rows = [u for u in rows if u["total"] == 0]
+    elif estado == "por_renovar":
+        rows = [u for u in rows if u["estado"] == "pagado" and u["dias_renovar"] is not None and u["dias_renovar"] <= 5]
     elif estado == "por_vencer":
         rows = [u for u in rows if u["estado"] == "prueba" and u["dias_restantes"] is not None and u["dias_restantes"] <= 3]
     floor = datetime.min.replace(tzinfo=timezone.utc)
@@ -1780,11 +1827,91 @@ def admin_usuario(uid):
                 soporte = client.table("soporte_mensajes").select("*").eq("email", u["email"]).limit(10).execute().data or []
             except Exception as exc:
                 warns.append(f"soporte_mensajes: {exc}")
-        return jsonify({"ok": True, "usuario": _user_json(u), "recientes": recientes,
-                        "palabras": palabras, "soporte": soporte, "warnings": warns})
+        acciones = []
+        if ds.get("log_ok"):
+            try:
+                acciones = (client.table(LOG_TABLE).select("created_at,accion,dias,vence_at,nota,admin_email")
+                            .eq("user_id", uid).order("created_at", desc=True).limit(10).execute().data or [])
+            except Exception as exc:
+                warns.append(f"{LOG_TABLE}: {exc}")
+        return jsonify({"ok": True, "usuario": _user_json(u), "recientes": recientes, "palabras": palabras,
+                        "soporte": soporte, "acciones": acciones, "registro_activo": ds.get("log_ok", False),
+                        "warnings": warns})
     except Exception as exc:
         print(f"[ADMIN usuario] {exc}")
         return json_error(f"No se pudo cargar el usuario: {exc}", 500)
+
+
+@app.post("/api/admin/usuario/<uid>/acceso")
+def admin_acceso(uid):
+    """Activa, renueva o quita el acceso de pago, o extiende la prueba. Siempre deja registro."""
+    admin, err = admin_guard()
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    if body.get("confirmar") is not True:
+        return json_error("Falta confirmar la acción.", 400)
+    accion = (body.get("accion") or "").strip()
+    if accion not in ("activar", "renovar", "desactivar", "extender_prueba"):
+        return json_error("Acción no válida.", 400)
+    try:
+        dias = int(body.get("dias") or 30)
+    except (TypeError, ValueError):
+        dias = 30
+    dias = max(1, min(dias, 365))
+    nota = str(body.get("nota") or "")[:200]
+    client = supabase_admin or supabase
+    if not client or not SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_KEY == SUPABASE_KEY:
+        return json_error("Falta la clave service_role en el servidor (SUPABASE_SERVICE_KEY): sin ella no se pueden cambiar accesos.", 500)
+    try:
+        res = client.table("profiles").select("id,is_subscribed,trial_ends_at").eq("id", uid).limit(1).execute()
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            return json_error("Ese usuario no tiene perfil en la base de datos.", 404)
+        perfil = rows[0]
+        now = datetime.now(timezone.utc)
+        vence, payload = None, {}
+        if accion in ("activar", "renovar"):
+            base = now
+            prev = (admin_dataset().get("users", {}).get(uid) or {}).get("vence_pago")
+            if accion == "renovar" and prev and prev > now:
+                base = prev                      # renovar a tiempo suma días al vencimiento actual
+            vence = base + timedelta(days=dias)
+            payload = {"is_subscribed": True}
+        elif accion == "desactivar":
+            payload = {"is_subscribed": False}
+        else:
+            actual = _parse_ts(perfil.get("trial_ends_at"))
+            base = actual if actual and actual > now else now
+            payload = {"trial_ends_at": (base + timedelta(days=dias)).isoformat()}
+        upd = client.table("profiles").update(payload).eq("id", uid).execute()
+        if not (getattr(upd, "data", None) or []):
+            return json_error("No se pudo actualizar el perfil (no se modificó ninguna fila).", 500)
+
+        correo = (admin_dataset().get("users", {}).get(uid) or {}).get("email") or ""
+        aviso = None
+        try:
+            client.table(LOG_TABLE).insert({
+                "admin_email": (getattr(admin, "email", "") or "").lower(), "user_id": uid, "user_email": correo,
+                "accion": accion, "dias": dias if accion != "desactivar" else None,
+                "vence_at": vence.isoformat() if vence else None, "nota": nota or None,
+            }).execute()
+        except Exception as exc:
+            aviso = ("El cambio se aplicó, pero no se pudo guardar el registro de la acción. "
+                     f"Crea la tabla {LOG_TABLE} con admin_acciones.sql ({exc}).")
+        try:
+            notify_telegram(f"🔧 Admin {getattr(admin, 'email', '')}: {accion} → {correo or uid}"
+                            + (f" ({dias} días)" if accion != "desactivar" else ""))
+        except Exception:
+            pass
+        ds = admin_dataset(force=True)
+        u = ds["users"].get(uid)
+        textos = {"activar": f"Acceso de pago activado por {dias} días.", "renovar": f"Pago renovado: +{dias} días.",
+                  "desactivar": "Acceso de pago quitado.", "extender_prueba": f"Prueba extendida +{dias} días."}
+        return jsonify({"ok": True, "mensaje": textos[accion], "usuario": _user_json(u) if u else None, "aviso": aviso})
+    except Exception as exc:
+        print(f"[ADMIN acceso] {exc}")
+        return json_error(f"No se pudo aplicar el cambio: {exc}", 500)
 
 
 @app.get("/api/admin/actividad")
@@ -1800,7 +1927,9 @@ def admin_activity():
         emails = {uid: u["email"] for uid, u in ds["users"].items()}
         events, warns = [], []
         for tipo, table, score_col, prev_col in ACTIVITY_TABLES:
-            if tipo_f and tipo_f != tipo and not (tipo_f == "llamada" and table == "historial_tutor"):
+            if tipo_f and tipo_f not in (tipo, "llamada") :
+                continue
+            if tipo_f and tipo_f != tipo and table != "historial_tutor":
                 continue
             cols = "user_id,created_at," + prev_col + (f",{score_col}" if score_col else "")
             try:
@@ -1866,6 +1995,13 @@ def admin_sistema():
         checks.append({"nombre": "Lista de cuentas de acceso", "ok": True, "detalle": "Se pueden leer correos y fechas de registro."})
     except Exception as exc:
         checks.append({"nombre": "Lista de cuentas de acceso", "ok": False, "detalle": f"Error: {exc}. Se usarán los perfiles."})
+    try:
+        client.table(LOG_TABLE).select("id").limit(1).execute()
+        checks.append({"nombre": "Registro de pagos (tabla admin_acciones)", "ok": True,
+                       "detalle": "Activa: cada cambio de acceso queda guardado y se calcula cuándo vence cada pago."})
+    except Exception:
+        checks.append({"nombre": "Registro de pagos (tabla admin_acciones)", "ok": False,
+                       "detalle": "No existe. Los botones funcionan, pero no se sabrá cuándo vence cada pago. Ejecuta admin_acciones.sql en el SQL Editor de Supabase."})
     checks.append({"nombre": "Azure OpenAI (tutor y correcciones)", "ok": bool(ai_client),
                    "detalle": "Configurado." if ai_client else "No configurado: el tutor y las evaluaciones no funcionarán."})
     checks.append({"nombre": "Azure Speech (voz y pronunciación)", "ok": bool(AZURE_SPEECH_KEY),
