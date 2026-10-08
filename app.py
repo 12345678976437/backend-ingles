@@ -5,9 +5,17 @@ import re
 import tempfile
 import threading
 import time
-from collections import defaultdict, deque
+import hashlib
+import math
+import platform
 import requests
+from collections import defaultdict, deque, OrderedDict
 from datetime import datetime, timezone, timedelta
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:  # pragma: no cover
+    ZoneInfo = None
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, Response
@@ -21,7 +29,13 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "12")) * 1024 * 1024
+# Límite de tamaño de subida (audios): evita que un archivo enorme te cueste procesamiento.
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+
+
+@app.errorhandler(413)
+def too_large(_exc):
+    return jsonify({"ok": False, "error": "El archivo es demasiado grande."}), 413
 
 def env(name, default=""):
     return (os.getenv(name) or default).strip()
@@ -30,7 +44,12 @@ AZURE_SPEECH_KEY = env("AZURE_SPEECH_KEY")
 AZURE_SPEECH_REGION = env("AZURE_SPEECH_REGION", "westus3")
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "")
-ADMIN_EMAIL = env("ADMIN_EMAIL", "").lower()
+# Cuentas con acceso al panel de administración (separa varias con comas en ADMIN_EMAIL).
+ADMIN_EMAILS = {e.strip().lower() for e in env("ADMIN_EMAIL", "a07077189@tec.mx").split(",") if e.strip()}
+
+
+def is_admin_user(user):
+    return (getattr(user, "email", "") or "").lower() in ADMIN_EMAILS
 AZURE_OPENAI_ENDPOINT = env("AZURE_OPENAI_ENDPOINT").rstrip("/")
 AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
@@ -99,45 +118,72 @@ def has_active_access(profile_data):
     return datetime.now(timezone.utc) < deadline
 
 
-
 # ---------------------------------------------------------------------------
-# Límites de uso por usuario para los endpoints que gastan IA / voz (Azure).
-# Protege tu crédito: si alguien abusa, recibe un 429 en vez de generar costo.
-# Se pueden ajustar con variables de entorno en Render, sin tocar el código.
-# Nota: el contador vive en memoria; con 1 solo proceso (plan gratis) es exacto.
+# Límites de uso por usuario (protegen tu crédito de Azure sin costo extra).
+# Se guardan en memoria del servidor: gratis y suficientes para un solo servidor.
+# Ajusta los números aquí si algún límite se queda corto para tus alumnos.
 # ---------------------------------------------------------------------------
-AI_PATH_PREFIXES = (
-    "/api/sintetizar-audio", "/nueva-frase", "/nuevo-tema-libre", "/nuevo-trabalenguas",
-    "/nuevo-texto-lectura", "/nuevo-dictado", "/analizar-audio-real", "/api/assess-",
-    "/api/writing/challenge", "/analizar-escritura", "/evaluar-lectura", "/evaluar-dictado",
-    "/api/transcribir-audio", "/api/resumen-llamada", "/api/tutor",
-    "/api/learning-path/practice",
-)
-RATE_LIMITS = (  # (ventana en segundos, máximo de peticiones, nombre)
-    (60, int(os.environ.get("RATE_LIMIT_PER_MIN", "15")), "minuto"),
-    (3600, int(os.environ.get("RATE_LIMIT_PER_HOUR", "120")), "hora"),
-    (86400, int(os.environ.get("RATE_LIMIT_PER_DAY", "400")), "día"),
-)
-_rate_hits = defaultdict(deque)
+RATE_RULES = {
+    "/api/tutor": (60, 3600),
+    "/api/sintetizar-audio": (120, 3600),
+    "/api/transcribir-audio": (60, 3600),
+    "/api/resumen-llamada": (10, 3600),
+    "/analizar-escritura": (20, 3600),
+    "/evaluar-lectura": (30, 3600),
+    "/evaluar-dictado": (40, 3600),
+    "/analizar-audio-real": (60, 3600),
+    "/api/assess-reading": (40, 3600),
+    "/api/assess-unscripted": (40, 3600),
+    "/nueva-frase": (60, 3600),
+    "/nuevo-tema-libre": (60, 3600),
+    "/nuevo-trabalenguas": (60, 3600),
+    "/nuevo-texto-lectura": (30, 3600),
+    "/nuevo-dictado": (30, 3600),
+    "/api/writing/challenge": (30, 3600),
+    "/api/vocabulario/diario": (20, 3600),
+    "/api/learning-path/practice": (60, 3600),
+}
+DAILY_AI_LIMIT = int(env("DAILY_AI_LIMIT", "400") or 400)   # llamadas de IA por usuario al día
+GENERAL_PER_MINUTE = 120                                      # cualquier endpoint, por usuario
 _rate_lock = threading.Lock()
+_rate_hits = {}
+_rate_calls = 0
 
 
-def check_rate_limit(user_id):
-    """Devuelve None si puede continuar, o un mensaje en español si superó un límite."""
+def _rate_hit(key, limit, window):
+    """Registra una llamada. Devuelve (permitida, segundos_para_reintentar)."""
+    global _rate_calls
     now = time.time()
-    longest = max(w for w, _, _ in RATE_LIMITS)
     with _rate_lock:
-        hits = _rate_hits[user_id]
-        while hits and now - hits[0] > longest:
-            hits.popleft()
-        for window, limit, name in RATE_LIMITS:
-            recent = sum(1 for t in hits if now - t <= window)
-            if recent >= limit:
-                return f"Has hecho muchas prácticas en poco tiempo (límite por {name}). Espera un momento e inténtalo de nuevo."
-        hits.append(now)
-        if len(_rate_hits) > 5000:  # limpieza de usuarios inactivos
-            for uid in [u for u, d in _rate_hits.items() if not d or now - d[-1] > longest]:
-                _rate_hits.pop(uid, None)
+        _rate_calls += 1
+        if _rate_calls % 2000 == 0:  # limpieza ocasional para no acumular memoria
+            for k in [k for k, q in _rate_hits.items() if not q or now - q[-1] > 86400]:
+                _rate_hits.pop(k, None)
+        q = _rate_hits.setdefault(key, deque())
+        while q and now - q[0] > window:
+            q.popleft()
+        if len(q) >= limit:
+            return False, int(window - (now - q[0])) + 1
+        q.append(now)
+        return True, 0
+
+
+def check_rate_limit(user):
+    """Devuelve None si todo bien, o un mensaje de error (429)."""
+    if is_admin_user(user):
+        return None
+    uid = getattr(user, "id", "anon")
+    ok, wait = _rate_hit((uid, "minuto"), GENERAL_PER_MINUTE, 60)
+    if not ok:
+        return f"Vas muy rápido. Espera {wait} segundos e inténtalo de nuevo."
+    rule = RATE_RULES.get(request.path)
+    if rule:
+        ok, wait = _rate_hit((uid, request.path), rule[0], rule[1])
+        if not ok:
+            return f"Alcanzaste el límite de esta actividad por ahora. Vuelve a intentarlo en {max(1, wait // 60)} min."
+        ok, wait = _rate_hit((uid, "dia-ia"), DAILY_AI_LIMIT, 86400)
+        if not ok:
+            return "Alcanzaste el límite diario de práctica con IA. Vuelve mañana."
     return None
 
 
@@ -159,12 +205,7 @@ def authenticated_user(require_subscription=True):
     if not user:
         return None, ("Sesión inválida.", 401)
 
-    if request.path.startswith(AI_PATH_PREFIXES):
-        limit_message = check_rate_limit(user.id)
-        if limit_message:
-            return None, (limit_message, 429)
-
-    if require_subscription:
+    if require_subscription and not is_admin_user(user):
         try:
             client = supabase_admin or supabase
             profile = (
@@ -180,6 +221,10 @@ def authenticated_user(require_subscription=True):
         except Exception as exc:
             print(f"[PROFILE] {exc}")
             return None, ("No se pudo comprobar tu acceso.", 500)
+
+    limited = check_rate_limit(user)
+    if limited:
+        return None, (limited, 429)
 
     return user, None
 
@@ -724,12 +769,14 @@ def session_info():
         except Exception as exc:
             print(f"[SESSION PROFILE] {exc}")
 
+    if is_admin_user(user):
+        is_subscribed = True  # el administrador nunca se queda fuera de su propia app
     return jsonify({
         "authenticated": True,
         "is_subscribed": is_subscribed,
         "en_prueba": en_prueba,
         "trial_dias_restantes": trial_dias_restantes,
-        "es_admin": bool(ADMIN_EMAIL) and (user.email or "").lower() == ADMIN_EMAIL,
+        "es_admin": is_admin_user(user),
         "user": {
             "id": user.id, "email": user.email, "miembro_desde": getattr(user, "created_at", None),
             "username": username, "avatar_url": avatar_url, "onboarded": onboarded,
@@ -737,6 +784,10 @@ def session_info():
             "gems": gems, "avatar_frame": avatar_frame,
         },
     })
+
+
+_tts_cache = OrderedDict()
+_tts_lock = threading.Lock()
 
 
 @app.post("/api/sintetizar-audio")
@@ -755,6 +806,17 @@ def synthesize_audio():
         text = text[:600]
 
     voice = (body.get("voz") or "en-US-AvaMultilingualNeural").strip()
+    # Solo voces neuronales estándar en inglés (evita voces HD que cuestan más).
+    if not re.fullmatch(r"en-[A-Z]{2}-[A-Za-z]+Neural", voice):
+        voice = "en-US-AvaMultilingualNeural"
+
+    cache_key = hashlib.sha256(f"{voice}|{text}".encode("utf-8")).hexdigest()
+    with _tts_lock:
+        cached = _tts_cache.get(cache_key)
+        if cached is not None:
+            _tts_cache.move_to_end(cache_key)
+    if cached is not None:
+        return Response(cached, mimetype="audio/mpeg")
 
     config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
     config.speech_synthesis_voice_name = voice
@@ -769,7 +831,13 @@ def synthesize_audio():
         message = detail.error_details if detail else "No se pudo generar el audio."
         return json_error(f"No se pudo generar el audio: {message}", 500)
 
-    return Response(result.audio_data, mimetype="audio/mpeg")
+    audio_bytes = bytes(result.audio_data)
+    if len(audio_bytes) <= 200_000:
+        with _tts_lock:
+            _tts_cache[cache_key] = audio_bytes
+            while len(_tts_cache) > 80:
+                _tts_cache.popitem(last=False)
+    return Response(audio_bytes, mimetype="audio/mpeg")
 
 
 @app.get("/nueva-frase")
@@ -1036,7 +1104,7 @@ def analyze_writing():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    text = (body.get("texto") or body.get("text") or "").strip()
+    text = (body.get("texto") or body.get("text") or "").strip()[:4000]
     lp_unit_code = (body.get("unit_code") or "").strip()
     lp_topic_id = (body.get("topic_id") or "").strip()
     if not text:
@@ -1071,8 +1139,8 @@ def evaluate_reading():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    passage = (body.get("texto_original") or body.get("passage") or "").strip()
-    answer = (body.get("respuesta") or body.get("answer") or "").strip()
+    passage = (body.get("texto_original") or body.get("passage") or "").strip()[:6000]
+    answer = (body.get("respuesta") or body.get("answer") or "").strip()[:3000]
     if not passage or not answer:
         return json_error("Faltan la lectura o tu respuesta.")
     try:
@@ -1113,8 +1181,8 @@ def evaluate_dictation():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    expected = (body.get("texto_original") or body.get("expected") or "").strip()
-    answer = (body.get("respuesta") or body.get("answer") or "").strip()
+    expected = (body.get("texto_original") or body.get("expected") or "").strip()[:2000]
+    answer = (body.get("respuesta") or body.get("answer") or "").strip()[:2000]
     if not expected or not answer:
         return json_error("Faltan el texto esperado o tu respuesta.")
     try:
@@ -1305,77 +1373,521 @@ def soporte():
     return jsonify({"ok": True})
 
 
-@app.get("/api/admin/actividad")
-def admin_activity():
+# =============================================================================
+# PANEL DE ADMINISTRACIÓN (solo lectura)
+# Todos los números salen de tus tablas reales. Si algo no se puede leer, el panel
+# lo avisa en "warnings" en lugar de mostrar un 0 engañoso.
+# =============================================================================
+SERVER_STARTED = time.time()
+PRICE_MXN = int(env("PRICE_MXN", "79") or 79)
+try:
+    LOCAL_TZ = ZoneInfo(env("APP_TIMEZONE", "America/Mexico_City"))
+except Exception:
+    LOCAL_TZ = timezone.utc
+
+# (tipo, tabla, columna de calificación, columna de vista previa)
+ACTIVITY_TABLES = [
+    ("pronunciacion", "historial_pronunciacion", "puntuacion_global", "frase_esperada"),
+    ("escritura", "historial_escritura", "calificacion", "texto"),
+    ("lectura", "historial_lectura", "calificacion", "titulo"),
+    ("dictado", "historial_dictado", "calificacion", "texto_esperado"),
+    ("tutor", "historial_tutor", None, "mensaje_usuario"),
+]
+CALL_MARK = "[Resumen de llamada]"
+
+
+def _parse_ts(v):
+    if not v:
+        return None
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    try:
+        s = str(v).replace("Z", "+00:00").replace(" ", "T", 1)
+        s = re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], s)
+        d = datetime.fromisoformat(s)
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _iso(dt):
+    return dt.isoformat() if dt else None
+
+
+def _day(dt):
+    return dt.astimezone(LOCAL_TZ).date()
+
+
+def admin_guard():
     user, error = authenticated_user(require_subscription=False)
     if error:
-        return json_error(error[0], error[1])
-    if not ADMIN_EMAIL or (user.email or "").lower() != ADMIN_EMAIL:
-        return json_error("No autorizado.", 403)
+        return None, json_error(error[0], error[1])
+    if not is_admin_user(user):
+        return None, json_error("No autorizado.", 403)
+    return user, None
 
+
+def _fetch_all(client, table, columns, order_col="created_at", max_rows=20000):
+    rows, start, page = [], 0, 1000
+    while len(rows) < max_rows:
+        q = client.table(table).select(columns)
+        if order_col:
+            q = q.order(order_col, desc=True)
+        data = q.range(start, start + page - 1).execute().data or []
+        rows.extend(data)
+        if len(data) < page:
+            break
+        start += page
+    return rows
+
+
+def _list_auth_users(client):
+    out, page = [], 1
+    while page <= 30:
+        batch = client.auth.admin.list_users(page=page, per_page=1000)
+        items = list(batch) if isinstance(batch, (list, tuple)) else list(getattr(batch, "users", None) or [])
+        out.extend(items)
+        if len(items) < 1000:
+            break
+        page += 1
+    return out
+
+
+def _streak(days, today):
+    if today in days:
+        cur = today
+    elif (today - timedelta(days=1)) in days:
+        cur = today - timedelta(days=1)
+    else:
+        return 0
+    n = 0
+    while cur in days:
+        n += 1
+        cur -= timedelta(days=1)
+    return n
+
+
+def _build_admin_dataset():
     client = supabase_admin or supabase
-    tables = [
-        ("pronunciación", "historial_pronunciacion", "frase_esperada"),
-        ("escritura", "historial_escritura", "texto"),
-        ("lectura", "historial_lectura", "respuesta"),
-        ("dictado", "historial_dictado", "respuesta"),
-        ("tutor", "historial_tutor", "mensaje_usuario"),
-    ]
-    emails_by_id = {}
+    if not client:
+        raise RuntimeError("Supabase no está configurado en el servidor.")
+    warnings = []
+    if not SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_KEY == SUPABASE_KEY:
+        warnings.append(
+            "Falta la clave service_role (variable SUPABASE_SERVICE_KEY en Render). Sin ella Supabase oculta "
+            "los datos de otros usuarios y las cifras salen incompletas."
+        )
+    now = datetime.now(timezone.utc)
+
+    auth_users = {}
     try:
-        profiles = client.table("profiles").select("id,email").execute().data or []
-        emails_by_id = {p["id"]: p.get("email") for p in profiles}
+        for u in _list_auth_users(client):
+            uid = str(getattr(u, "id", "") or "")
+            if uid:
+                auth_users[uid] = {
+                    "email": getattr(u, "email", None) or "",
+                    "created_at": _parse_ts(getattr(u, "created_at", None)),
+                    "last_sign_in": _parse_ts(getattr(u, "last_sign_in_at", None)),
+                    "confirmed": bool(getattr(u, "email_confirmed_at", None) or getattr(u, "confirmed_at", None)),
+                }
     except Exception as exc:
-        print(f"[ADMIN PROFILES] {exc}")
+        warnings.append(f"No se pudo leer la lista de cuentas de acceso ({exc}); se usan solo los perfiles.")
+
+    profiles, ok, err = {}, False, None
+    for cols in (
+        "id,email,username,is_subscribed,trial_ends_at,onboarded,cefr_level,learning_goal,daily_goal_minutes,gems",
+        "id,username,is_subscribed,trial_ends_at,onboarded,cefr_level,learning_goal,daily_goal_minutes,gems",
+        "id,is_subscribed,trial_ends_at",
+    ):
+        try:
+            rows = _fetch_all(client, "profiles", cols, order_col=None)
+            profiles = {str(r["id"]): r for r in rows if r.get("id")}
+            ok = True
+            break
+        except Exception as exc:
+            err = exc
+    if not ok:
+        warnings.append(f"No se pudo leer la tabla de perfiles ({err}). Estados de pago y prueba no disponibles.")
 
     events = []
-    for label, table, preview_col in tables:
+    for tipo, table, score_col, _prev in ACTIVITY_TABLES:
+        cols = "user_id,created_at" + (f",{score_col}" if score_col else "") + (",mensaje_usuario" if table == "historial_tutor" else "")
         try:
-            rows = (
-                client.table(table)
-                .select(f"user_id,created_at,{preview_col}")
-                .order("created_at", desc=True)
-                .limit(20)
-                .execute()
-            ).data or []
-            for r in rows:
-                events.append({
-                    "tipo": label,
-                    "email": emails_by_id.get(r.get("user_id"), r.get("user_id")),
-                    "fecha": r.get("created_at"),
-                    "detalle": (r.get(preview_col) or "")[:80],
-                })
+            rows = _fetch_all(client, table, cols)
         except Exception as exc:
-            print(f"[ADMIN:{table}] {exc}")
+            warnings.append(f"No se pudo leer {table} ({exc}); la actividad de ese tipo sale incompleta.")
+            continue
+        for r in rows:
+            ts, uid = _parse_ts(r.get("created_at")), r.get("user_id")
+            if not ts or not uid:
+                continue
+            t = tipo
+            if table == "historial_tutor" and str(r.get("mensaje_usuario") or "").startswith(CALL_MARK):
+                t = "llamada"
+            sc = r.get(score_col) if score_col else None
+            try:
+                sc = float(sc) if sc is not None else None
+            except (TypeError, ValueError):
+                sc = None
+            events.append({"uid": str(uid), "tipo": t, "ts": ts, "score": sc})
+    events.sort(key=lambda e: e["ts"], reverse=True)
 
-    events.sort(key=lambda e: e.get("fecha") or "", reverse=True)
-
-    total_usuarios = len(emails_by_id)
+    vocab = defaultdict(int)
     try:
-        active_trials = (
-            client.table("profiles")
-            .select("id", count="exact")
-            .gt("trial_ends_at", datetime.now(timezone.utc).isoformat())
-            .execute()
-        ).count or 0
-    except Exception:
-        active_trials = 0
-    try:
-        pagados = (
-            client.table("profiles")
-            .select("id", count="exact")
-            .eq("is_subscribed", True)
-            .execute()
-        ).count or 0
-    except Exception:
-        pagados = 0
+        for r in _fetch_all(client, "vocabulario_usuario", "user_id", order_col=None):
+            vocab[str(r.get("user_id"))] += 1
+    except Exception as exc:
+        warnings.append(f"No se pudo leer vocabulario_usuario ({exc}).")
 
+    by_user = defaultdict(list)
+    for e in events:
+        by_user[e["uid"]].append(e)
+
+    today = _day(now)
+    d7, d30 = now - timedelta(days=7), now - timedelta(days=30)
+    users = {}
+    for uid in set(auth_users) | set(profiles):
+        a, p = auth_users.get(uid, {}), profiles.get(uid, {})
+        email = a.get("email") or p.get("email") or ""
+        trial_end = _parse_ts(p.get("trial_ends_at"))
+        dias = None
+        if p.get("is_subscribed"):
+            estado = "pagado"
+        elif trial_end and trial_end > now:
+            estado = "prueba"
+            dias = max(1, round((trial_end - now).total_seconds() / 86400))
+        else:
+            estado = "vencido"
+        evs = by_user.get(uid, [])
+        scores = [e["score"] for e in evs if e["score"] is not None]
+        tipos = defaultdict(int)
+        for e in evs:
+            tipos[e["tipo"]] += 1
+        users[uid] = {
+            "id": uid, "email": email, "username": p.get("username") or "",
+            "es_admin": email.lower() in ADMIN_EMAILS,
+            "estado": estado, "dias_restantes": dias, "trial_ends_at": trial_end,
+            "created_at": a.get("created_at"), "last_sign_in": a.get("last_sign_in"),
+            "confirmado": a.get("confirmed"),
+            "onboarded": bool(p.get("onboarded")), "cefr_level": p.get("cefr_level") or "",
+            "learning_goal": p.get("learning_goal") or "", "daily_goal_minutes": p.get("daily_goal_minutes"),
+            "gems": p.get("gems") or 0,
+            "total": len(evs), "act_7d": sum(1 for e in evs if e["ts"] >= d7), "act_30d": sum(1 for e in evs if e["ts"] >= d30),
+            "last_activity": evs[0]["ts"] if evs else None,
+            "prom_score": round(sum(scores) / len(scores), 1) if scores else None,
+            "tipos": dict(tipos), "palabras": vocab.get(uid, 0),
+            "racha": _streak({_day(e["ts"]) for e in evs}, today),
+        }
+    return {"now": now, "users": users, "events": events, "warnings": warnings}
+
+
+_admin_cache = {"t": 0.0, "data": None}
+_admin_lock = threading.Lock()
+
+
+def admin_dataset(force=False):
+    with _admin_lock:
+        if not force and _admin_cache["data"] and time.time() - _admin_cache["t"] < 45:
+            return _admin_cache["data"]
+        data = _build_admin_dataset()
+        _admin_cache["t"], _admin_cache["data"] = time.time(), data
+        return data
+
+
+def _user_json(u):
+    return {
+        "id": u["id"], "email": u["email"], "username": u["username"], "es_admin": u["es_admin"],
+        "estado": u["estado"], "dias_restantes": u["dias_restantes"], "trial_ends_at": _iso(u["trial_ends_at"]),
+        "created_at": _iso(u["created_at"]), "last_sign_in": _iso(u["last_sign_in"]), "confirmado": u["confirmado"],
+        "onboarded": u["onboarded"], "cefr_level": u["cefr_level"], "learning_goal": u["learning_goal"],
+        "daily_goal_minutes": u["daily_goal_minutes"], "gems": u["gems"],
+        "total": u["total"], "act_7d": u["act_7d"], "act_30d": u["act_30d"],
+        "last_activity": _iso(u["last_activity"]), "prom_score": u["prom_score"],
+        "tipos": u["tipos"], "palabras": u["palabras"], "racha": u["racha"],
+    }
+
+
+def _admin_overview(ds):
+    now, events = ds["now"], ds["events"]
+    users = [u for u in ds["users"].values() if not u["es_admin"]]
+    ids = {u["id"] for u in users}
+    events = [e for e in events if e["uid"] in ids]
+    h15, d1, d7, d30 = now - timedelta(minutes=15), now - timedelta(days=1), now - timedelta(days=7), now - timedelta(days=30)
+
+    def uniq(since):
+        return len({e["uid"] for e in events if e["ts"] >= since})
+
+    def nuevos(since):
+        return sum(1 for u in users if u["created_at"] and u["created_at"] >= since)
+
+    estados = {"pagado": 0, "prueba": 0, "vencido": 0}
+    for u in users:
+        estados[u["estado"]] += 1
+    por_vencer = sorted(
+        [u for u in users if u["estado"] == "prueba" and u["dias_restantes"] is not None and u["dias_restantes"] <= 3],
+        key=lambda u: u["dias_restantes"],
+    )
+    today = _day(now)
+    dias = [today - timedelta(days=i) for i in range(13, -1, -1)]
+    ev_dia, us_dia, reg_dia = defaultdict(int), defaultdict(set), defaultdict(int)
+    for e in events:
+        if e["ts"] >= now - timedelta(days=16):
+            d = _day(e["ts"])
+            ev_dia[d] += 1
+            us_dia[d].add(e["uid"])
+    for u in users:
+        if u["created_at"]:
+            reg_dia[_day(u["created_at"])] += 1
+    serie = [{"fecha": d.isoformat(), "eventos": ev_dia[d], "usuarios": len(us_dia[d]), "registros": reg_dia[d]} for d in dias]
+
+    t7, t24 = defaultdict(int), defaultdict(int)
+    for e in events:
+        if e["ts"] >= d7:
+            t7[e["tipo"]] += 1
+        if e["ts"] >= d1:
+            t24[e["tipo"]] += 1
+
+    con_act = sum(1 for u in users if u["total"] > 0)
+    elegibles = [u for u in users if u["created_at"] and u["created_at"] <= d7]
+    retenidos = sum(1 for u in elegibles if u["act_7d"] > 0)
+    niveles, objetivos = defaultdict(int), defaultdict(int)
+    for u in users:
+        niveles[u["cefr_level"] or "sin definir"] += 1
+        objetivos[u["learning_goal"] or "sin definir"] += 1
+    top = sorted([u for u in users if u["act_7d"] > 0], key=lambda u: (-u["act_7d"], -u["total"]))[:10]
+    sin_act = [u for u in users if u["total"] == 0 and u["created_at"] and u["created_at"] <= now - timedelta(days=3)]
+
+    return {
+        "ok": True, "generado": _iso(now), "precio_mxn": PRICE_MXN,
+        "usuarios": {
+            "total": len(users), "confirmados": sum(1 for u in users if u["confirmado"]),
+            "nuevos_24h": nuevos(d1), "nuevos_7d": nuevos(d7), "nuevos_30d": nuevos(d30),
+        },
+        "actividad": {
+            "ahora_15min": uniq(h15), "activos_24h": uniq(d1), "activos_7d": uniq(d7), "activos_30d": uniq(d30),
+            "eventos_24h": sum(t24.values()), "eventos_7d": sum(t7.values()),
+        },
+        "estados": estados, "mrr_estimado": estados["pagado"] * PRICE_MXN,
+        "por_vencer": [{"id": u["id"], "email": u["email"], "dias": u["dias_restantes"]} for u in por_vencer[:15]],
+        "embudo": [
+            {"paso": "Registrados", "n": len(users)},
+            {"paso": "Correo confirmado", "n": sum(1 for u in users if u["confirmado"])},
+            {"paso": "Terminaron el onboarding", "n": sum(1 for u in users if u["onboarded"])},
+            {"paso": "Hicieron ≥1 actividad", "n": con_act},
+            {"paso": "Pagan", "n": estados["pagado"]},
+        ],
+        "retencion_7d": {"elegibles": len(elegibles), "retenidos": retenidos,
+                         "pct": round(retenidos / len(elegibles) * 100) if elegibles else None},
+        "sin_actividad_3d": len(sin_act),
+        "serie_14d": serie, "tipos_7d": dict(t7), "tipos_24h": dict(t24),
+        "niveles": dict(niveles), "objetivos": dict(objetivos),
+        "top_7d": [{"id": u["id"], "email": u["email"], "act_7d": u["act_7d"], "total": u["total"]} for u in top],
+        "warnings": ds["warnings"],
+        "nota": "Las cifras no incluyen cuentas de administrador. 'Activos' = usuarios con alguna práctica registrada en esa ventana.",
+    }
+
+
+def _admin_users(ds, q, estado, orden, limit, offset):
+    rows = list(ds["users"].values())
+    q = (q or "").strip().lower()
+    if q:
+        rows = [u for u in rows if q in u["email"].lower() or q in (u["username"] or "").lower() or q == u["id"]]
+    if estado in ("pagado", "prueba", "vencido"):
+        rows = [u for u in rows if u["estado"] == estado]
+    elif estado == "inactivo":
+        rows = [u for u in rows if u["total"] == 0]
+    elif estado == "por_vencer":
+        rows = [u for u in rows if u["estado"] == "prueba" and u["dias_restantes"] is not None and u["dias_restantes"] <= 3]
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    if orden == "actividad":
+        rows.sort(key=lambda u: (-u["act_7d"], -u["total"]))
+    elif orden == "registro":
+        rows.sort(key=lambda u: u["created_at"] or floor, reverse=True)
+    elif orden == "vence":
+        rows.sort(key=lambda u: (u["dias_restantes"] is None, u["dias_restantes"] or 0))
+    else:
+        rows.sort(key=lambda u: u["last_activity"] or u["last_sign_in"] or u["created_at"] or floor, reverse=True)
+    return len(rows), [_user_json(u) for u in rows[offset:offset + limit]]
+
+
+def _recent_events_for(client, uid, per_table=12):
+    out, warns = [], []
+    for tipo, table, score_col, prev_col in ACTIVITY_TABLES:
+        cols = "created_at," + prev_col + (f",{score_col}" if score_col else "")
+        try:
+            rows = client.table(table).select(cols).eq("user_id", uid).order("created_at", desc=True).limit(per_table).execute().data or []
+        except Exception as exc:
+            warns.append(f"{table}: {exc}")
+            continue
+        for r in rows:
+            prev = str(r.get(prev_col) or "")
+            t = "llamada" if table == "historial_tutor" and prev.startswith(CALL_MARK) else tipo
+            sc = r.get(score_col) if score_col else None
+            out.append({"tipo": t, "fecha": r.get("created_at"), "score": sc, "detalle": prev[:140]})
+    out.sort(key=lambda e: e.get("fecha") or "", reverse=True)
+    return out[:30], warns
+
+
+@app.get("/api/admin/resumen")
+def admin_resumen():
+    _u, err = admin_guard()
+    if err:
+        return err
+    try:
+        return jsonify(_admin_overview(admin_dataset(force=request.args.get("fresh") == "1")))
+    except Exception as exc:
+        print(f"[ADMIN resumen] {exc}")
+        return json_error(f"No se pudo calcular el resumen: {exc}", 500)
+
+
+@app.get("/api/admin/usuarios")
+def admin_usuarios():
+    _u, err = admin_guard()
+    if err:
+        return err
+    try:
+        ds = admin_dataset(force=request.args.get("fresh") == "1")
+        limit = max(1, min(int(request.args.get("limit", 30) or 30), 100))
+        offset = max(0, int(request.args.get("offset", 0) or 0))
+        total, rows = _admin_users(ds, request.args.get("q"), request.args.get("estado", "todos"),
+                                   request.args.get("orden", "reciente"), limit, offset)
+        return jsonify({"ok": True, "total": total, "usuarios": rows, "warnings": ds["warnings"]})
+    except Exception as exc:
+        print(f"[ADMIN usuarios] {exc}")
+        return json_error(f"No se pudo cargar la lista de usuarios: {exc}", 500)
+
+
+@app.get("/api/admin/usuario/<uid>")
+def admin_usuario(uid):
+    _u, err = admin_guard()
+    if err:
+        return err
+    try:
+        ds = admin_dataset()
+        u = ds["users"].get(uid)
+        if not u:
+            return json_error("Usuario no encontrado.", 404)
+        client = supabase_admin or supabase
+        recientes, warns = _recent_events_for(client, uid)
+        palabras = []
+        try:
+            palabras = client.table("vocabulario_usuario").select("palabra,significado").eq("user_id", uid).limit(12).execute().data or []
+        except Exception as exc:
+            warns.append(f"vocabulario_usuario: {exc}")
+        soporte = []
+        if u["email"]:
+            try:
+                soporte = client.table("soporte_mensajes").select("*").eq("email", u["email"]).limit(10).execute().data or []
+            except Exception as exc:
+                warns.append(f"soporte_mensajes: {exc}")
+        return jsonify({"ok": True, "usuario": _user_json(u), "recientes": recientes,
+                        "palabras": palabras, "soporte": soporte, "warnings": warns})
+    except Exception as exc:
+        print(f"[ADMIN usuario] {exc}")
+        return json_error(f"No se pudo cargar el usuario: {exc}", 500)
+
+
+@app.get("/api/admin/actividad")
+def admin_activity():
+    _u, err = admin_guard()
+    if err:
+        return err
+    try:
+        ds = admin_dataset()
+        client = supabase_admin or supabase
+        tipo_f = (request.args.get("tipo") or "").strip()
+        limit = max(10, min(int(request.args.get("limit", 100) or 100), 200))
+        emails = {uid: u["email"] for uid, u in ds["users"].items()}
+        events, warns = [], []
+        for tipo, table, score_col, prev_col in ACTIVITY_TABLES:
+            if tipo_f and tipo_f != tipo and not (tipo_f == "llamada" and table == "historial_tutor"):
+                continue
+            cols = "user_id,created_at," + prev_col + (f",{score_col}" if score_col else "")
+            try:
+                rows = client.table(table).select(cols).order("created_at", desc=True).limit(limit).execute().data or []
+            except Exception as exc:
+                warns.append(f"No se pudo leer {table}: {exc}")
+                continue
+            for r in rows:
+                prev = str(r.get(prev_col) or "")
+                t = "llamada" if table == "historial_tutor" and prev.startswith(CALL_MARK) else tipo
+                if tipo_f and t != tipo_f:
+                    continue
+                uid = str(r.get("user_id") or "")
+                events.append({"tipo": t, "uid": uid, "email": emails.get(uid) or uid[:8],
+                               "fecha": r.get("created_at"), "score": r.get(score_col) if score_col else None,
+                               "detalle": prev[:120]})
+        events.sort(key=lambda e: e.get("fecha") or "", reverse=True)
+        ov = _admin_overview(ds)
+        return jsonify({"ok": True, "eventos": events[:limit], "warnings": ds["warnings"] + warns,
+                        "total_usuarios": ov["usuarios"]["total"], "en_prueba": ov["estados"]["prueba"],
+                        "pagados": ov["estados"]["pagado"]})
+    except Exception as exc:
+        print(f"[ADMIN actividad] {exc}")
+        return json_error(f"No se pudo cargar la actividad: {exc}", 500)
+
+
+@app.get("/api/admin/soporte")
+def admin_soporte():
+    _u, err = admin_guard()
+    if err:
+        return err
+    client = supabase_admin or supabase
+    try:
+        try:
+            rows = client.table("soporte_mensajes").select("*").order("created_at", desc=True).limit(50).execute().data or []
+        except Exception:
+            rows = client.table("soporte_mensajes").select("*").limit(50).execute().data or []
+        return jsonify({"ok": True, "mensajes": rows})
+    except Exception as exc:
+        print(f"[ADMIN soporte] {exc}")
+        return json_error(f"No se pudieron leer los mensajes de soporte: {exc}", 500)
+
+
+@app.get("/api/admin/sistema")
+def admin_sistema():
+    _u, err = admin_guard()
+    if err:
+        return err
+    checks = []
+    client = supabase_admin or supabase
+    service_ok = bool(SUPABASE_SERVICE_KEY) and SUPABASE_SERVICE_KEY != SUPABASE_KEY
+    checks.append({"nombre": "Clave service_role de Supabase", "ok": service_ok,
+                   "detalle": "Configurada." if service_ok else "NO configurada: define SUPABASE_SERVICE_KEY en Render o el panel verá datos incompletos."})
+    try:
+        t0 = time.time()
+        client.table("profiles").select("id").limit(1).execute()
+        ms = round((time.time() - t0) * 1000)
+        checks.append({"nombre": "Base de datos (Supabase)", "ok": True, "detalle": f"Responde en {ms} ms."})
+    except Exception as exc:
+        checks.append({"nombre": "Base de datos (Supabase)", "ok": False, "detalle": f"Error: {exc}"})
+    try:
+        client.auth.admin.list_users(page=1, per_page=1)
+        checks.append({"nombre": "Lista de cuentas de acceso", "ok": True, "detalle": "Se pueden leer correos y fechas de registro."})
+    except Exception as exc:
+        checks.append({"nombre": "Lista de cuentas de acceso", "ok": False, "detalle": f"Error: {exc}. Se usarán los perfiles."})
+    checks.append({"nombre": "Azure OpenAI (tutor y correcciones)", "ok": bool(ai_client),
+                   "detalle": "Configurado." if ai_client else "No configurado: el tutor y las evaluaciones no funcionarán."})
+    checks.append({"nombre": "Azure Speech (voz y pronunciación)", "ok": bool(AZURE_SPEECH_KEY),
+                   "detalle": f"Configurado (región {AZURE_SPEECH_REGION})." if AZURE_SPEECH_KEY else "No configurado."})
+    checks.append({"nombre": "Cuentas de administrador", "ok": bool(ADMIN_EMAILS),
+                   "detalle": f"{len(ADMIN_EMAILS)} configurada(s)."})
+    checks.append({"nombre": "Avisos por Telegram (opcional)", "ok": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
+                   "detalle": "Configurado." if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID else "No configurado (no es obligatorio)."})
+    up = int(time.time() - SERVER_STARTED)
+    with _rate_lock:
+        claves = len(_rate_hits)
+    with _tts_lock:
+        tts = len(_tts_cache)
     return jsonify({
-        "ok": True,
-        "total_usuarios": total_usuarios,
-        "en_prueba": active_trials,
-        "pagados": pagados,
-        "eventos": events[:40],
+        "ok": True, "checks": checks,
+        "servidor": {
+            "encendido_desde": datetime.fromtimestamp(SERVER_STARTED, timezone.utc).isoformat(),
+            "uptime_seg": up, "python": platform.python_version(), "zona_horaria": str(LOCAL_TZ),
+            "precio_mxn": PRICE_MXN, "limite_ia_diario": DAILY_AI_LIMIT, "limite_general_min": GENERAL_PER_MINUTE,
+            "audios_en_cache": tts, "contadores_de_limite": claves,
+            "cache_panel_seg": int(time.time() - _admin_cache["t"]) if _admin_cache["data"] else None,
+        },
     })
 
 
@@ -1385,7 +1897,7 @@ def tutor():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    message = (body.get("mensaje") or body.get("message") or "").strip()
+    message = (body.get("mensaje") or body.get("message") or "").strip()[:1500]
     history = body.get("history") or []
     modo = (body.get("modo") or "").strip()
     categoria = (body.get("categoria") or "").strip()
@@ -1574,102 +2086,6 @@ def vocab_mark():
         return jsonify({"ok": True})
     except Exception as exc:
         return json_error(f"No se pudo actualizar: {exc}", 500)
-
-
-# ---------------------------------------------------------------------------
-# Repaso espaciado de vocabulario: las palabras regresan a los 1, 3, 7, 14 y 30 días.
-# Requiere las columnas repaso_nivel y proximo_repaso (ver migracion_repaso_espaciado.sql).
-# ---------------------------------------------------------------------------
-REVIEW_INTERVALS = [1, 3, 7, 14, 30]
-REVIEW_MAX_LEVEL = len(REVIEW_INTERVALS)
-REVIEW_SESSION_SIZE = 10
-
-
-def _parse_day(value):
-    try:
-        return datetime.fromisoformat(str(value)[:10]).date()
-    except (TypeError, ValueError):
-        return None
-
-
-def _review_is_due(row, today):
-    level = row.get("repaso_nivel") or 0
-    if level >= REVIEW_MAX_LEVEL:
-        return False
-    scheduled = _parse_day(row.get("proximo_repaso"))
-    if scheduled:
-        return scheduled <= today
-    if row.get("aprendida"):  # marcada a mano como aprendida, sin programar
-        return False
-    learned_on = _parse_day(row.get("fecha") or row.get("created_at"))
-    return bool(learned_on and learned_on < today)
-
-
-@app.get("/api/vocabulario/repaso")
-def vocab_review_due():
-    user, error = authenticated_user()
-    if error:
-        return json_error(error[0], error[1])
-    client = supabase_admin or supabase
-    today = datetime.now(timezone.utc).date()
-    try:
-        rows = (
-            client.table("vocabulario_usuario").select("*").eq("user_id", user.id).limit(500).execute()
-        ).data or []
-    except Exception as exc:
-        return json_error(f"No se pudo cargar el repaso: {exc}", 500)
-    if rows and "repaso_nivel" not in rows[0]:
-        return jsonify({"ok": True, "palabras": [], "pendientes": 0, "needs_migration": True})
-    due = [r for r in rows if _review_is_due(r, today)]
-    due.sort(key=lambda r: (_parse_day(r.get("proximo_repaso")) or _parse_day(r.get("fecha")) or today))
-    session = [
-        {k: r.get(k) for k in ("id", "palabra", "significado", "ejemplo", "repaso_nivel")}
-        for r in due[:REVIEW_SESSION_SIZE]
-    ]
-    return jsonify({"ok": True, "palabras": session, "pendientes": len(due)})
-
-
-@app.post("/api/vocabulario/repasar")
-def vocab_review_answer():
-    user, error = authenticated_user()
-    if error:
-        return json_error(error[0], error[1])
-    body = request.get_json(silent=True) or {}
-    word_id = body.get("id")
-    remembered = bool(body.get("recordada"))
-    if not word_id:
-        return json_error("Falta el identificador de la palabra.")
-    client = supabase_admin or supabase
-    today = datetime.now(timezone.utc).date()
-    try:
-        row = (
-            client.table("vocabulario_usuario").select("*")
-            .eq("id", word_id).eq("user_id", user.id).maybe_single().execute()
-        ).data
-        if not row:
-            return json_error("Palabra no encontrada.", 404)
-        level = row.get("repaso_nivel") or 0
-        level = min(level + 1, REVIEW_MAX_LEVEL) if remembered else 0
-        if level >= REVIEW_MAX_LEVEL:
-            next_day = None
-        else:
-            next_day = (today + timedelta(days=REVIEW_INTERVALS[level])).isoformat()
-        client.table("vocabulario_usuario").update({
-            "repaso_nivel": level,
-            "proximo_repaso": next_day,
-            "aprendida": level >= 3,
-        }).eq("id", word_id).eq("user_id", user.id).execute()
-    except Exception as exc:
-        text = str(exc)
-        if "repaso_nivel" in text or "proximo_repaso" in text:
-            return json_error("Falta ejecutar la migración SQL del repaso espaciado en Supabase.", 500)
-        return json_error(f"No se pudo guardar el repaso: {text}", 500)
-    if remembered:
-        try:
-            award_xp(user.id, 1)
-        except Exception as exc:
-            print(f"[REVIEW XP] {exc}")
-    return jsonify({"ok": True, "nivel": level, "proximo_repaso": next_day})
 
 
 def _unit_xp_and_progress(user_id):
