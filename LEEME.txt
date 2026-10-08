@@ -1,0 +1,6 @@
+Talvo English - carpeta lista para subir
+=======================================
+Sube TODA esta carpeta a tu hosting (mismo lugar donde estaba tu index.html).
+Debe servirse por HTTPS (casi todos los hosting gratis ya lo hacen).
+Para actualizar en el futuro: sube de nuevo la carpeta completa. El service worker
+(sw.js) cambia solo cuando cambian los archivos y los usuarios reciben la version nueva.
