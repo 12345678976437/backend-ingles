@@ -576,6 +576,17 @@ textarea{min-height:150px;resize:vertical;line-height:1.7}
   .adm-chips::-webkit-scrollbar{display:none}
   .adm-chips button{flex:none}
 }
+
+/* ---------- Panel admin: acceso y pagos ---------- */
+.adm-access{margin:14px 0;padding:14px;border:1px solid var(--line-strong);border-left:2px solid var(--primary);background:rgba(8,12,24,.55)}
+.adm-access>b{font-family:var(--display);font-size:14px}
+.adm-access small{display:block;margin-top:4px;color:var(--muted);font-size:12.5px;line-height:1.5}
+.adm-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.adm-acts select.input{width:auto;min-height:42px;padding:0 12px}
+.adm-acts .btn{min-height:42px}
+.adm-acts .btn.primary{clip-path:none;color:#04101a}
+.adm-hist{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px}
+.adm-hist small{color:var(--muted)}
 </style>
 <script>
 window.TalvoTheme=(function(){
@@ -733,8 +744,8 @@ window.TalvoTheme.apply(window.TalvoTheme.current());
 <div class="modebar" id="admin-tabs"><button type="button" class="mode active" data-atab="resumen">Resumen</button><button type="button" class="mode" data-atab="usuarios">Usuarios</button><button type="button" class="mode" data-atab="actividad">Actividad</button><button type="button" class="mode" data-atab="sistema">Sistema</button></div>
 <div class="panel active" id="atab-resumen"><div id="admin-resumen"><div class="empty">Cargando resumen…</div></div></div>
 <div class="panel" id="atab-usuarios">
-  <div class="adm-tools"><input class="input" id="admin-q" type="search" placeholder="Buscar por correo o nombre" autocomplete="off"><select class="input" id="admin-sort"><option value="reciente">Más reciente</option><option value="actividad">Más activos (7 d)</option><option value="registro">Registro nuevo</option><option value="vence">Prueba por vencer</option></select></div>
-  <div class="adm-chips" id="admin-filters"><button type="button" class="active" data-aflt="todos">Todos</button><button type="button" data-aflt="pagado">Pagados</button><button type="button" data-aflt="prueba">En prueba</button><button type="button" data-aflt="por_vencer">Vencen en 3 d</button><button type="button" data-aflt="vencido">Vencidos</button><button type="button" data-aflt="inactivo">Sin actividad</button></div>
+  <div class="adm-tools"><input class="input" id="admin-q" type="search" placeholder="Buscar por correo o nombre" autocomplete="off"><select class="input" id="admin-sort"><option value="reciente">Más reciente</option><option value="actividad">Más activos (7 d)</option><option value="registro">Registro nuevo</option><option value="vence">Prueba por vencer</option></select><button type="button" class="btn" id="admin-export">⬇ Exportar CSV</button></div>
+  <div class="adm-chips" id="admin-filters"><button type="button" class="active" data-aflt="todos">Todos</button><button type="button" data-aflt="pagado">Pagados</button><button type="button" data-aflt="por_renovar">Por renovar</button><button type="button" data-aflt="prueba">En prueba</button><button type="button" data-aflt="por_vencer">Vencen en 3 d</button><button type="button" data-aflt="vencido">Vencidos</button><button type="button" data-aflt="inactivo">Sin actividad</button></div>
   <div class="admin-updated" id="admin-count"></div>
   <div id="admin-users"><div class="empty">Cargando usuarios…</div></div>
   <div class="actions" style="margin-top:14px"><button type="button" class="btn" id="admin-more" style="display:none">Cargar más</button></div>
@@ -1137,11 +1148,20 @@ function admScoreCls(v){return v>=80?'good':v>=60?'mid':'low'}
 function admRow(label,n,max,extra){const pct=max?Math.round(n/max*100):0;return '<div class="adm-row"><span>'+label+'</span><div class="bar"><div class="fill" style="width:'+pct+'%"></div></div><b>'+n+(extra?' <small>'+extra+'</small>':'')+'</b></div>'}
 function admUserLink(id,email,right){return '<button type="button" class="adm-list-item" data-adm-user="'+esc(email)+'"><span>'+esc(email||id.slice(0,8))+'</span><span>'+right+'</span></button>'}
 
+function admPagos(d){
+  const p=d.pagos||{},s=d.soporte;
+  const k=(v,l,sub,c)=>'<div class="report '+(c||'')+'"><b>'+v+'</b><small>'+l+'</small>'+(sub?'<em>'+sub+'</em>':'')+'</div>';
+  const ren=(p.por_renovar||[]).map(x=>admUserLink(x.id,x.email,x.dias>=0?'renueva en '+x.dias+' d':'venció hace '+Math.abs(x.dias)+' d')).join('')||'<div class="empty">'+(p.registro_activo?'Ningún pago vence en los próximos 5 días.':'Activa el registro de pagos para ver vencimientos.')+'</div>';
+  let sup='';
+  if(s){sup=(s.recientes||[]).map(m=>'<button type="button" class="adm-list-item" data-adm-user="'+esc(m.email||'')+'"><span><b>'+esc(m.tipo||'')+'</b> · '+esc(m.mensaje)+'</span><span>'+admAgo(m.fecha)+'</span></button>').join('')||'<div class="empty">Sin mensajes en 7 días.</div>'}
+  return '<h2 class="sec-h">Pagos y soporte</h2><div class="adm-kpis">'+k((p.por_renovar||[]).length,'Pagos por renovar','Vencen en ≤5 días o ya vencieron',(p.por_renovar||[]).length?'warn':'')+k(p.sin_fecha==null?'—':p.sin_fecha,'Pagados sin fecha de vencimiento',p.registro_activo?'Actívalos de nuevo con el botón para registrar su fecha':'Falta crear la tabla admin_acciones (pestaña Sistema)',p.sin_fecha?'warn':'')+(s?k(s.total_7d,'Mensajes de soporte (7 d)','De pagos: '+s.pago_7d,s.pago_7d?'warn':''):'')+'</div>'+
+   '<div class="adm-two"><div><h3>Pagos por renovar</h3>'+ren+'</div>'+(s?'<div><h3>Soporte reciente</h3>'+sup+'</div>':'<div></div>')+'</div>';
+}
 async function admResumen(fresh){
   const box=$('admin-resumen');if(!adm.loaded.resumen)box.innerHTML='<div class="empty">Cargando resumen…</div>';
   try{
     const d=await admFetch('/api/admin/resumen',fresh);admWarn(d.warnings);admStamp();adm.loaded.resumen=Date.now();
-    const u=d.usuarios,a=d.actividad,e=d.estados;
+    const u=d.usuarios,a=d.actividad,e=d.estados;adm.price=d.precio_mxn;
     const k=(v,l,sub,c)=>'<div class="report '+(c||'')+'"><b>'+v+'</b><small>'+l+'</small>'+(sub?'<em>'+sub+'</em>':'')+'</div>';
     const maxEv=Math.max(1,...d.serie_14d.map(x=>x.eventos));
     const days=d.serie_14d.map(x=>'<div class="adm-col" title="'+esc(admShort(x.fecha))+': '+x.eventos+' actividades, '+x.usuarios+' usuarios, '+x.registros+' registros"><b>'+x.eventos+'</b><div class="adm-bar" style="height:'+Math.round(x.eventos/maxEv*100)+'px"></div><small>'+esc(admShort(x.fecha).slice(0,2))+'</small><em>👤'+x.usuarios+'</em></div>').join('');
@@ -1160,6 +1180,7 @@ async function admResumen(fresh){
      '<h2 class="sec-h">Usuarios</h2><div class="adm-kpis">'+k(u.total,'Usuarios totales','Confirmados: '+u.confirmados)+k(u.nuevos_7d,'Nuevos (7 días)','24 h: '+u.nuevos_24h+' · 30 d: '+u.nuevos_30d)+k(d.sin_actividad_3d,'Sin ninguna práctica','Registrados hace más de 3 días',d.sin_actividad_3d?'warn':'')+k(ret.pct==null?'—':ret.pct+'%','Retención a 7 días',ret.retenidos+' de '+ret.elegibles+' practicaron esta semana')+'</div>'+
      '<h2 class="sec-h">Actividad</h2><div class="adm-kpis">'+k(a.ahora_15min,'Practicando ahora','Últimos 15 min',a.ahora_15min?'good':'')+k(a.activos_24h,'Activos 24 h',a.eventos_24h+' actividades')+k(a.activos_7d,'Activos 7 días',a.eventos_7d+' actividades')+k(a.activos_30d,'Activos 30 días')+'</div>'+
      '<h2 class="sec-h">Suscripciones</h2><div class="adm-kpis">'+k(e.pagado,'Pagando','',e.pagado?'good':'')+k(e.prueba,'En prueba')+k(e.vencido,'Prueba vencida','Sin acceso hasta que paguen',e.vencido?'warn':'')+k('$'+d.mrr_estimado,'Ingreso mensual estimado','Pagando × $'+d.precio_mxn+' MXN (no son pagos registrados)')+'</div>'+
+     admPagos(d)+
      '<h2 class="sec-h">Actividades por día (14 días)</h2><div class="adm-days">'+days+'</div><p class="adm-legend">Número grande = actividades · 👤 = usuarios distintos que practicaron ese día.</p>'+
      '<div class="adm-two"><div><h2 class="sec-h">Qué practican (7 días)</h2>'+tipoRows+'</div><div><h2 class="sec-h">Embudo</h2>'+funnel+'</div></div>'+
      '<div class="adm-two"><div><h2 class="sec-h">Pruebas que vencen pronto</h2>'+venc+'</div><div><h2 class="sec-h">Más activos (7 días)</h2>'+top+'</div></div>'+
@@ -1168,11 +1189,14 @@ async function admResumen(fresh){
   }catch(err){admErr(box,err.message)}
 }
 
-function admUserRow(u){
-  const [lbl,cls]=ADM_E[u.estado]||['—',''];adm.users[u.id]=u;
-  const vence=u.estado==='prueba'?' · '+u.dias_restantes+' d':'';
-  return '<div class="user-item"><button type="button" class="user-row" data-uid="'+esc(u.id)+'"><div class="ur-main"><b>'+esc(u.email||u.id.slice(0,8))+(u.es_admin?' <span class="estado st-admin">admin</span>':'')+'</b><small>'+esc(u.username||'sin nombre')+' · '+esc(u.cefr_level||'nivel sin definir')+'</small></div><span class="estado '+cls+'">'+lbl+vence+'</span><div class="ur-meta"><span>Última práctica: '+admAgo(u.last_activity)+'</span><span>'+u.total+' act. · '+u.act_7d+' en 7 d · 🔥 '+u.racha+'</span><span>Registro: '+admDate(u.created_at)+'</span></div></button><div class="user-detail" id="ud-'+esc(u.id)+'" style="display:none"></div></div>';
+function admRowHead(u){
+  const [lbl,cls]=ADM_E[u.estado]||['—',''];
+  let extra='';
+  if(u.estado==='prueba')extra=' · '+u.dias_restantes+' d';
+  else if(u.estado==='pagado'&&u.dias_renovar!=null)extra=u.dias_renovar>=0?' · renueva en '+u.dias_renovar+' d':' · venció hace '+Math.abs(u.dias_renovar)+' d';
+  return '<div class="ur-main"><b>'+esc(u.email||u.id.slice(0,8))+(u.es_admin?' <span class="estado st-admin">admin</span>':'')+'</b><small>'+esc(u.username||'sin nombre')+' · '+esc(u.cefr_level||'nivel sin definir')+'</small></div><span class="estado '+cls+'">'+lbl+extra+'</span><div class="ur-meta"><span>Última práctica: '+admAgo(u.last_activity)+'</span><span>'+u.total+' act. · '+u.act_7d+' en 7 d · 🔥 '+u.racha+'</span><span>Registro: '+admDate(u.created_at)+'</span></div>';
 }
+function admUserRow(u){adm.users[u.id]=u;return '<div class="user-item" id="ui-'+esc(u.id)+'"><button type="button" class="user-row" data-uid="'+esc(u.id)+'">'+admRowHead(u)+'</button><div class="user-detail" id="ud-'+esc(u.id)+'" style="display:none"></div></div>'}
 async function admUsuarios(reset,fresh){
   const list=$('admin-users');
   if(reset){adm.offset=0;list.innerHTML='<div class="empty">Cargando usuarios…</div>'}
@@ -1186,28 +1210,90 @@ async function admUsuarios(reset,fresh){
     $('admin-more').style.display=adm.offset<d.total?'':'none';
   }catch(err){if(reset)admErr(list,err.message);else toast(err.message)}
 }
-async function admToggleUser(id){
+function admCopy(text){
+  if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text);
+  const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove();return Promise.resolve();
+}
+function admReminder(u){
+  const precio=adm.price||79;
+  if(u.estado==='prueba')return 'Hola 👋 Tu prueba gratis de Talvo English termina en '+u.dias_restantes+' día(s). Si quieres seguir practicando, la suscripción cuesta $'+precio+' MXN al mes. ¿Te comparto los datos para activarla?';
+  if(u.estado==='vencido')return 'Hola 👋 Tu prueba de Talvo English ya terminó. Si quieres seguir practicando, la suscripción cuesta $'+precio+' MXN al mes. ¿Te comparto los datos de pago?';
+  if(u.estado==='pagado'&&u.dias_renovar!=null&&u.dias_renovar<=5)return 'Hola 👋 Tu suscripción de Talvo English '+(u.dias_renovar<=0?'ya venció':'vence en '+u.dias_renovar+' día(s)')+'. ¿Quieres renovarla por $'+precio+' MXN? Te comparto los datos de pago.';
+  return '';
+}
+function admAccessPanel(u,d){
+  const id=esc(u.id),paid=u.estado==='pagado';
+  let estado;
+  if(paid)estado=u.dias_renovar==null?'Acceso de pago activo (sin fecha de vencimiento registrada).':(u.dias_renovar>=0?'Pago activo · cubre hasta '+admDate(u.vence_pago):'Según el registro, el pago venció el '+admDate(u.vence_pago)+' · el acceso sigue activo hasta que lo quites');
+  else if(u.estado==='prueba')estado='En prueba hasta '+admDate(u.trial_ends_at);
+  else estado='Sin acceso · la prueba terminó el '+admDate(u.trial_ends_at);
+  const dias='<select class="input" id="acc-dias-'+id+'"><option value="30">30 días</option><option value="60">60 días</option><option value="90">90 días</option><option value="365">1 año</option></select>';
+  const prueba='<select class="input" id="acc-prueba-'+id+'"><option value="3">+3 días</option><option value="7" selected>+7 días</option><option value="14">+14 días</option></select>';
+  const rem=admReminder(u);
+  return '<div class="adm-access"><b>Acceso y pagos</b><small>'+esc(estado)+'</small>'+
+   '<div class="adm-acts">'+dias+'<button type="button" class="btn primary" data-acc="'+(paid?'renovar':'activar')+'" data-uid="'+id+'">'+(paid?'🔁 Renovar pago':'✅ Activar pago')+'</button>'+(paid?'<button type="button" class="btn danger" data-acc="desactivar" data-uid="'+id+'">⛔ Quitar acceso de pago</button>':'')+'</div>'+
+   (paid?'':'<div class="adm-acts">'+prueba+'<button type="button" class="btn" data-acc="extender_prueba" data-uid="'+id+'">⏱ Extender prueba</button></div>')+
+   (rem?'<div class="adm-acts"><button type="button" class="btn" data-copy="'+id+'">📋 Copiar recordatorio</button></div>':'')+
+   (d&&d.registro_activo===false?'<small style="color:var(--warning)">⚠ Los cambios se aplican, pero no queda registro ni fecha de vencimiento. Crea la tabla con admin_acciones.sql (pestaña Sistema).</small>':'')+'</div>';
+}
+async function admLoadDetail(id){
   const box=$('ud-'+id);if(!box)return;
-  if(box.style.display==='block'){box.style.display='none';return}
-  box.style.display='block';
-  if(box.dataset.ready)return;
   box.innerHTML='<div class="empty">Cargando detalle…</div>';
   try{
-    const d=await admFetch('/api/admin/usuario/'+encodeURIComponent(id));const u=d.usuario;
+    const d=await admFetch('/api/admin/usuario/'+encodeURIComponent(id));const u=d.usuario;adm.users[id]=u;
     const cell=(v,l)=>'<div><b>'+v+'</b><small>'+l+'</small></div>';
     const tipos=Object.entries(u.tipos||{}).map(([t,n])=>'<span class="badge">'+(ADM_T[t]?ADM_T[t][0]+' '+ADM_T[t][1]:esc(t))+' ×'+n+'</span>').join('')||'<span class="admin-updated">Todavía no ha practicado.</span>';
     const ev=(d.recientes||[]).map(x=>'<div class="ud-ev"><span>'+(ADM_T[x.tipo]?ADM_T[x.tipo][0]:'•')+'</span><span>'+(ADM_T[x.tipo]?ADM_T[x.tipo][1]:esc(x.tipo))+' <small>· '+admAgo(x.fecha)+'</small></span>'+(x.score!=null?'<span class="adm-score '+admScoreCls(x.score)+'">'+Math.round(x.score)+'</span>':'<span></span>')+(x.detalle?'<span class="adm-d">'+esc(x.detalle)+'</span>':'')+'</div>').join('')||'<div class="admin-updated">Sin actividad.</div>';
     const words=(d.palabras||[]).map(w=>'<span class="chip">'+esc(w.palabra)+'</span>').join('');
     const sup=(d.soporte||[]).map(m=>'<div class="adm-sup"><b>'+esc(m.tipo||'mensaje')+'</b> · '+admDate(m.created_at)+'<small>'+esc(m.mensaje||'')+'</small></div>').join('');
-    box.innerHTML=
+    const NA={activar:'Activó pago',renovar:'Renovó pago',desactivar:'Quitó acceso de pago',extender_prueba:'Extendió prueba'};
+    const hist=(d.acciones||[]).map(a=>'<div class="adm-hist"><span>'+(NA[a.accion]||esc(a.accion))+(a.dias&&a.accion!=='desactivar'?' · '+a.dias+' d':'')+'</span><span>'+admDate(a.created_at)+'</span>'+(a.nota?'<small>'+esc(a.nota)+'</small>':'')+'</div>').join('');
+    box.innerHTML=admAccessPanel(u,d)+
      '<div class="ud-grid">'+cell(admDate(u.created_at),'Registro')+cell(admDate(u.last_sign_in),'Último acceso')+cell(admDate(u.last_activity),'Última práctica')+cell(u.estado==='prueba'?admDate(u.trial_ends_at):u.estado==='pagado'?'Suscripción activa':'Venció '+admDate(u.trial_ends_at),u.estado==='prueba'?'La prueba termina':'Acceso')+
      cell(u.total+' / '+u.act_7d+' / '+u.act_30d,'Actividades: total / 7 d / 30 d')+cell(u.prom_score==null?'—':u.prom_score,'Calificación promedio')+cell('🔥 '+u.racha+' d','Racha actual')+cell(u.palabras,'Palabras guardadas')+
      cell(esc(ADM_GOAL[u.learning_goal]||u.learning_goal||'—'),'Objetivo')+cell(u.daily_goal_minutes?u.daily_goal_minutes+' min':'—','Meta diaria')+cell('💎 '+u.gems,'Gemas')+cell(u.onboarded?'Sí':'No',u.confirmado?'Onboarding · correo confirmado':'Onboarding · correo SIN confirmar')+'</div>'+
      '<div class="adm-chips" style="flex-wrap:wrap;overflow:visible;margin:8px 0">'+tipos+'</div>'+
+     (hist?'<h3>Historial de cambios de acceso</h3>'+hist:'')+
      '<h3>Últimas actividades</h3>'+ev+(words?'<h3>Palabras guardadas</h3><div class="chips">'+words+'</div>':'')+(sup?'<h3>Mensajes de soporte</h3>'+sup:'')+
      '<p class="admin-updated" style="margin-top:12px">ID: '+esc(u.id)+'</p>';
     box.dataset.ready='1';
   }catch(err){admErr(box,err.message)}
+}
+async function admToggleUser(id){
+  const box=$('ud-'+id);if(!box)return;
+  if(box.style.display==='block'){box.style.display='none';return}
+  box.style.display='block';
+  if(!box.dataset.ready)await admLoadDetail(id);
+}
+async function admAcceso(btn){
+  const id=btn.dataset.uid,accion=btn.dataset.acc,u=adm.users[id]||{};
+  let dias=30;
+  if(accion==='extender_prueba')dias=Number(($('acc-prueba-'+id)||{}).value||7);
+  else if(accion!=='desactivar')dias=Number(($('acc-dias-'+id)||{}).value||30);
+  const quien=u.email||id;
+  const pregunta={activar:'¿Activar el acceso de pago de '+quien+' por '+dias+' días?',renovar:'¿Renovar el pago de '+quien+' por '+dias+' días más?',desactivar:'¿QUITAR el acceso de pago de '+quien+'? Dejará de poder practicar.',extender_prueba:'¿Extender la prueba de '+quien+' por '+dias+' días?'}[accion];
+  if(!window.confirm(pregunta))return;
+  btn.disabled=true;
+  try{
+    const d=await jsonFetch('/api/admin/usuario/'+encodeURIComponent(id)+'/acceso',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accion:accion,dias:dias,confirmar:true})});
+    toast(d.mensaje);
+    if(d.aviso)setTimeout(()=>toast(d.aviso),3400);
+    if(d.usuario){adm.users[id]=d.usuario;const row=document.querySelector('#ui-'+CSS.escape(id)+' .user-row');if(row)row.innerHTML=admRowHead(d.usuario)}
+    adm.loaded.resumen=0;adm.loaded.usuarios=0;
+    await admLoadDetail(id);
+  }catch(err){toast(err.message);btn.disabled=false}
+}
+async function admExport(){
+  const btn=$('admin-export');btn.disabled=true;toast('Preparando el archivo…');
+  try{
+    let off=0,total=1,rows=[];
+    while(off<total){const d=await admFetch('/api/admin/usuarios?q='+encodeURIComponent(adm.q)+'&estado='+adm.filter+'&orden='+adm.sort+'&limit=100&offset='+off,off===0);total=d.total;rows=rows.concat(d.usuarios);off+=d.usuarios.length;if(!d.usuarios.length)break}
+    const cols=[['Correo','email'],['Nombre','username'],['Estado','estado'],['Días de prueba restantes','dias_restantes'],['Pago vence','vence_pago'],['Registro','created_at'],['Último acceso','last_sign_in'],['Última práctica','last_activity'],['Actividades totales','total'],['Actividades 7 d','act_7d'],['Actividades 30 d','act_30d'],['Calificación promedio','prom_score'],['Racha','racha'],['Palabras guardadas','palabras'],['Nivel','cefr_level'],['Objetivo','learning_goal'],['ID','id']];
+    const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const csv='\ufeff'+[cols.map(c=>q(c[0])).join(',')].concat(rows.map(r=>cols.map(c=>q(r[c[1]])).join(','))).join('\r\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='talvo-usuarios-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove();
+    toast('Listo: '+rows.length+' usuarios exportados.');
+  }catch(err){toast(err.message)}finally{btn.disabled=false}
 }
 
 async function admActividad(fresh){
@@ -1256,6 +1342,9 @@ function admBoot(){
     if(n=t.closest('[data-aflt]')){adm.filter=n.dataset.aflt;$$('#admin-filters button').forEach(b=>b.classList.toggle('active',b===n));return admUsuarios(true)}
     if(n=t.closest('[data-aevf]')){adm.evf=n.dataset.aevf;$$('#admin-evfilters button').forEach(b=>b.classList.toggle('active',b===n));adm.loaded.actividad=0;return admActividad()}
     if(t.closest('#admin-more'))return admUsuarios(false);
+    if(t.closest('#admin-export'))return admExport();
+    if(n=t.closest('[data-acc]'))return admAcceso(n);
+    if(n=t.closest('[data-copy]')){const u=adm.users[n.dataset.copy];if(u)admCopy(admReminder(u)).then(()=>toast('Recordatorio copiado. Pégalo en WhatsApp.'));return}
     if(n=t.closest('.user-row'))return admToggleUser(n.dataset.uid);
     if(n=t.closest('[data-adm-user]')){adm.q=n.dataset.admUser;$('admin-q').value=adm.q;adm.filter='todos';$$('#admin-filters button').forEach(b=>b.classList.toggle('active',b.dataset.aflt==='todos'));admTab('usuarios');return admUsuarios(true)}
   });
