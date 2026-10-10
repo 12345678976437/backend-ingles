@@ -1277,9 +1277,9 @@ def sessions_today(user_id):
         return 0
     try:
         start = datetime.now(timezone.utc).date().isoformat()
-        rows = (client.table("learning_sessions").select("id").eq("user_id", user_id)
-                .gte("created_at", start).limit(50).execute()).data or []
-        return len(rows)
+        rows = (client.table("learning_sessions").select("id,kind").eq("user_id", user_id)
+                .gte("created_at", start).limit(80).execute()).data or []
+        return sum(1 for r in rows if r.get("kind") != "plan_bonus")
     except Exception:
         return 0
 
@@ -1497,12 +1497,14 @@ def build_exercises(unit, lessons, recipe, rng, diff=0, extra_words=None):
 
     for n, kind in enumerate(recipe):
         ex = None
-        if kind in ("pick_meaning", "pick_word", "listen_pick"):
+        if kind in ("pick_meaning", "pick_word", "listen_pick", "type_translate"):
             w = word_cycle.next()
             if not w:
                 continue
             ref = {"en": w["en"], "es": w["es"]}
-            if kind == "pick_word":
+            if kind == "type_translate":
+                ex = {"type": "type_translate", "q": w["es"], "answer": w["en"], "ref": ref}
+            elif kind == "pick_word":
                 d = _distractors(rng, w, unit_words, 3, key=lambda x: x["en"])
                 opts = [w["en"]] + [x["en"] for x in d]
                 rng.shuffle(opts)
@@ -3608,7 +3610,7 @@ def learning_path_complete():
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
     kind = (body.get("kind") or "lesson").strip()
-    if kind not in ("lesson", "review", "sound"):
+    if kind not in ("lesson", "review", "sound", "focus"):
         return json_error("Tipo de sesión no válido.")
     try:
         seconds = max(0, min(7200, int(body.get("seconds") or 0)))
@@ -3676,9 +3678,11 @@ def learning_path_complete():
             if unit_completed:
                 unit_bonus = 30
                 xp += unit_bonus
-    else:  # review
+    else:  # review / focus
         if seconds >= 15 and total >= 6:
             xp = 10
+        if kind == "focus":
+            unit_code, lesson_id = "focus", (lesson_id if lesson_id in FOCUS_SKILLS else "mixed")
 
     if xp:
         award_xp(user.id, xp)
@@ -3691,11 +3695,187 @@ def learning_path_complete():
         next_step = _path_for_user(user.id)[5]
     except Exception as exc:
         print(f"[LEARNING NEXT] {exc}")
+    plan_bonus = 0
+    try:
+        plan = _daily_plan(user.id)
+        if plan["complete"] and not plan["bonus"]["claimed"]:
+            award_xp(user.id, PLAN_BONUS_XP)
+            _log_session(user.id, "plan_bonus", None, None, 100, 0, PLAN_BONUS_XP, [], 0)
+            plan_bonus = PLAN_BONUS_XP
+    except Exception as exc:
+        print(f"[DAILY PLAN BONUS] {exc}")
     return jsonify({
         "ok": True, "kind": kind, "score": score, "best": best, "stars": stars, "passed": passed,
         "first_time": first_time, "xp": xp, "unit_bonus": unit_bonus, "unit_completed": unit_completed,
-        "mistakes": len(mistakes), "next": next_step,
+        "mistakes": len(mistakes), "next": next_step, "plan_bonus": plan_bonus,
     })
+
+
+# ---------------------------------------------------------------------------
+#  Plan diario personalizado + práctica enfocada (se abre desde los resultados de cada herramienta)
+# ---------------------------------------------------------------------------
+FOCUS_SKILLS = ("speaking", "listening", "writing", "reading", "vocabulary")
+FOCUS_LABELS = {"speaking": "Speaking", "listening": "Listening", "writing": "Writing",
+                "reading": "Reading", "vocabulary": "Vocabulary"}
+FOCUS_NOTES = {
+    "speaking": "Repeat phrases you already know until they flow. Fluency comes from rhythm, not speed.",
+    "listening": "Train your ear with words and phrases from your own lessons, plus the ones you missed.",
+    "writing": "Build and type sentences from your own lessons. Grammar sticks when you produce it.",
+    "reading": "Mixed comprehension practice using what you have learned and what you missed.",
+    "vocabulary": "Recall the words that gave you trouble, in different ways, until they stick.",
+}
+FOCUS_RECIPES = {
+    "listening": ["listen_pick", "type_listen", "listen_pick", "dialog", "type_listen", "listen_pick", "type_listen", "dialog"],
+    "writing": ["build", "fill", "type_translate", "build", "fill", "type_translate", "build", "fill"],
+    "reading": ["pick_meaning", "fill", "dialog", "match", "fill", "dialog", "pick_meaning", "fill"],
+    "vocabulary": ["pick_word", "pick_meaning", "match", "type_translate", "listen_pick", "pick_word", "type_translate", "match"],
+    "speaking": ["speak", "speak", "speak", "speak", "speak"],
+}
+PLAN_BONUS_XP = 15
+
+
+def _skill_scores(user_id):
+    client = supabase_admin or supabase
+    tables = {"speaking": ("historial_pronunciacion", "puntuacion_global"),
+              "listening": ("historial_dictado", "calificacion"),
+              "reading": ("historial_lectura", "calificacion"),
+              "writing": ("historial_escritura", "calificacion")}
+    out = {}
+    if not client:
+        return out
+    for key, (table, col) in tables.items():
+        try:
+            rows = (client.table(table).select(col).eq("user_id", user_id)
+                    .order("created_at", desc=True).limit(10).execute()).data or []
+            vals = [r[col] for r in rows if r.get(col) is not None]
+            if vals:
+                out[key] = round(sum(vals) / len(vals))
+        except Exception as exc:
+            print(f"[SKILL SCORES:{table}] {exc}")
+    return out
+
+
+def _weakest_skill(scores):
+    if scores:
+        return min(scores, key=lambda k: scores[k])
+    return ["speaking", "listening", "writing", "reading"][datetime.now(timezone.utc).weekday() % 4]
+
+
+def _focus_sources(user_id):
+    """Lecciones que la persona ya vio (o las primeras de su nivel si aún no hay ninguna)."""
+    prof, level_rank, progress, gems, sections, nxt = _path_for_user(user_id)
+    done = []
+    for (ucode, lid), _row in progress.items():
+        u = get_unit(ucode)
+        l = get_lesson(u, lid) if u else None
+        if l:
+            done.append((u, l))
+    random.shuffle(done)
+    chosen = done[:6]
+    if not chosen and nxt:
+        u = get_unit(nxt["unit_code"])
+        chosen = [(u, l) for l in u["lessons"][:2]]
+    if not chosen:
+        u = LEARNING_UNITS[0]
+        chosen = [(u, l) for l in u["lessons"][:2]]
+    units = {}
+    for u, _l in chosen:
+        units[u["code"]] = u
+    pseudo = {"lessons": [l for u in units.values() for l in u["lessons"]], "level": chosen[0][0]["level"]}
+    return pseudo, [l for _u, l in chosen], level_rank
+
+
+def build_focus(user_id, skill):
+    if skill == "speaking":
+        stats = phoneme_stats(user_id, limit=15)
+        weak = sorted((v["avg"], k) for k, v in stats.items() if v["samples"] >= 2 and v["avg"] < 80)
+        if weak:
+            sid = weak[0][1]
+            return {"mode": "sound", "skill": skill, "sound": sound_info(sid), "avg": weak[0][0]}
+    pseudo, lessons, level_rank = _focus_sources(user_id)
+    mistakes = [m for m in recent_mistakes(user_id) if m.get("es")]
+    extra = [{"en": m["en"], "es": m["es"], "emoji": ""} for m in mistakes[:6]]
+    rng = random.Random(time.time_ns())
+    diff = level_rank - LEVEL_TO_RANK.get(pseudo["level"], 0)
+    diff = -1 if diff < 0 else (1 if diff > 0 else 0)
+    ex = build_exercises(pseudo, lessons, FOCUS_RECIPES[skill], rng, diff=diff, extra_words=extra)
+    return {"mode": "exercises", "skill": skill, "title": "Focus: " + FOCUS_LABELS[skill], "note": FOCUS_NOTES[skill],
+            "teach": [], "exercises": ex, "challenge": False, "unit_code": "focus", "lesson_id": skill,
+            "from_mistakes": len(extra)}
+
+
+def _today_sessions(user_id):
+    client = supabase_admin or supabase
+    if not client:
+        return []
+    try:
+        start = datetime.now(timezone.utc).date().isoformat()
+        return (client.table("learning_sessions").select("kind,score,xp,created_at").eq("user_id", user_id)
+                .gte("created_at", start).limit(80).execute()).data or []
+    except Exception:
+        return []
+
+
+def _daily_plan(user_id):
+    prof, level_rank, progress, gems, sections, nxt = _path_for_user(user_id)
+    scores = _skill_scores(user_id)
+    weakest = _weakest_skill(scores)
+    mistakes = recent_mistakes(user_id)
+    sessions = _today_sessions(user_id)
+
+    def did(kinds, need_pass=False):
+        for r in sessions:
+            if r.get("kind") in kinds and ((r.get("xp") or 0) > 0 or (r.get("score") or 0) >= PASS_THRESHOLD):
+                return True
+        return False
+
+    steps = []
+    if mistakes or progress:
+        steps.append({"id": "warmup", "kind": "review", "icon": "🔁", "title": "Warm-up: tricky words",
+                      "desc": (str(len(mistakes)) + " items to refresh") if mistakes else "Refresh what you learned",
+                      "done": did(("review",))})
+    sc = scores.get(weakest)
+    steps.append({"id": "focus", "kind": "focus", "skill": weakest, "icon": "🎯", "title": "Focus: " + FOCUS_LABELS[weakest],
+                  "desc": ("Your lowest skill lately · " + str(sc) + "%") if sc is not None else "Build this skill today",
+                  "done": did(("focus", "sound"))})
+    if nxt:
+        steps.append({"id": "lesson", "kind": "lesson", "icon": "🚀", "title": nxt["lesson_title"],
+                      "desc": nxt["unit_title"], "unit_code": nxt["unit_code"], "lesson_id": nxt["lesson_id"],
+                      "done": did(("lesson",))})
+    claimed = any(r.get("kind") == "plan_bonus" for r in sessions)
+    complete = bool(steps) and all(s["done"] for s in steps)
+    return {"steps": steps, "done": sum(1 for s in steps if s["done"]), "total": len(steps), "complete": complete,
+            "bonus": {"xp": PLAN_BONUS_XP, "claimed": claimed}, "scores": scores, "weakest": weakest}
+
+
+@app.get("/api/learning-path/daily-plan")
+def learning_path_daily_plan():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    try:
+        return jsonify({"ok": True, **_daily_plan(user.id)})
+    except Exception as exc:
+        print(f"[DAILY PLAN] {exc}")
+        return json_error("No se pudo preparar tu plan de hoy.", 500)
+
+
+@app.get("/api/learning-path/focus")
+def learning_path_focus():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    skill = (request.args.get("skill") or "").strip().lower()
+    if skill not in FOCUS_SKILLS:
+        return json_error("Habilidad no válida.")
+    try:
+        data = build_focus(user.id, skill)
+    except Exception as exc:
+        print(f"[FOCUS] {exc}")
+        return json_error("No se pudo preparar tu práctica personalizada.", 500)
+    if data["mode"] == "exercises" and not data["exercises"]:
+        return json_error("No se pudo preparar tu práctica personalizada.", 500)
+    return jsonify({"ok": True, **data})
 
 
 @app.get("/api/vocabulario")
