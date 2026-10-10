@@ -18,7 +18,7 @@ except Exception:  # pragma: no cover
     ZoneInfo = None
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, g
 from flask_cors import CORS
 from openai import OpenAI
 from pydub import AudioSegment
@@ -93,6 +93,8 @@ if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY:
 
 def json_error(message, status=400, **extra):
     payload = {"ok": False, "error": message}
+    if status == 429 and getattr(g, "limit_info", None):
+        payload["limite"] = g.limit_info        # el frontend lo usa para mostrar el aviso de plan
     payload.update(extra)
     return jsonify(payload), status
 
@@ -142,7 +144,6 @@ RATE_RULES = {
     "/api/writing/challenge": (30, 3600),
     "/api/vocabulario/diario": (20, 3600),
 }
-DAILY_AI_LIMIT = int(env("DAILY_AI_LIMIT", "400") or 400)   # llamadas de IA por usuario al día
 GENERAL_PER_MINUTE = 120                                      # cualquier endpoint, por usuario
 _rate_lock = threading.Lock()
 _rate_hits = {}
@@ -167,8 +168,282 @@ def _rate_hit(key, limit, window):
         return True, 0
 
 
+# ---------------------------------------------------------------------------
+# PLANES Y CRÉDITOS (como Claude: una cuota que se renueva cada 5 horas + un tope diario).
+# Cada acción con IA gasta créditos. Cuando se acaban, el alumno espera a que se renueve
+# o sube de plan. Todo se puede ajustar aquí o con variables de entorno en Render.
+#   ventana = créditos cada 5 horas   |   dia = créditos cada 24 horas
+# ---------------------------------------------------------------------------
+WINDOW_SECONDS = 5 * 3600
+PLANS = {
+    "gratis": {"nombre": "Prueba gratis", "precio": 0,
+               "ventana": int(env("PLAN_GRATIS_VENTANA", "10") or 10), "dia": int(env("PLAN_GRATIS_DIA", "25") or 25)},
+    "basico": {"nombre": "Básico", "precio": int(env("PRICE_BASICO_MXN", "79") or 79),
+               "ventana": int(env("PLAN_BASICO_VENTANA", "40") or 40), "dia": int(env("PLAN_BASICO_DIA", "120") or 120)},
+    "pro":    {"nombre": "Pro", "precio": int(env("PRICE_PRO_MXN", "149") or 149),
+               "ventana": int(env("PLAN_PRO_VENTANA", "100") or 100), "dia": int(env("PLAN_PRO_DIA", "300") or 300)},
+    "max":    {"nombre": "Max", "precio": int(env("PRICE_MAX_MXN", "299") or 299),
+               "ventana": int(env("PLAN_MAX_VENTANA", "250") or 250), "dia": int(env("PLAN_MAX_DIA", "700") or 700)},
+}
+# Cuánto cuesta cada acción (lo caro de Azure cuesta más créditos; 1 crédito ≈ 1 mensaje al tutor).
+CREDIT_COST = {
+    "/api/tutor": 1, "/api/resumen-llamada": 3, "/api/transcribir-audio": 1,
+    "/api/sintetizar-audio": 0.1,
+    "/analizar-escritura": 2, "/evaluar-lectura": 2, "/evaluar-dictado": 1.5,
+    "/analizar-audio-real": 2, "/api/assess-reading": 2, "/api/assess-unscripted": 2,
+    "/nueva-frase": 0.5, "/nuevo-tema-libre": 0.5, "/nuevo-trabalenguas": 0.5,
+    "/nuevo-texto-lectura": 1, "/nuevo-dictado": 1, "/api/writing/challenge": 1,
+    "/api/vocabulario/diario": 1,
+}
+# Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
+# la prueba gratis se pausa (los que pagan siguen). Protege tu saldo de Azure.
+GLOBAL_DAILY_CREDITS = float(env("GLOBAL_DAILY_CREDITS", "6000") or 6000)
+# Tope diario sólo para pruebas gratis (en conjunto), por si llega mucha gente nueva de golpe.
+FREE_GLOBAL_DAILY_CREDITS = float(env("FREE_GLOBAL_DAILY_CREDITS", "2500") or 2500)
+
+_use = {}                      # uid -> deque[(timestamp, costo)]
+_use_loaded = set()
+_global_use = deque()          # (timestamp, costo, es_gratis)
+_use_table_ok = True
+_profile_cache = {}            # uid -> (expira, datos)
+_plan_col_ok = True
+
+
+import copy
+CONFIG_TABLE = "config_app"
+_DEFAULT_CFG = None
+_cfg_loaded = False
+_cfg_saved_ok = None
+
+
+def _current_config():
+    return {
+        "planes": {k: {"precio": v["precio"], "ventana": v["ventana"], "dia": v["dia"]} for k, v in PLANS.items()},
+        "costos": dict(CREDIT_COST),
+        "global_dia": GLOBAL_DAILY_CREDITS,
+        "gratis_global_dia": FREE_GLOBAL_DAILY_CREDITS,
+    }
+
+
+def _apply_config(cfg):
+    """Aplica una configuración (ya validada) a los límites en vivo."""
+    global GLOBAL_DAILY_CREDITS, FREE_GLOBAL_DAILY_CREDITS
+    for k, v in (cfg.get("planes") or {}).items():
+        if k in PLANS and isinstance(v, dict):
+            for f in ("precio", "ventana", "dia"):
+                if f in v:
+                    PLANS[k][f] = int(v[f])
+    for path, c in (cfg.get("costos") or {}).items():
+        if path in CREDIT_COST:
+            CREDIT_COST[path] = float(c)
+    if "global_dia" in cfg:
+        GLOBAL_DAILY_CREDITS = float(cfg["global_dia"])
+    if "gratis_global_dia" in cfg:
+        FREE_GLOBAL_DAILY_CREDITS = float(cfg["gratis_global_dia"])
+
+
+def _validate_config(raw):
+    """Devuelve (config_limpia, error)."""
+    if not isinstance(raw, dict):
+        return None, "Configuración inválida."
+    out = {"planes": {}, "costos": {}}
+    for k, v in (raw.get("planes") or {}).items():
+        if k not in PLANS or not isinstance(v, dict):
+            continue
+        clean = {}
+        for f, hi in (("precio", 100000), ("ventana", 100000), ("dia", 1000000)):
+            if f in v:
+                try:
+                    n = int(float(v[f]))
+                except (TypeError, ValueError):
+                    return None, f"Número inválido en {PLANS[k]['nombre']} · {f}."
+                if n < 0 or n > hi:
+                    return None, f"{PLANS[k]['nombre']} · {f} debe estar entre 0 y {hi}."
+                clean[f] = n
+        if clean.get("dia") is not None and clean.get("ventana") is not None and clean["ventana"] > clean["dia"]:
+            return None, f"{PLANS[k]['nombre']}: los mensajes por 5 h no pueden superar los del día."
+        out["planes"][k] = clean
+    for p, c in (raw.get("costos") or {}).items():
+        if p not in CREDIT_COST:
+            continue
+        try:
+            n = float(c)
+        except (TypeError, ValueError):
+            return None, f"Costo inválido en {p}."
+        if n < 0 or n > 50:
+            return None, f"El costo de {p} debe estar entre 0 y 50."
+        out["costos"][p] = round(n, 2)
+    for key in ("global_dia", "gratis_global_dia"):
+        if key in raw:
+            try:
+                n = float(raw[key])
+            except (TypeError, ValueError):
+                return None, "Tope global inválido."
+            if n < 0 or n > 10000000:
+                return None, "Tope global fuera de rango."
+            out[key] = n
+    return out, None
+
+
+def _load_config():
+    """Una sola vez por arranque: lee lo que guardaste desde el panel de admin (si existe la tabla)."""
+    global _cfg_loaded, _DEFAULT_CFG, _cfg_saved_ok
+    if _cfg_loaded:
+        return
+    _cfg_loaded = True
+    _DEFAULT_CFG = copy.deepcopy(_current_config())
+    client = supabase_admin or supabase
+    if not client:
+        return
+    try:
+        rows = client.table(CONFIG_TABLE).select("value").eq("key", "planes").limit(1).execute().data or []
+        if rows and isinstance(rows[0].get("value"), dict):
+            cfg, err = _validate_config(rows[0]["value"])
+            if not err:
+                _apply_config(cfg)
+                print("[PLAN] Configuración de planes cargada desde la base de datos.")
+        _cfg_saved_ok = True
+    except Exception as exc:
+        _cfg_saved_ok = False
+        print(f"[PLAN] Sin tabla {CONFIG_TABLE}: se usan los valores por defecto ({str(exc)[:100]}).")
+
+
+def _save_config():
+    """Guarda la configuración actual. Devuelve un aviso si no se pudo guardar de forma permanente."""
+    global _cfg_saved_ok
+    client = supabase_admin or supabase
+    try:
+        client.table(CONFIG_TABLE).upsert({"key": "planes", "value": _current_config(),
+                                           "updated_at": datetime.now(timezone.utc).isoformat()}).execute()
+        _cfg_saved_ok = True
+        return None
+    except Exception as exc:
+        _cfg_saved_ok = False
+        return (f"Se aplicó ahora mismo, pero NO quedó guardado: si Render reinicia, vuelve a los valores de antes. "
+                f"Crea la tabla {CONFIG_TABLE} con planes_y_uso.sql ({str(exc)[:80]}).")
+
+
+def _fmt_wait(sec):
+    sec = max(60, int(sec))
+    h, m = sec // 3600, (sec % 3600) // 60
+    if h and m:
+        return f"{h} h {m} min"
+    return f"{h} h" if h else f"{m} min"
+
+
+def _profile_access(uid, fresh=False):
+    """Perfil mínimo del usuario (acceso + plan). Se guarda 30 s para no consultar la base en cada petición."""
+    global _plan_col_ok
+    now = time.time()
+    hit = _profile_cache.get(uid)
+    if hit and hit[0] > now and not fresh:
+        return hit[1]
+    client = supabase_admin or supabase
+    data = {}
+    for cols in (("is_subscribed,trial_ends_at,plan" if _plan_col_ok else None), "is_subscribed,trial_ends_at"):
+        if not cols:
+            continue
+        try:
+            res = client.table("profiles").select(cols).eq("id", uid).limit(1).execute()
+            rows = getattr(res, "data", None) or []
+            data = rows[0] if rows else {}
+            break
+        except Exception as exc:
+            if "plan" in cols and "plan" in str(exc).lower():
+                _plan_col_ok = False
+                print("[PLAN] La columna profiles.plan no existe todavía; todos los de pago se tratan como Básico.")
+                continue
+            raise
+    if len(_profile_cache) > 5000:
+        _profile_cache.clear()
+    _profile_cache[uid] = (now + 30, data)
+    return data
+
+
+def plan_key(profile):
+    if profile and profile.get("is_subscribed"):
+        p = str(profile.get("plan") or "basico").strip().lower()
+        return p if p in PLANS else "basico"
+    return "gratis"
+
+
+def _load_usage(uid):
+    """Tras un reinicio del servidor recupera el consumo de las últimas 24 h (si existe la tabla uso_ia)."""
+    global _use_table_ok
+    if uid in _use_loaded:
+        return
+    _use_loaded.add(uid)
+    q = _use.setdefault(uid, deque())
+    if not _use_table_ok:
+        return
+    client = supabase_admin or supabase
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        rows = (client.table("uso_ia").select("costo,created_at").eq("user_id", uid)
+                .gte("created_at", since).order("created_at").limit(2000).execute()).data or []
+        loaded = []
+        for r in rows:
+            ts = _parse_ts(r.get("created_at"))
+            if ts:
+                loaded.append((ts.timestamp(), float(r.get("costo") or 0)))
+        merged = sorted(loaded + list(q))
+        q.clear()
+        q.extend(merged)
+    except Exception as exc:
+        _use_table_ok = False
+        print(f"[USO] Tabla uso_ia no disponible (los límites siguen funcionando en memoria): {str(exc)[:120]}")
+
+
+def _persist_usage(uid, cost):
+    if not _use_table_ok:
+        return
+    def _w():
+        global _use_table_ok
+        try:
+            (supabase_admin or supabase).table("uso_ia").insert({"user_id": uid, "costo": cost}).execute()
+        except Exception as exc:
+            _use_table_ok = False
+            print(f"[USO] No se pudo guardar el consumo: {str(exc)[:120]}")
+    threading.Thread(target=_w, daemon=True).start()
+
+
+def usage_snapshot(uid, plan):
+    now = time.time()
+    _load_usage(uid)
+    q = _use.setdefault(uid, deque())
+    while q and now - q[0][0] > 86400:
+        q.popleft()
+    p = PLANS[plan]
+    used_w = sum(c for t, c in q if now - t < WINDOW_SECONDS)
+    used_d = sum(c for t, c in q)
+    def reset_after(limit, window, used):
+        oldest = [t for t, c in q if now - t < window]
+        return int(min(oldest) + window - now) if oldest else 0
+    return {
+        "plan": plan, "plan_nombre": p["nombre"],
+        "ventana": {"usado": round(used_w, 2), "limite": p["ventana"], "reinicia_seg": reset_after(p["ventana"], WINDOW_SECONDS, used_w)},
+        "dia": {"usado": round(used_d, 2), "limite": p["dia"], "reinicia_seg": reset_after(p["dia"], 86400, used_d)},
+    }
+
+
+def _wait_to_fit(q, now, window, limit, cost):
+    """Segundos hasta que haya espacio para `cost` créditos más dentro de `window`."""
+    used = sum(c for t, c in q if now - t < window)
+    need = used + cost - limit
+    freed = 0.0
+    for t, c in q:
+        if now - t >= window:
+            continue
+        freed += c
+        if freed >= need:
+            return int(t + window - now) + 1
+    return window
+
+
 def check_rate_limit(user):
     """Devuelve None si todo bien, o un mensaje de error (429)."""
+    g.limit_info = None
+    _load_config()
     if is_admin_user(user):
         return None
     uid = getattr(user, "id", "anon")
@@ -176,20 +451,65 @@ def check_rate_limit(user):
     if not ok:
         return f"Vas muy rápido. Espera {wait} segundos e inténtalo de nuevo."
     rule = RATE_RULES.get(request.path)
-    if rule:
-        ok, wait = _rate_hit((uid, request.path), rule[0], rule[1])
-        if not ok:
-            return f"Alcanzaste el límite de esta actividad por ahora. Vuelve a intentarlo en {max(1, wait // 60)} min."
-        try:
-            fast_clip = request.path == "/analizar-audio-real" and request.form.get("fast") in ("1", "true")
-        except Exception:
-            fast_clip = False
-        if fast_clip:
-            return None  # los audios rápidos de las lecciones no usan IA, así que no cuentan para el límite diario
-        ok, wait = _rate_hit((uid, "dia-ia"), DAILY_AI_LIMIT, 86400)
-        if not ok:
-            return "Alcanzaste el límite diario de práctica con IA. Vuelve mañana."
+    if not rule:
+        return None
+    ok, wait = _rate_hit((uid, request.path), rule[0], rule[1])
+    if not ok:
+        return f"Alcanzaste el límite de esta actividad por ahora. Vuelve a intentarlo en {max(1, wait // 60)} min."
+    try:
+        fast_clip = request.path == "/analizar-audio-real" and request.form.get("fast") in ("1", "true")
+    except Exception:
+        fast_clip = False
+    if fast_clip:
+        return None  # los audios rápidos de las lecciones no usan IA, así que no cuentan
+    cost = CREDIT_COST.get(request.path, 1)
+    try:
+        plan = plan_key(_profile_access(uid))
+    except Exception as exc:
+        print(f"[PLAN] {exc}")
+        plan = "gratis"
+    p = PLANS[plan]
+    now = time.time()
+    _load_usage(uid)
+    q = _use.setdefault(uid, deque())
+    while q and now - q[0][0] > 86400:
+        q.popleft()
+    while _global_use and now - _global_use[0][0] > 86400:
+        _global_use.popleft()
+
+    # 1) Interruptores globales (protegen tu dinero de Azure)
+    g_total = sum(c for _, c, _f in _global_use)
+    g_free = sum(c for _, c, f in _global_use if f)
+    if plan == "gratis" and (g_total >= GLOBAL_DAILY_CREDITS or g_free >= FREE_GLOBAL_DAILY_CREDITS):
+        g.limit_info = {"tipo": "alta_demanda", "plan": plan, "plan_nombre": p["nombre"], "reinicia_seg": 3600}
+        return ("Hay muchísima gente practicando ahora y las pruebas gratis están en pausa un rato. "
+                "Vuelve en un rato o activa un plan para seguir sin esperar.")
+    if g_total >= GLOBAL_DAILY_CREDITS * 1.5:
+        g.limit_info = {"tipo": "alta_demanda", "plan": plan, "plan_nombre": p["nombre"], "reinicia_seg": 3600}
+        return "El servicio está con mucha demanda. Inténtalo de nuevo en un rato."
+
+    # 2) Cuota por plan: ventana de 5 horas y tope del día
+    used_w = sum(c for t, c in q if now - t < WINDOW_SECONDS)
+    used_d = sum(c for t, c in q)
+    if used_d + cost > p["dia"]:
+        wait = _wait_to_fit(q, now, 86400, p["dia"], cost)
+        g.limit_info = {"tipo": "dia", "plan": plan, "plan_nombre": p["nombre"], "reinicia_seg": wait, **_limit_extra(plan)}
+        return f"Llegaste a tu límite diario del plan {p['nombre']}. Se renueva en {_fmt_wait(wait)}."
+    if used_w + cost > p["ventana"]:
+        wait = _wait_to_fit(q, now, WINDOW_SECONDS, p["ventana"], cost)
+        g.limit_info = {"tipo": "ventana", "plan": plan, "plan_nombre": p["nombre"], "reinicia_seg": wait, **_limit_extra(plan)}
+        return f"Usaste todos tus mensajes de estas 5 horas del plan {p['nombre']}. Se renuevan en {_fmt_wait(wait)}."
+
+    q.append((now, cost))
+    _global_use.append((now, cost, plan == "gratis"))
+    _persist_usage(uid, cost)
     return None
+
+
+def _limit_extra(plan):
+    order = ["gratis", "basico", "pro", "max"]
+    nxt = order[order.index(plan) + 1] if plan != "max" else None
+    return {"siguiente_plan": nxt, "siguiente_nombre": PLANS[nxt]["nombre"] if nxt else None}
 
 
 def authenticated_user(require_subscription=True):
@@ -212,15 +532,7 @@ def authenticated_user(require_subscription=True):
 
     if require_subscription and not is_admin_user(user):
         try:
-            client = supabase_admin or supabase
-            profile = (
-                client.table("profiles")
-                .select("is_subscribed,trial_ends_at")
-                .eq("id", user.id)
-                .maybe_single()
-                .execute()
-            )
-            data = profile.data or {}
+            data = _profile_access(user.id)
             if not has_active_access(data):
                 return None, ("Tu acceso todavía no está activo.", 403)
         except Exception as exc:
@@ -1808,6 +2120,20 @@ def save_onboarding():
         return json_error(f"No se pudo guardar tu información: {exc}", 500)
 
 
+@app.get("/api/uso")
+def my_usage():
+    """Consumo del alumno: cuántos créditos lleva en esta ventana de 5 h y hoy, y cuándo se renuevan."""
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    if is_admin_user(user):
+        return jsonify({"ok": True, "ilimitado": True, "plan": "max", "plan_nombre": "Administrador"})
+    plan = plan_key(_profile_access(user.id, fresh=True))
+    snap = usage_snapshot(user.id, plan)
+    planes = [{"id": k, "nombre": v["nombre"], "precio": v["precio"], "ventana": v["ventana"], "dia": v["dia"]} for k, v in PLANS.items()]
+    return jsonify({"ok": True, **snap, "planes": planes, "ventana_horas": 5})
+
+
 @app.get("/api/session")
 def session_info():
     user, error = authenticated_user(require_subscription=False)
@@ -2927,12 +3253,70 @@ def admin_usuario(uid):
                             .eq("user_id", uid).order("created_at", desc=True).limit(10).execute().data or [])
             except Exception as exc:
                 warns.append(f"{LOG_TABLE}: {exc}")
+        plan_u, uso_u = "gratis", None
+        try:
+            plan_u = plan_key(_profile_access(uid, fresh=True))
+            _load_usage(uid)
+            uso_u = usage_snapshot(uid, plan_u)
+        except Exception as exc:
+            warns.append(f"plan: {str(exc)[:80]}")
         return jsonify({"ok": True, "usuario": _user_json(u), "recientes": recientes, "palabras": palabras,
                         "soporte": soporte, "acciones": acciones, "registro_activo": ds.get("log_ok", False),
-                        "warnings": warns})
+                        "plan": plan_u, "uso": uso_u, "warnings": warns})
     except Exception as exc:
         print(f"[ADMIN usuario] {exc}")
         return json_error(f"No se pudo cargar el usuario: {exc}", 500)
+
+
+@app.get("/api/admin/planes")
+def admin_planes_get():
+    admin, err = admin_guard()
+    if err:
+        return err
+    _load_config()
+    now = time.time()
+    while _global_use and now - _global_use[0][0] > 86400:
+        _global_use.popleft()
+    total = round(sum(c for _, c, _f in _global_use), 1)
+    gratis = round(sum(c for _, c, f in _global_use if f), 1)
+    users = (admin_dataset().get("users") or {}) if True else {}
+    top = []
+    for uid, q in list(_use.items()):
+        cons = round(sum(c for t, c in q if now - t < 86400), 1)
+        if cons > 0:
+            top.append({"id": uid, "email": (users.get(uid) or {}).get("email") or uid[:8], "creditos": cons,
+                        "plan": plan_key((_profile_cache.get(uid) or (0, {}))[1])})
+    top.sort(key=lambda x: -x["creditos"])
+    return jsonify({"ok": True, "config": _current_config(), "defecto": _DEFAULT_CFG,
+                    "nombres": {k: v["nombre"] for k, v in PLANS.items()},
+                    "guardado_permanente": _cfg_saved_ok, "ventana_horas": WINDOW_SECONDS // 3600,
+                    "hoy": {"total": total, "gratis": gratis, "tope_total": GLOBAL_DAILY_CREDITS, "tope_gratis": FREE_GLOBAL_DAILY_CREDITS,
+                            "pausa_gratis": gratis >= FREE_GLOBAL_DAILY_CREDITS or total >= GLOBAL_DAILY_CREDITS},
+                    "top": top[:12]})
+
+
+@app.post("/api/admin/planes")
+def admin_planes_set():
+    admin, err = admin_guard()
+    if err:
+        return err
+    _load_config()
+    body = request.get_json(silent=True) or {}
+    if body.get("restaurar") is True:
+        cfg = copy.deepcopy(_DEFAULT_CFG)
+    else:
+        cfg, bad = _validate_config(body.get("config"))
+        if bad:
+            return json_error(bad, 400)
+    _apply_config(cfg)
+    _profile_cache.clear()
+    aviso = _save_config()
+    try:
+        notify_telegram(f"🔧 Admin {getattr(admin, 'email', '')} cambió los planes/límites.")
+    except Exception:
+        pass
+    return jsonify({"ok": True, "mensaje": "Planes y límites actualizados.", "config": _current_config(),
+                    "aviso": aviso, "guardado_permanente": _cfg_saved_ok})
 
 
 @app.post("/api/admin/usuario/<uid>/acceso")
@@ -2945,7 +3329,7 @@ def admin_acceso(uid):
     if body.get("confirmar") is not True:
         return json_error("Falta confirmar la acción.", 400)
     accion = (body.get("accion") or "").strip()
-    if accion not in ("activar", "renovar", "desactivar", "extender_prueba"):
+    if accion not in ("activar", "renovar", "desactivar", "extender_prueba", "cambiar_plan", "reiniciar_uso"):
         return json_error("Acción no válida.", 400)
     try:
         dias = int(body.get("dias") or 30)
@@ -2964,13 +3348,31 @@ def admin_acceso(uid):
         perfil = rows[0]
         now = datetime.now(timezone.utc)
         vence, payload = None, {}
-        if accion in ("activar", "renovar"):
+        if accion == "reiniciar_uso":
+            _use[uid] = deque()
+            _use_loaded.add(uid)
+            try:
+                client.table("uso_ia").delete().eq("user_id", uid).execute()
+            except Exception as exc:
+                print(f"[USO] reinicio sin tabla: {str(exc)[:100]}")
+            return jsonify({"ok": True, "mensaje": "Cuota reiniciada: el alumno vuelve a tener todos sus mensajes."})
+        if accion == "cambiar_plan":
+            plan_nuevo = str(body.get("plan") or "").strip().lower()
+            if plan_nuevo not in PLANS or plan_nuevo == "gratis":
+                return json_error("Elige Básico, Pro o Max.", 400)
+            if not _plan_col_ok:
+                return json_error("Falta la columna profiles.plan: ejecuta planes_y_uso.sql en Supabase.", 500)
+            payload = {"plan": plan_nuevo}
+        elif accion in ("activar", "renovar"):
             base = now
             prev = (admin_dataset().get("users", {}).get(uid) or {}).get("vence_pago")
             if accion == "renovar" and prev and prev > now:
                 base = prev                      # renovar a tiempo suma días al vencimiento actual
             vence = base + timedelta(days=dias)
             payload = {"is_subscribed": True}
+            plan_nuevo = str(body.get("plan") or "").strip().lower()
+            if plan_nuevo in PLANS and plan_nuevo != "gratis" and _plan_col_ok:
+                payload["plan"] = plan_nuevo
         elif accion == "desactivar":
             payload = {"is_subscribed": False}
         else:
@@ -2978,6 +3380,7 @@ def admin_acceso(uid):
             base = actual if actual and actual > now else now
             payload = {"trial_ends_at": (base + timedelta(days=dias)).isoformat()}
         upd = client.table("profiles").update(payload).eq("id", uid).execute()
+        _profile_cache.pop(uid, None)
         if not (getattr(upd, "data", None) or []):
             return json_error("No se pudo actualizar el perfil (no se modificó ninguna fila).", 500)
 
@@ -2986,7 +3389,7 @@ def admin_acceso(uid):
         try:
             client.table(LOG_TABLE).insert({
                 "admin_email": (getattr(admin, "email", "") or "").lower(), "user_id": uid, "user_email": correo,
-                "accion": accion, "dias": dias if accion != "desactivar" else None,
+                "accion": accion, "dias": dias if accion in ("activar", "renovar", "extender_prueba") else None,
                 "vence_at": vence.isoformat() if vence else None, "nota": nota or None,
             }).execute()
         except Exception as exc:
@@ -2994,12 +3397,13 @@ def admin_acceso(uid):
                      f"Crea la tabla {LOG_TABLE} con admin_acciones.sql ({exc}).")
         try:
             notify_telegram(f"🔧 Admin {getattr(admin, 'email', '')}: {accion} → {correo or uid}"
-                            + (f" ({dias} días)" if accion != "desactivar" else ""))
+                            + (f" ({dias} días)" if accion in ("activar", "renovar", "extender_prueba") else (f" → {payload.get('plan')}" if payload.get("plan") else "")))
         except Exception:
             pass
         ds = admin_dataset(force=True)
         u = ds["users"].get(uid)
-        textos = {"activar": f"Acceso de pago activado por {dias} días.", "renovar": f"Pago renovado: +{dias} días.",
+        textos = {"cambiar_plan": f"Plan cambiado a {PLANS[payload.get('plan', 'basico')]['nombre']}.",
+                  "activar": f"Acceso de pago activado por {dias} días.", "renovar": f"Pago renovado: +{dias} días.",
                   "desactivar": "Acceso de pago quitado.", "extender_prueba": f"Prueba extendida +{dias} días."}
         return jsonify({"ok": True, "mensaje": textos[accion], "usuario": _user_json(u) if u else None, "aviso": aviso})
     except Exception as exc:
@@ -3113,7 +3517,7 @@ def admin_sistema():
         "servidor": {
             "encendido_desde": datetime.fromtimestamp(SERVER_STARTED, timezone.utc).isoformat(),
             "uptime_seg": up, "python": platform.python_version(), "zona_horaria": str(LOCAL_TZ),
-            "precio_mxn": PRICE_MXN, "limite_ia_diario": DAILY_AI_LIMIT, "limite_general_min": GENERAL_PER_MINUTE,
+            "precio_mxn": PRICE_MXN, "planes": {k: {"precio": v["precio"], "ventana": v["ventana"], "dia": v["dia"]} for k, v in PLANS.items()}, "limite_general_min": GENERAL_PER_MINUTE,
             "audios_en_cache": tts, "contadores_de_limite": claves,
             "cache_panel_seg": int(time.time() - _admin_cache["t"]) if _admin_cache["data"] else None,
         },
