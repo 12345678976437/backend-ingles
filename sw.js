@@ -1,5 +1,5 @@
 /* Talvo · service worker (generado automáticamente). Cambia solo cuando cambian los archivos. */
-const VERSION='talvo-16dd3a5ce3';
+const VERSION='talvo-8269bfa343';
 const CORE=["./", "assets/img-039fa38f.webp", "assets/img-2aa8b477.webp", "assets/img-4145c7f0.png", "assets/img-4b463dd2.webp", "assets/img-5f908050.webp", "assets/img-66c6cea6.webp", "assets/img-a0344521.webp", "assets/img-ac1046cd.png", "assets/img-e38bc3f3.webp", "assets/img-f298199c.webp", "css/app.css", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "index.html", "js/app.js", "js/extras.js", "js/i18n.js", "js/path.js", "js/theme.js", "manifest.webmanifest"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==VERSION&&k.startsWith('talvo-')).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
