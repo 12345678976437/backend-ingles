@@ -3250,16 +3250,45 @@ def vocab_daily():
             .eq("fecha", today)
             .execute()
         ).data or []
-        if existing:
+        want_more = request.args.get("mas") in ("1", "true", "si")
+        if existing and not want_more:
             return jsonify({"ok": True, "palabras": existing})
+        # Máximo 4 tandas de 5 palabras al día (controla el costo de IA).
+        if existing and len(existing) >= 20:
+            return jsonify({"ok": True, "palabras": existing, "limite": True})
+
+        # Palabras que el alumno ya tiene: no se vuelven a ofrecer.
+        known = set()
+        try:
+            prev = (
+                client.table("vocabulario_usuario")
+                .select("palabra")
+                .eq("user_id", user.id)
+                .order("created_at", desc=True)
+                .limit(150)
+                .execute()
+            ).data or []
+            known = {(r.get("palabra") or "").strip().lower() for r in prev if r.get("palabra")}
+        except Exception as exc:
+            print(f"[VOCAB KNOWN] {exc}")
+        avoid = ", ".join(sorted(known)[:80])
 
         level = estimate_level(user.id) or "B1"
         data = ai_json(
-            "You create a short daily English vocabulary list for a learner. Return JSON only with exact key: palabras, an array of exactly 5 objects each with keys 'palabra' (the English word), 'significado' (short definition in Spanish), 'ejemplo' (one example sentence in English using the word).",
-            f"Student level: {level}. Give 5 useful, varied everyday words appropriate for this level.",
-            temperature=0.6,
+            "You create a short daily English vocabulary list for a learner. Return JSON only with exact key: palabras, an array of exactly 6 objects each with keys 'palabra' (the English word), 'significado' (short definition in Spanish), 'ejemplo' (one example sentence in English using the word). Never repeat a word from the avoid list.",
+            f"Student level: {level}. Give 6 useful, varied everyday words appropriate for this level. Avoid these words: {avoid or 'none'}.",
+            temperature=0.7,
         )
-        words = data.get("palabras", [])[:5]
+        words = []
+        seen_now = set(known)
+        for w in data.get("palabras", []):
+            key = (w.get("palabra") or "").strip().lower()
+            if not key or key in seen_now:
+                continue
+            seen_now.add(key)
+            words.append(w)
+            if len(words) == 5:
+                break
         inserted = []
         for w in words:
             row = {
@@ -3276,7 +3305,7 @@ def vocab_daily():
             except Exception as exc:
                 print(f"[VOCAB INSERT] {exc}")
                 inserted.append(row)
-        return jsonify({"ok": True, "palabras": inserted})
+        return jsonify({"ok": True, "palabras": existing + inserted})
     except Exception as exc:
         return json_error(f"No se pudieron generar las palabras del día: {exc}", 500)
 
@@ -3290,6 +3319,14 @@ def vocab_save():
     palabra = (body.get("palabra") or "").strip()
     if not palabra:
         return json_error("Falta la palabra.")
+    try:
+        _c = supabase_admin or supabase
+        dup = (_c.table("vocabulario_usuario").select("id").eq("user_id", user.id)
+               .ilike("palabra", palabra).limit(1).execute()).data or []
+        if dup:
+            return jsonify({"ok": True, "duplicada": True})
+    except Exception as exc:
+        print(f"[VOCAB DUP] {exc}")
     save_history("vocabulario_usuario", user.id, {
         "palabra": palabra,
         "significado": (body.get("significado") or "").strip(),
@@ -3893,6 +3930,21 @@ def vocab_list():
             .limit(200)
             .execute()
         ).data or []
+        # Una sola entrada por palabra (la más reciente); si alguna copia está aprendida, cuenta como aprendida.
+        unique, order = {}, []
+        for r in rows:
+            key = (r.get("palabra") or "").strip().lower()
+            if not key:
+                continue
+            if key not in unique:
+                unique[key] = dict(r)
+                order.append(key)
+            else:
+                if r.get("aprendida"):
+                    unique[key]["aprendida"] = True
+                if not unique[key].get("ejemplo") and r.get("ejemplo"):
+                    unique[key]["ejemplo"] = r["ejemplo"]
+        rows = [unique[k] for k in order]
         learned = sum(1 for r in rows if r.get("aprendida"))
         return jsonify({"ok": True, "palabras": rows, "total": len(rows), "aprendidas": learned})
     except Exception as exc:
