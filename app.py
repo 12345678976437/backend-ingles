@@ -664,6 +664,7 @@ def ai_json(system_prompt, user_prompt, temperature=0.7):
         ],
         temperature=temperature,
         response_format={"type": "json_object"},
+        timeout=100,
     )
     content = response.choices[0].message.content or "{}"
     return json.loads(content)
@@ -5347,27 +5348,54 @@ def route_create():
     lvl = {"beginner": "A1", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(prof.get("cefr_level"), "")
     asked = body.get("nivel") if body.get("nivel") in ("A1", "A2", "B1", "B2") else ""
     level = asked or lvl or "A2"
-    system = (
-        "You design personalized English micro-courses for a Spanish-speaking adult. Build the course around the learner's REAL situation (their product, job, trip or goal), "
-        "using the exact vocabulary and sentences they would actually need. " + _SAFE_SCENE + " If the request is unsafe, build a generic daily-life course instead.\n"
-        f"Create exactly {n} lessons that progress from essential vocabulary to full interactions. Target CEFR level: {level} (keep sentences short and useful).\n"
-        "Return JSON only: {title (<=40 chars, catchy, Spanish or English), emoji, level ('A1'|'A2'|'B1'|'B2'), summary_es (<=140 chars), "
-        "lessons: [{title (English, <=34 chars), note_es (a practical tip in Spanish, <=180 chars), "
-        "words: [8 objects {en (1-3 words), es (natural Mexican Spanish), emoji}], phrases: [6 objects {en (<=12 words, something the learner would really say), es}], "
-        "dialogs: [3 objects {q (a line the OTHER person says), a (the best natural reply by the learner), wrong: [2 plausible but wrong or unnatural replies]}]}], "
-        "roleplay: {setup (1-2 sentences, English), ai_role (who the AI plays, e.g. a customer), user_role (who the learner plays), goal (<=160 chars), opening (first line the AI says)}}.\n"
-        "Rules: no duplicate words across lessons; no placeholders; wrong answers must be clearly worse but believable; Spanish translations must be accurate."
-    )
+    def _route_system(count, first, last, part, parts):
+        extra = ""
+        if parts > 1:
+            extra = (f"This is PART {part} of {parts} of a course with {n} lessons in total. Write ONLY lessons {first} to {last} of the course "
+                     "(the course progresses from essential vocabulary to full interactions, so place these lessons accordingly and do not repeat words other parts would use). ")
+        meta = ("title (<=40 chars, catchy, Spanish or English), emoji, level ('A1'|'A2'|'B1'|'B2'), summary_es (<=140 chars), " if part == 1 else "")
+        rp = (", roleplay: {setup (1-2 sentences, English), ai_role (who the AI plays, e.g. a customer), user_role (who the learner plays), goal (<=160 chars), opening (first line the AI says)}" if part == 1 else "")
+        return (
+            "You design personalized English micro-courses for a Spanish-speaking adult. Build the course around the learner's REAL situation (their product, job, trip or goal), "
+            "using the exact vocabulary and sentences they would actually need. " + _SAFE_SCENE + " If the request is unsafe, build a generic daily-life course instead.\n"
+            + extra + f"Create exactly {count} lessons. Target CEFR level: {level} (keep sentences short and useful).\n"
+            "Return JSON only: {" + meta +
+            "lessons: [{title (English, <=34 chars), note_es (a practical tip in Spanish, <=180 chars), "
+            "words: [8 objects {en (1-3 words), es (natural Mexican Spanish), emoji}], phrases: [6 objects {en (<=12 words, something the learner would really say), es}], "
+            "dialogs: [3 objects {q (a line the OTHER person says), a (the best natural reply by the learner), wrong: [2 plausible but wrong or unnatural replies]}]}]" + rp + "}.\n"
+            "Rules: no duplicate words across lessons; no placeholders; wrong answers must be clearly worse but believable; Spanish translations must be accurate."
+        )
+
+    # Se generan en paralelo bloques de hasta 3 lecciones: una sola llamada larga pasaba el límite de tiempo del servidor.
+    sizes, left = [], n
+    while left > 0:
+        k = min(3, left)
+        if left - k == 1:
+            k = 2 if left > 3 else left
+        sizes.append(k)
+        left -= k
+    plan_parts = []
+    start = 1
+    for i, k in enumerate(sizes):
+        plan_parts.append((k, start, start + k - 1, i + 1, len(sizes)))
+        start += k
+
+    def _gen(spec):
+        for attempt in range(2):
+            try:
+                return ai_json(_route_system(*spec), pedido, temperature=0.6)
+            except Exception as exc:
+                print(f"[ROUTE AI part {spec[3]} try {attempt}] {str(exc)[:160]}")
+        return None
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(plan_parts)) as ex:
+        results = list(ex.map(_gen, plan_parts))
     data = None
-    for attempt in range(2):
-        try:
-            raw = ai_json(system, pedido, temperature=0.6)
-        except Exception as exc:
-            print(f"[ROUTE AI {attempt}] {exc}")
-            continue
-        data = _clean_route(raw, n)
-        if data:
-            break
+    if all(isinstance(r, dict) for r in results):
+        merged = dict(results[0])
+        merged["lessons"] = [l for r in results for l in (r.get("lessons") or [])]
+        data = _clean_route(merged, n)
     if not data:
         return json_error("No pude armar la ruta esta vez. Prueba describiéndola con otras palabras.", 500)
     try:
