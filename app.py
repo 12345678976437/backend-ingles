@@ -28,9 +28,34 @@ from supabase import Client, create_client
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+_ALLOWED = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS") or "").split(",") if o.strip()]
+# ALLOWED_ORIGINS (Render > Environment): dominios del front separados por coma. Vacío = cualquiera (menos seguro).
+CORS(app, origins=_ALLOWED or "*", allow_headers=["Authorization", "Content-Type"], methods=["GET", "POST", "OPTIONS"],
+     supports_credentials=False, max_age=600)
+
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    resp.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    if request.path.startswith("/api") or request.path.startswith("/analizar") or request.path.startswith("/evaluar"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
 # Límite de tamaño de subida (audios): evita que un archivo enorme te cueste procesamiento.
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+
+
+@app.errorhandler(Exception)
+def _unhandled(exc):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        return jsonify({"ok": False, "error": exc.description if exc.code in (400, 404, 405, 413) else "Solicitud no válida."}), exc.code
+    print(f"[UNHANDLED] {request.path}: {exc}")
+    return jsonify({"ok": False, "error": "Ocurrió un error en el servidor. Inténtalo de nuevo."}), 500
 
 
 @app.errorhandler(413)
@@ -49,7 +74,12 @@ ADMIN_EMAILS = {e.strip().lower() for e in env("ADMIN_EMAIL", "a07077189@tec.mx"
 
 
 def is_admin_user(user):
-    return (getattr(user, "email", "") or "").lower() in ADMIN_EMAILS
+    """Admin solo si el correo coincide Y está confirmado (evita que alguien registre ese correo sin verificarlo)."""
+    if (getattr(user, "email", "") or "").lower() not in ADMIN_EMAILS:
+        return False
+    if hasattr(user, "email_confirmed_at") and not getattr(user, "email_confirmed_at"):
+        return False
+    return True
 AZURE_OPENAI_ENDPOINT = env("AZURE_OPENAI_ENDPOINT").rstrip("/")
 AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
@@ -90,6 +120,22 @@ if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY:
     except Exception as exc:
         print(f"[WARN] Azure OpenAI no pudo inicializarse: {exc}")
 
+
+
+def _err_log(msg, exc):
+    """Guarda el detalle técnico solo en los logs del servidor; al usuario le llega un mensaje limpio."""
+    try:
+        print(f"[ERROR] {request.path}: {msg}: {exc}")
+    except Exception:
+        print(f"[ERROR] {msg}: {exc}")
+    return msg + ". Inténtalo de nuevo."
+
+
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _is_uuid(v):
+    return bool(v and _UUID_RE.match(str(v)))
 
 def json_error(message, status=400, **extra):
     payload = {"ok": False, "error": message}
@@ -143,6 +189,15 @@ RATE_RULES = {
     "/nuevo-dictado": (30, 3600),
     "/api/writing/challenge": (30, 3600),
     "/api/vocabulario/diario": (20, 3600),
+    "/api/traducir": (150, 3600),
+    "/api/rutas/crear": (8, 3600),
+    "/api/escenario/nuevo": (10, 3600),
+    "/api/escenario/turno": (90, 3600),
+    "/api/escenario/feedback": (12, 3600),
+    "/api/diccionario": (120, 3600),
+    "/api/clips/tema": (20, 3600), "/api/presentacion/guion": (10, 3600),
+    "/api/shadowing/tema": (30, 3600),
+    "/api/reunion/analizar": (6, 3600),
 }
 GENERAL_PER_MINUTE = 120                                      # cualquier endpoint, por usuario
 _rate_lock = threading.Lock()
@@ -194,6 +249,10 @@ CREDIT_COST = {
     "/nueva-frase": 0.5, "/nuevo-tema-libre": 0.5, "/nuevo-trabalenguas": 0.5,
     "/nuevo-texto-lectura": 1, "/nuevo-dictado": 1, "/api/writing/challenge": 1,
     "/api/vocabulario/diario": 1,
+    # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
+    "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/escenario/nuevo": 1,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3,
+    "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
 # la prueba gratis se pausa (los que pagan siguen). Protege tu saldo de Azure.
@@ -394,13 +453,29 @@ def _load_usage(uid):
         print(f"[USO] Tabla uso_ia no disponible (los límites siguen funcionando en memoria): {str(exc)[:120]}")
 
 
+_uso_ruta_ok = True
+
+
 def _persist_usage(uid, cost):
     if not _use_table_ok:
         return
+    try:
+        ruta = request.path[:60]
+    except Exception:
+        ruta = None
     def _w():
-        global _use_table_ok
+        global _use_table_ok, _uso_ruta_ok
         try:
-            (supabase_admin or supabase).table("uso_ia").insert({"user_id": uid, "costo": cost}).execute()
+            c = supabase_admin or supabase
+            if _uso_ruta_ok and ruta:
+                try:
+                    c.table("uso_ia").insert({"user_id": uid, "costo": cost, "ruta": ruta}).execute()
+                    return
+                except Exception as exc2:
+                    if "ruta" not in str(exc2).lower():
+                        raise
+                    _uso_ruta_ok = False
+            c.table("uso_ia").insert({"user_id": uid, "costo": cost}).execute()
         except Exception as exc:
             _use_table_ok = False
             print(f"[USO] No se pudo guardar el consumo: {str(exc)[:120]}")
@@ -512,22 +587,53 @@ def _limit_extra(plan):
     return {"siguiente_plan": nxt, "siguiente_nombre": PLANS[nxt]["nombre"] if nxt else None}
 
 
+def _client_ip():
+    h = request.headers
+    ip = h.get("CF-Connecting-IP") or h.get("True-Client-IP") or (h.get("X-Forwarded-For") or "").split(",")[0].strip() or request.remote_addr
+    return (ip or "?")[:64]
+
+
+def _rate_peek(key, limit, window):
+    """True si ya se alcanzó el límite (sin registrar una llamada nueva)."""
+    now = time.time()
+    with _rate_lock:
+        q = _rate_hits.get(key)
+        if not q:
+            return False
+        while q and now - q[0] > window:
+            q.popleft()
+        return len(q) >= limit
+
+
 def authenticated_user(require_subscription=True):
     if not supabase:
         return None, ("Supabase no está configurado.", 500)
 
+    # Protección contra fuerza bruta / abuso por IP (antes de gastar una consulta a Supabase)
+    ip = _client_ip()
+    if _rate_peek(("authfail", ip), 25, 300):
+        return None, ("Demasiados intentos con sesión inválida. Espera unos minutos.", 429)
+    ok_ip, _w = _rate_hit(("ip", ip), 900, 60)
+    if not ok_ip:
+        return None, ("Demasiadas solicitudes desde tu red. Espera un momento.", 429)
+
     token = get_bearer_token()
     if not token:
         return None, ("Sesión requerida.", 401)
+    if len(token) > 4096:
+        _rate_hit(("authfail", ip), 25, 300)
+        return None, ("Sesión inválida.", 401)
 
     try:
         result = supabase.auth.get_user(token)
         user = result.user
     except Exception as exc:
         print(f"[AUTH] {exc}")
+        _rate_hit(("authfail", ip), 25, 300)
         return None, ("Sesión inválida o expirada.", 401)
 
     if not user:
+        _rate_hit(("authfail", ip), 25, 300)
         return None, ("Sesión inválida.", 401)
 
     if require_subscription and not is_admin_user(user):
@@ -1570,6 +1676,12 @@ def daily_target_lessons(minutes):
 # ---------------------------------------------------------------------------
 #  Registro de sesiones (tabla opcional learning_sessions; si no existe, todo sigue funcionando)
 # ---------------------------------------------------------------------------
+def _xp_allowed(user_id):
+    """Anti-farmeo: máximo 60 sesiones con XP por día y por usuario (un humano no llega ahí)."""
+    ok, _w = _rate_hit((user_id, "xp_day"), 60, 86400)
+    return ok
+
+
 def _log_session(user_id, kind, unit_code, lesson_id, score, stars, xp, mistakes, seconds):
     client = supabase_admin or supabase
     if not client:
@@ -2026,7 +2138,7 @@ def update_profile():
     if error:
         return json_error(error[0], error[1])
     body = request.get_json(silent=True) or {}
-    username = (body.get("username") or "").strip()
+    username = re.sub(r"[<>\u0000-\u001f\u007f]", "", str(body.get("username") or "")).strip()
     if not (2 <= len(username) <= 30):
         return json_error("El nombre debe tener entre 2 y 30 caracteres.")
     client = supabase_admin or supabase
@@ -2036,7 +2148,7 @@ def update_profile():
         client.table("profiles").update({"username": username}).eq("id", user.id).execute()
         return jsonify({"ok": True, "username": username})
     except Exception as exc:
-        return json_error(f"No se pudo guardar el nombre: {exc}", 500)
+        return json_error(_err_log("No se pudo guardar el nombre", exc), 500)
 
 
 @app.post("/api/perfil/avatar")
@@ -2058,6 +2170,11 @@ def upload_avatar():
         file_bytes = file.read()
         if len(file_bytes) > 4 * 1024 * 1024:
             return json_error("La imagen no debe pesar más de 4 MB.")
+        head = file_bytes[:12]
+        real = ("jpg" if head[:3] == b"\xff\xd8\xff" else "png" if head[:8] == b"\x89PNG\r\n\x1a\n"
+                else "webp" if (head[:4] == b"RIFF" and head[8:12] == b"WEBP") else None)
+        if real is None or real != ext:
+            return json_error("El archivo no es una imagen válida.")
         path = f"{user.id}/avatar.{ext}"
         client.storage.from_("avatars").upload(
             path, file_bytes, {"content-type": mime, "upsert": "true"}
@@ -2067,18 +2184,12 @@ def upload_avatar():
         client.table("profiles").update({"avatar_url": public_url}).eq("id", user.id).execute()
         return jsonify({"ok": True, "avatar_url": public_url})
     except Exception as exc:
-        return json_error(f"No se pudo subir la foto: {exc}", 500)
+        return json_error(_err_log("No se pudo subir la foto", exc), 500)
 
 
 @app.get("/health")
 def health():
-    return jsonify({
-        "ok": True,
-        "service": "Talvo English",
-        "ai": bool(ai_client),
-        "speech": bool(AZURE_SPEECH_KEY and AZURE_SPEECH_REGION),
-        "supabase": bool(supabase),
-    })
+    return jsonify({"ok": True})   # sin detalles de configuración (el panel de admin tiene el diagnóstico completo)
 
 
 CEFR_LEVELS = {"beginner", "elementary", "intermediate", "advanced"}
@@ -2117,7 +2228,7 @@ def save_onboarding():
         }).eq("id", user.id).execute()
         return jsonify({"ok": True})
     except Exception as exc:
-        return json_error(f"No se pudo guardar tu información: {exc}", 500)
+        return json_error(_err_log("No se pudo guardar tu información", exc), 500)
 
 
 @app.get("/api/uso")
@@ -2130,7 +2241,8 @@ def my_usage():
         return jsonify({"ok": True, "ilimitado": True, "plan": "max", "plan_nombre": "Administrador"})
     plan = plan_key(_profile_access(user.id, fresh=True))
     snap = usage_snapshot(user.id, plan)
-    planes = [{"id": k, "nombre": v["nombre"], "precio": v["precio"], "ventana": v["ventana"], "dia": v["dia"]} for k, v in PLANS.items()]
+    planes = [{"id": k, "nombre": v["nombre"], "precio": v["precio"], "ventana": v["ventana"], "dia": v["dia"],
+               "funciones": PLAN_FEATURES.get(k, {})} for k, v in PLANS.items()]
     return jsonify({"ok": True, **snap, "planes": planes, "ventana_horas": 5})
 
 
@@ -2245,7 +2357,8 @@ def synthesize_audio():
     if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
         detail = getattr(result, "cancellation_details", None)
         message = detail.error_details if detail else "No se pudo generar el audio."
-        return json_error(f"No se pudo generar el audio: {message}", 500)
+        print(f"[TTS] {message}")
+        return json_error("No se pudo generar el audio. Inténtalo de nuevo.", 500)
 
     audio_bytes = bytes(result.audio_data)
     if len(audio_bytes) <= 200_000:
@@ -2256,19 +2369,47 @@ def synthesize_audio():
     return Response(audio_bytes, mimetype="audio/mpeg")
 
 
+_VARIETY_THEMES = ["ordering food", "the weather", "a job interview", "at the airport", "shopping for clothes", "a doctor's visit", "talking about family",
+    "weekend plans", "public transport", "a hotel stay", "technology and phones", "hobbies and sports", "cooking at home", "school and studying", "making friends",
+    "a phone call", "directions in a city", "health and exercise", "movies and music", "the office", "a restaurant bill", "moving to a new city", "a birthday party",
+    "the news", "money and saving", "pets and animals", "travel plans", "a complaint at a store", "learning a language", "nature and the environment"]
+_VARIETY_FORMS = ["a question", "a polite request", "a statement with a time word", "a sentence with 'because'", "a sentence with a contrast (but/although)",
+    "a suggestion", "a sentence in the present perfect", "a sentence about the future", "a sentence with a comparison", "an opinion"]
+_VARIETY_SOUNDS = ["", "", "th", "r", "v vs b", "sh and ch", "short i vs long ee", "final -ed endings", "s + consonant clusters", "w", "j (as in job)", "h", "-ing endings"]
+_recent_gen = {}
+
+
+def _variety(user_id, kind):
+    """Elige tema/forma/sonido al azar y recuerda lo último que se generó, para que no se repita ni se parezca."""
+    dq = _recent_gen.setdefault((user_id, kind), deque(maxlen=12))
+    if len(_recent_gen) > 4000:
+        _recent_gen.clear()
+    return dq, random.choice(_VARIETY_THEMES), random.choice(_VARIETY_FORMS), random.choice(_VARIETY_SOUNDS)
+
+
+def _avoid_line(dq):
+    return (" Do NOT repeat or closely paraphrase any of these: " + " | ".join(dq)) if dq else ""
+
+
 @app.get("/nueva-frase")
 def new_phrase():
     user, error = authenticated_user()
     if error:
         return json_error(error[0], error[1])
+    dq, theme, form, sound = _variety(user.id, "frase")
+    lvl = {"beginner": "A1-A2, simple words", "elementary": "A2", "intermediate": "B1", "advanced": "B2-C1"}.get(_profile_for_path(user.id).get("cefr_level"), "A2-B1")
     try:
         data = ai_json(
             "Create one natural English sentence for pronunciation practice. Return JSON only with exact keys: frase (the English sentence), traduccion (Spanish translation).",
-            "Generate a useful sentence between 8 and 18 words. Avoid slang and proper names.",
+            f"Theme: {theme}. Type: {form}. Level: {lvl}. " + (f"Include several words with the sound '{sound}'. " if sound else "") +
+            "Between 8 and 18 words. Avoid slang and proper names." + _avoid_line(dq),
+            temperature=1.0,
         )
+        if data.get("frase"):
+            dq.append(str(data["frase"])[:120])
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar la frase: {exc}", 500)
+        return json_error(_err_log("No se pudo generar la frase", exc), 500)
 
 
 @app.get("/nuevo-tema-libre")
@@ -2276,14 +2417,18 @@ def new_free_topic():
     user, error = authenticated_user()
     if error:
         return json_error(error[0], error[1])
+    dq, theme, form, _s = _variety(user.id, "tema")
     try:
         data = ai_json(
             "Create a speaking practice topic for an English learner. Return JSON only with exact keys: tema (the topic, in English), instrucciones (short instructions in Spanish on what to talk about and for how long).",
-            "Give a practical topic that encourages 45-90 seconds of speaking.",
+            f"Area: {theme}. Style: {form}. Give a practical topic that encourages 45-90 seconds of speaking." + _avoid_line(dq),
+            temperature=1.0,
         )
+        if data.get("tema"):
+            dq.append(str(data["tema"])[:120])
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar el tema: {exc}", 500)
+        return json_error(_err_log("No se pudo generar el tema", exc), 500)
 
 
 @app.get("/nuevo-trabalenguas")
@@ -2291,14 +2436,19 @@ def new_twister():
     user, error = authenticated_user()
     if error:
         return json_error(error[0], error[1])
+    dq, theme, _f, sound = _variety(user.id, "twister")
+    sound = sound or random.choice(["th", "r", "sh and s", "v and w", "ch and j", "p and b"])
     try:
         data = ai_json(
             "Create a short English tongue twister suitable for pronunciation practice. Return JSON only with exact keys: trabalenguas (the tongue twister, in English), enfoque (short description in Spanish of which sounds it targets).",
-            "Generate one original tongue twister, 8-18 words, challenging but pronounceable.",
+            f"Generate one original tongue twister, 8-18 words, challenging but pronounceable, targeting the sound(s): {sound}. Loose theme: {theme}." + _avoid_line(dq),
+            temperature=1.0,
         )
+        if data.get("trabalenguas"):
+            dq.append(str(data["trabalenguas"])[:120])
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar el trabalenguas: {exc}", 500)
+        return json_error(_err_log("No se pudo generar el trabalenguas", exc), 500)
 
 
 READING_LIBRARY = [
@@ -2342,7 +2492,7 @@ def reading_library_item(entry_id):
         data["entry_id"] = entry_id
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar la lectura: {exc}", 500)
+        return json_error(_err_log("No se pudo generar la lectura", exc), 500)
 
 
 @app.get("/nuevo-texto-lectura")
@@ -2357,7 +2507,7 @@ def new_reading():
         )
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar la lectura: {exc}", 500)
+        return json_error(_err_log("No se pudo generar la lectura", exc), 500)
 
 
 LISTENING_LIBRARY = [
@@ -2401,7 +2551,7 @@ def listening_library_item(entry_id):
         data["entry_id"] = entry_id
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar el audio: {exc}", 500)
+        return json_error(_err_log("No se pudo generar el audio", exc), 500)
 
 
 @app.get("/nuevo-dictado")
@@ -2416,7 +2566,7 @@ def new_dictation():
         )
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar el dictado: {exc}", 500)
+        return json_error(_err_log("No se pudo generar el dictado", exc), 500)
 
 
 @app.post("/analizar-audio-real")
@@ -2433,6 +2583,11 @@ def analyze_real_audio():
     fast = (request.form.get("fast") or "").strip() in ("1", "true")
     if not upload:
         return json_error("No se recibió audio.")
+    if (request.form.get("shadow") or "") == "1" and not is_admin_user(user):
+        lim = PLAN_FEATURES[_user_plan(user)]["shadowing_dia"]
+        ok_s, _w = _rate_hit((user.id, "shadow"), lim, 86400)
+        if not ok_s:
+            return _gate(user, f"Llegaste a tus {lim} intentos de shadowing de hoy. Vuelve mañana o sube de plan.", refund=False)
     wav_path = None
     try:
         wav_path = convert_audio_to_wav(upload)
@@ -2476,7 +2631,7 @@ def analyze_real_audio():
                 payload["learning_path"] = lp_result
         return jsonify({"ok": True, **payload})
     except Exception as exc:
-        return json_error(f"No se pudo analizar el audio: {exc}", 500)
+        return json_error(_err_log("No se pudo analizar el audio", exc), 500)
     finally:
         if wav_path and os.path.exists(wav_path):
             os.remove(wav_path)
@@ -2514,7 +2669,7 @@ def writing_challenge():
         )
         return jsonify({"ok": True, "prompt": data.get("prompt"), "nivel": nivel})
     except Exception as exc:
-        return json_error(f"No se pudo generar el reto: {exc}", 500)
+        return json_error(_err_log("No se pudo generar el reto", exc), 500)
 
 
 @app.post("/analizar-escritura")
@@ -2549,7 +2704,7 @@ def analyze_writing():
             data["learning_path"] = lp_result
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo evaluar el texto: {exc}", 500)
+        return json_error(_err_log("No se pudo evaluar el texto", exc), 500)
 
 
 @app.post("/evaluar-lectura")
@@ -2591,7 +2746,7 @@ def evaluate_reading():
             data["learning_path"] = lp_result
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo evaluar la lectura: {exc}", 500)
+        return json_error(_err_log("No se pudo evaluar la lectura", exc), 500)
 
 
 @app.post("/evaluar-dictado")
@@ -2630,7 +2785,7 @@ def evaluate_dictation():
             data["learning_path"] = lp_result
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo evaluar el dictado: {exc}", 500)
+        return json_error(_err_log("No se pudo evaluar el dictado", exc), 500)
 
 
 def estimate_level(user_id):
@@ -2720,7 +2875,7 @@ def transcribe_audio():
             return jsonify({"ok": True, "texto": ""})
         return jsonify({"ok": True, "texto": result.text})
     except Exception as exc:
-        return json_error(f"No se pudo transcribir el audio: {exc}", 500)
+        return json_error(_err_log("No se pudo transcribir el audio", exc), 500)
     finally:
         if wav_path and os.path.exists(wav_path):
             os.remove(wav_path)
@@ -2756,7 +2911,7 @@ def call_summary():
         award_xp(user.id, 25)
         return jsonify({"ok": True, **data})
     except Exception as exc:
-        return json_error(f"No se pudo generar el resumen: {exc}", 500)
+        return json_error(_err_log("No se pudo generar el resumen", exc), 500)
 
 
 def notify_telegram(text):
@@ -2811,9 +2966,70 @@ ACTIVITY_TABLES = [
     ("lectura", "historial_lectura", "calificacion", "titulo"),
     ("dictado", "historial_dictado", "calificacion", "texto_esperado"),
     ("tutor", "historial_tutor", None, "mensaje_usuario"),
+    ("leccion", "learning_sessions", "score", "kind"),   # Ruta de aprendizaje y Mis rutas
 ]
+# Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
+_USO_TIPOS = {
+    "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/rutas/crear": "ruta_nueva",
+    "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
+    "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
+}
+_USO_LABEL = {
+    "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
+    "/api/escenario/turno": "Rol (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta",
+    "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
+}
 CALL_MARK = "[Resumen de llamada]"
 LOG_TABLE = "admin_acciones"   # registro de cada cambio de acceso (ver admin_acciones.sql)
+
+
+def _num(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _act_cols(table, score_col, prev_col):
+    if table == "learning_sessions":
+        return "created_at,kind,unit_code,lesson_id,score,xp,seconds"
+    return "created_at," + prev_col + (f",{score_col}" if score_col else "")
+
+
+def _act_norm(tipo, table, r, prev_col, score_col):
+    """Convierte una fila de cualquier tabla de actividad a un evento común (o None si no cuenta)."""
+    if table == "learning_sessions":
+        k = str(r.get("kind") or "")
+        if k == "plan_bonus":
+            return None
+        det = " · ".join(x for x in (str(r.get("unit_code") or ""), str(r.get("lesson_id") or "")) if x) or k
+        return {"tipo": "ruta" if k == "route" else ("clip" if k == "clip" else "leccion"), "detalle": det[:140], "score": _num(r.get("score")),
+                "xp": int(_num(r.get("xp")) or 0), "seg": int(_num(r.get("seconds")) or 0)}
+    prev = str(r.get(prev_col) or "")
+    t = "llamada" if table == "historial_tutor" and prev.startswith(CALL_MARK) else tipo
+    return {"tipo": t, "detalle": prev[:140], "score": _num(r.get(score_col)) if score_col else None, "xp": 0, "seg": 0}
+
+
+def _fetch_uso(client, since_iso, uid=None, max_rows=20000):
+    """Consumo de créditos (tabla uso_ia). Devuelve (filas, aviso)."""
+    for cols in ("user_id,created_at,costo,ruta", "user_id,created_at,costo"):
+        rows, start = [], 0
+        try:
+            while len(rows) < max_rows:
+                q = client.table("uso_ia").select(cols).gte("created_at", since_iso)
+                if uid:
+                    q = q.eq("user_id", uid)
+                data = q.order("created_at", desc=True).range(start, start + 999).execute().data or []
+                rows.extend(data)
+                if len(data) < 1000:
+                    break
+                start += 1000
+            aviso = None if "ruta" in cols else "uso_ia no tiene la columna ruta: ejecuta admin_mejoras.sql para ver el consumo por función."
+            return rows, aviso
+        except Exception as exc:
+            err = str(exc)[:100]
+    return [], f"No se pudo leer uso_ia ({err}). Crea la tabla con admin_mejoras.sql."
 
 
 def _parse_ts(v):
@@ -2930,26 +3146,35 @@ def _build_admin_dataset():
         warnings.append(f"No se pudo leer la tabla de perfiles ({err}). Estados de pago y prueba no disponibles.")
 
     events = []
-    for tipo, table, score_col, _prev in ACTIVITY_TABLES:
-        cols = "user_id,created_at" + (f",{score_col}" if score_col else "") + (",mensaje_usuario" if table == "historial_tutor" else "")
+    for tipo, table, score_col, prev_col in ACTIVITY_TABLES:
+        cols = "user_id," + _act_cols(table, score_col, prev_col)
         try:
             rows = _fetch_all(client, table, cols)
         except Exception as exc:
-            warnings.append(f"No se pudo leer {table} ({exc}); la actividad de ese tipo sale incompleta.")
+            warnings.append(f"No se pudo leer {table} ({str(exc)[:90]}); la actividad de ese tipo sale incompleta.")
             continue
         for r in rows:
             ts, uid = _parse_ts(r.get("created_at")), r.get("user_id")
             if not ts or not uid:
                 continue
-            t = tipo
-            if table == "historial_tutor" and str(r.get("mensaje_usuario") or "").startswith(CALL_MARK):
-                t = "llamada"
-            sc = r.get(score_col) if score_col else None
-            try:
-                sc = float(sc) if sc is not None else None
-            except (TypeError, ValueError):
-                sc = None
-            events.append({"uid": str(uid), "tipo": t, "ts": ts, "score": sc})
+            n = _act_norm(tipo, table, r, prev_col, score_col)
+            if n:
+                events.append({"uid": str(uid), "ts": ts, **n})
+    uso_rows, uso_warn = _fetch_uso(client, (now - timedelta(days=30)).isoformat())
+    if uso_warn:
+        warnings.append(uso_warn)
+    uso = []
+    for r in uso_rows:
+        ts, uid = _parse_ts(r.get("created_at")), r.get("user_id")
+        if not ts or not uid:
+            continue
+        ruta = str(r.get("ruta") or "")
+        c = _num(r.get("costo")) or 0
+        uso.append({"uid": str(uid), "ts": ts, "ruta": ruta, "costo": c})
+        t = _USO_TIPOS.get(ruta)
+        if t:
+            events.append({"uid": str(uid), "ts": ts, "tipo": t, "detalle": f"{_USO_LABEL.get(ruta, ruta)} · {c:g} créditos",
+                           "score": None, "xp": 0, "seg": 0})
     events.sort(key=lambda e: e["ts"], reverse=True)
 
     vocab = defaultdict(int)
@@ -2976,6 +3201,10 @@ def _build_admin_dataset():
 
     today = _day(now)
     d7, d30 = now - timedelta(days=7), now - timedelta(days=30)
+    d1 = now - timedelta(days=1)
+    uso_by_user = defaultdict(list)
+    for x in uso:
+        uso_by_user[x["uid"]].append(x)
     users = {}
     for uid in set(auth_users) | set(profiles):
         a, p = auth_users.get(uid, {}), profiles.get(uid, {})
@@ -2995,6 +3224,13 @@ def _build_admin_dataset():
             vence_pago = ult_pago[uid]
             dias_renovar = math.ceil((vence_pago - now).total_seconds() / 86400)
         scores = [e["score"] for e in evs if e["score"] is not None]
+        hoy_evs = [e for e in evs if _day(e["ts"]) == today]
+        e7 = [e for e in evs if e["ts"] >= d7]
+        u_uso = uso_by_user.get(uid, [])
+        por_func = defaultdict(float)
+        for x in u_uso:
+            if x["ts"] >= d7:
+                por_func[_USO_LABEL.get(x["ruta"], x["ruta"] or "Otras")] += x["costo"]
         tipos = defaultdict(int)
         for e in evs:
             tipos[e["tipo"]] += 1
@@ -3013,8 +3249,13 @@ def _build_admin_dataset():
             "tipos": dict(tipos), "palabras": vocab.get(uid, 0),
             "racha": _streak({_day(e["ts"]) for e in evs}, today),
             "vence_pago": vence_pago, "dias_renovar": dias_renovar,
+            "act_hoy": len(hoy_evs), "min_hoy": round(sum(e["seg"] for e in hoy_evs) / 60, 1),
+            "min_7d": round(sum(e["seg"] for e in e7) / 60, 1), "xp_7d": sum(e["xp"] for e in e7),
+            "creditos_24h": round(sum(x["costo"] for x in u_uso if x["ts"] >= d1), 2),
+            "creditos_7d": round(sum(x["costo"] for x in u_uso if x["ts"] >= d7), 2),
+            "por_funcion_7d": {k: round(v, 2) for k, v in sorted(por_func.items(), key=lambda kv: -kv[1])},
         }
-    return {"now": now, "users": users, "events": events, "warnings": warnings, "log_ok": log_ok}
+    return {"now": now, "users": users, "events": events, "uso": uso, "warnings": warnings, "log_ok": log_ok}
 
 
 _admin_cache = {"t": 0.0, "data": None}
@@ -3041,6 +3282,8 @@ def _user_json(u):
         "last_activity": _iso(u["last_activity"]), "prom_score": u["prom_score"],
         "tipos": u["tipos"], "palabras": u["palabras"], "racha": u["racha"],
         "vence_pago": _iso(u["vence_pago"]), "dias_renovar": u["dias_renovar"],
+        "act_hoy": u.get("act_hoy", 0), "min_hoy": u.get("min_hoy", 0), "min_7d": u.get("min_7d", 0), "xp_7d": u.get("xp_7d", 0),
+        "creditos_24h": u.get("creditos_24h", 0), "creditos_7d": u.get("creditos_7d", 0), "por_funcion_7d": u.get("por_funcion_7d", {}),
     }
 
 
@@ -3112,6 +3355,38 @@ def _admin_overview(ds):
     top = sorted([u for u in users if u["act_7d"] > 0], key=lambda u: (-u["act_7d"], -u["total"]))[:10]
     sin_act = [u for u in users if u["total"] == 0 and u["created_at"] and u["created_at"] <= now - timedelta(days=3)]
 
+    ev_hoy = [e for e in events if _day(e["ts"]) == today]
+    por_u = defaultdict(list)
+    for e in ev_hoy:
+        por_u[e["uid"]].append(e)
+    mail = {u["id"]: u["email"] for u in users}
+    lista_hoy = []
+    for uid_, es in sorted(por_u.items(), key=lambda kv: -len(kv[1]))[:40]:
+        tp = defaultdict(int)
+        for e in es:
+            tp[e["tipo"]] += 1
+        lista_hoy.append({"id": uid_, "email": mail.get(uid_, uid_[:8]), "n": len(es), "tipos": dict(tp),
+                          "min": round(sum(e["seg"] for e in es) / 60, 1), "xp": sum(e["xp"] for e in es),
+                          "ultima": _iso(max(e["ts"] for e in es))})
+    t_hoy = defaultdict(int)
+    for e in ev_hoy:
+        t_hoy[e["tipo"]] += 1
+    uso_ok = [x for x in ds.get("uso", []) if x["uid"] in ids]
+    cr_func, cr_user = defaultdict(float), defaultdict(float)
+    for x in uso_ok:
+        if x["ts"] >= d7:
+            cr_func[_USO_LABEL.get(x["ruta"], x["ruta"] or "Otras")] += x["costo"]
+        if x["ts"] >= d1:
+            cr_user[x["uid"]] += x["costo"]
+    por_hora = [0] * 24
+    for e in ev_hoy:
+        por_hora[e["ts"].astimezone(LOCAL_TZ).hour] += 1
+    hoy = {"fecha": today.isoformat(), "usuarios": len(por_u), "eventos": len(ev_hoy), "minutos": round(sum(e["seg"] for e in ev_hoy) / 60, 1),
+           "xp": sum(e["xp"] for e in ev_hoy), "tipos": dict(t_hoy), "lista": lista_hoy, "por_hora": por_hora,
+           "nuevos": sum(1 for u in users if u["created_at"] and _day(u["created_at"]) == today)}
+    creditos = {"total_24h": round(sum(x["costo"] for x in uso_ok if x["ts"] >= d1), 2), "total_7d": round(sum(x["costo"] for x in uso_ok if x["ts"] >= d7), 2),
+                "por_funcion_7d": {k: round(v, 2) for k, v in sorted(cr_func.items(), key=lambda kv: -kv[1])},
+                "top_24h": [{"id": k, "email": mail.get(k, k[:8]), "creditos": round(v, 2)} for k, v in sorted(cr_user.items(), key=lambda kv: -kv[1])[:8]]}
     pagados = [u for u in users if u["estado"] == "pagado"]
     por_renovar = sorted([u for u in pagados if u["dias_renovar"] is not None and u["dias_renovar"] <= 5],
                          key=lambda u: u["dias_renovar"])
@@ -3143,6 +3418,7 @@ def _admin_overview(ds):
         "retencion_7d": {"elegibles": len(elegibles), "retenidos": retenidos,
                          "pct": round(retenidos / len(elegibles) * 100) if elegibles else None},
         "sin_actividad_3d": len(sin_act),
+        "hoy": hoy, "creditos": creditos, "zona_horaria": str(LOCAL_TZ),
         "serie_14d": serie, "tipos_7d": dict(t7), "tipos_24h": dict(t24),
         "niveles": dict(niveles), "objetivos": dict(objetivos),
         "top_7d": [{"id": u["id"], "email": u["email"], "act_7d": u["act_7d"], "total": u["total"]} for u in top],
@@ -3179,19 +3455,24 @@ def _admin_users(ds, q, estado, orden, limit, offset):
 def _recent_events_for(client, uid, per_table=12):
     out, warns = [], []
     for tipo, table, score_col, prev_col in ACTIVITY_TABLES:
-        cols = "created_at," + prev_col + (f",{score_col}" if score_col else "")
+        cols = _act_cols(table, score_col, prev_col)
         try:
             rows = client.table(table).select(cols).eq("user_id", uid).order("created_at", desc=True).limit(per_table).execute().data or []
         except Exception as exc:
-            warns.append(f"{table}: {exc}")
+            warns.append(f"{table}: {str(exc)[:80]}")
             continue
         for r in rows:
-            prev = str(r.get(prev_col) or "")
-            t = "llamada" if table == "historial_tutor" and prev.startswith(CALL_MARK) else tipo
-            sc = r.get(score_col) if score_col else None
-            out.append({"tipo": t, "fecha": r.get("created_at"), "score": sc, "detalle": prev[:140]})
+            n = _act_norm(tipo, table, r, prev_col, score_col)
+            if n:
+                out.append({"tipo": n["tipo"], "fecha": r.get("created_at"), "score": n["score"], "detalle": n["detalle"], "xp": n["xp"], "seg": n["seg"]})
+    uso, w = _fetch_uso(client, (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(), uid=uid, max_rows=300)
+    for r in uso:
+        t = _USO_TIPOS.get(str(r.get("ruta") or ""))
+        if t:
+            out.append({"tipo": t, "fecha": r.get("created_at"), "score": None, "xp": 0, "seg": 0,
+                        "detalle": f"{_USO_LABEL.get(r.get('ruta'), r.get('ruta'))} · {r.get('costo')} créditos"})
     out.sort(key=lambda e: e.get("fecha") or "", reverse=True)
-    return out[:30], warns
+    return out[:40], warns
 
 
 @app.get("/api/admin/resumen")
@@ -3203,7 +3484,7 @@ def admin_resumen():
         return jsonify(_admin_overview(admin_dataset(force=request.args.get("fresh") == "1")))
     except Exception as exc:
         print(f"[ADMIN resumen] {exc}")
-        return json_error(f"No se pudo calcular el resumen: {exc}", 500)
+        return json_error(_err_log("No se pudo calcular el resumen", exc), 500)
 
 
 @app.get("/api/admin/usuarios")
@@ -3220,11 +3501,13 @@ def admin_usuarios():
         return jsonify({"ok": True, "total": total, "usuarios": rows, "warnings": ds["warnings"]})
     except Exception as exc:
         print(f"[ADMIN usuarios] {exc}")
-        return json_error(f"No se pudo cargar la lista de usuarios: {exc}", 500)
+        return json_error(_err_log("No se pudo cargar la lista de usuarios", exc), 500)
 
 
 @app.get("/api/admin/usuario/<uid>")
 def admin_usuario(uid):
+    if not _is_uuid(uid):
+        return json_error("Identificador no válido.", 400)
     _u, err = admin_guard()
     if err:
         return err
@@ -3260,12 +3543,18 @@ def admin_usuario(uid):
             uso_u = usage_snapshot(uid, plan_u)
         except Exception as exc:
             warns.append(f"plan: {str(exc)[:80]}")
-        return jsonify({"ok": True, "usuario": _user_json(u), "recientes": recientes, "palabras": palabras,
+        hoy_d = _day(ds["now"])
+        cnt = defaultdict(int)
+        for e in ds["events"]:
+            if e["uid"] == uid:
+                cnt[_day(e["ts"])] += 1
+        dias14 = [{"fecha": (hoy_d - timedelta(days=i)).isoformat(), "n": cnt[hoy_d - timedelta(days=i)]} for i in range(13, -1, -1)]
+        return jsonify({"ok": True, "dias14": dias14, "usuario": _user_json(u), "recientes": recientes, "palabras": palabras,
                         "soporte": soporte, "acciones": acciones, "registro_activo": ds.get("log_ok", False),
                         "plan": plan_u, "uso": uso_u, "warnings": warns})
     except Exception as exc:
         print(f"[ADMIN usuario] {exc}")
-        return json_error(f"No se pudo cargar el usuario: {exc}", 500)
+        return json_error(_err_log("No se pudo cargar el usuario", exc), 500)
 
 
 @app.get("/api/admin/planes")
@@ -3321,6 +3610,8 @@ def admin_planes_set():
 
 @app.post("/api/admin/usuario/<uid>/acceso")
 def admin_acceso(uid):
+    if not _is_uuid(uid):
+        return json_error("Identificador no válido.", 400)
     """Activa, renueva o quita el acceso de pago, o extiende la prueba. Siempre deja registro."""
     admin, err = admin_guard()
     if err:
@@ -3408,7 +3699,7 @@ def admin_acceso(uid):
         return jsonify({"ok": True, "mensaje": textos[accion], "usuario": _user_json(u) if u else None, "aviso": aviso})
     except Exception as exc:
         print(f"[ADMIN acceso] {exc}")
-        return json_error(f"No se pudo aplicar el cambio: {exc}", 500)
+        return json_error(_err_log("No se pudo aplicar el cambio", exc), 500)
 
 
 @app.get("/api/admin/actividad")
@@ -3424,25 +3715,23 @@ def admin_activity():
         emails = {uid: u["email"] for uid, u in ds["users"].items()}
         events, warns = [], []
         for tipo, table, score_col, prev_col in ACTIVITY_TABLES:
-            if tipo_f and tipo_f not in (tipo, "llamada") :
-                continue
-            if tipo_f and tipo_f != tipo and table != "historial_tutor":
-                continue
-            cols = "user_id,created_at," + prev_col + (f",{score_col}" if score_col else "")
+            cols = "user_id," + _act_cols(table, score_col, prev_col)
             try:
                 rows = client.table(table).select(cols).order("created_at", desc=True).limit(limit).execute().data or []
             except Exception as exc:
-                warns.append(f"No se pudo leer {table}: {exc}")
+                warns.append(f"No se pudo leer {table}: {str(exc)[:90]}")
                 continue
             for r in rows:
-                prev = str(r.get(prev_col) or "")
-                t = "llamada" if table == "historial_tutor" and prev.startswith(CALL_MARK) else tipo
-                if tipo_f and t != tipo_f:
+                n = _act_norm(tipo, table, r, prev_col, score_col)
+                if not n or (tipo_f and n["tipo"] != tipo_f):
                     continue
                 uid = str(r.get("user_id") or "")
-                events.append({"tipo": t, "uid": uid, "email": emails.get(uid) or uid[:8],
-                               "fecha": r.get("created_at"), "score": r.get(score_col) if score_col else None,
-                               "detalle": prev[:120]})
+                events.append({"tipo": n["tipo"], "uid": uid, "email": emails.get(uid) or uid[:8], "fecha": r.get("created_at"),
+                               "score": n["score"], "detalle": n["detalle"], "xp": n["xp"], "seg": n["seg"]})
+        for e in ds["events"]:
+            if e["tipo"] in _USO_TIPOS.values() and (not tipo_f or e["tipo"] == tipo_f):
+                events.append({"tipo": e["tipo"], "uid": e["uid"], "email": emails.get(e["uid"]) or e["uid"][:8], "fecha": _iso(e["ts"]),
+                               "score": None, "detalle": e["detalle"], "xp": 0, "seg": 0})
         events.sort(key=lambda e: e.get("fecha") or "", reverse=True)
         ov = _admin_overview(ds)
         return jsonify({"ok": True, "eventos": events[:limit], "warnings": ds["warnings"] + warns,
@@ -3450,7 +3739,7 @@ def admin_activity():
                         "pagados": ov["estados"]["pagado"]})
     except Exception as exc:
         print(f"[ADMIN actividad] {exc}")
-        return json_error(f"No se pudo cargar la actividad: {exc}", 500)
+        return json_error(_err_log("No se pudo cargar la actividad", exc), 500)
 
 
 @app.get("/api/admin/soporte")
@@ -3467,7 +3756,7 @@ def admin_soporte():
         return jsonify({"ok": True, "mensajes": rows})
     except Exception as exc:
         print(f"[ADMIN soporte] {exc}")
-        return json_error(f"No se pudieron leer los mensajes de soporte: {exc}", 500)
+        return json_error(_err_log("No se pudieron leer los mensajes de soporte", exc), 500)
 
 
 @app.get("/api/admin/sistema")
@@ -3593,7 +3882,7 @@ def tutor():
         })
         return jsonify({"ok": True, "respuesta": reply})
     except Exception as exc:
-        return json_error(f"El tutor no pudo responder: {exc}", 500)
+        return json_error(_err_log("El tutor no pudo responder", exc), 500)
 
 
 @app.get("/obtener-historial")
@@ -3711,7 +4000,7 @@ def vocab_daily():
                 inserted.append(row)
         return jsonify({"ok": True, "palabras": existing + inserted})
     except Exception as exc:
-        return json_error(f"No se pudieron generar las palabras del día: {exc}", 500)
+        return json_error(_err_log("No se pudieron generar las palabras del día", exc), 500)
 
 
 @app.post("/api/vocabulario/guardar")
@@ -3726,7 +4015,7 @@ def vocab_save():
     try:
         _c = supabase_admin or supabase
         dup = (_c.table("vocabulario_usuario").select("id").eq("user_id", user.id)
-               .ilike("palabra", palabra).limit(1).execute()).data or []
+               .ilike("palabra", re.sub(r"([%_\\])", r"\\\1", palabra)).limit(1).execute()).data or []
         if dup:
             return jsonify({"ok": True, "duplicada": True})
     except Exception as exc:
@@ -3755,7 +4044,7 @@ def vocab_mark():
         client.table("vocabulario_usuario").update({"aprendida": aprendida}).eq("id", word_id).eq("user_id", user.id).execute()
         return jsonify({"ok": True})
     except Exception as exc:
-        return json_error(f"No se pudo actualizar: {exc}", 500)
+        return json_error(_err_log("No se pudo actualizar", exc), 500)
 
 
 def _unit_xp_and_progress(user_id):
@@ -3904,7 +4193,7 @@ def shop_buy():
         try:
             client.table("gem_unit_unlocks").insert({"user_id": user.id, "unit_code": unit_code}).execute()
         except Exception as exc:
-            return json_error(f"No se pudo desbloquear la unidad: {exc}", 500)
+            return json_error(_err_log("No se pudo desbloquear la unidad", exc), 500)
         client.table("profiles").update({"gems": gems - price}).eq("id", user.id).execute()
         return jsonify({"ok": True, "gems": gems - price})
 
@@ -4125,6 +4414,8 @@ def learning_path_complete():
         if kind == "focus":
             unit_code, lesson_id = "focus", (lesson_id if lesson_id in FOCUS_SKILLS else "mixed")
 
+    if xp and not _xp_allowed(user.id):
+        xp = 0
     if xp:
         award_xp(user.id, xp)
     _log_session(user.id, kind, unit_code or None, lesson_id or None, score, stars, xp, mistakes, seconds)
@@ -4352,7 +4643,7 @@ def vocab_list():
         learned = sum(1 for r in rows if r.get("aprendida"))
         return jsonify({"ok": True, "palabras": rows, "total": len(rows), "aprendidas": learned})
     except Exception as exc:
-        return json_error(f"No se pudo cargar tu vocabulario: {exc}", 500)
+        return json_error(_err_log("No se pudo cargar tu vocabulario", exc), 500)
 
 
 @app.get("/api/achievements")
@@ -4582,6 +4873,915 @@ def progress():
         "lectura": counts.get("lectura", 0),
         "puntuaciones_recientes": scores,
     })
+
+
+# ===========================================================================
+#  NUEVAS FUNCIONES (Traductor en vivo · Rutas por tema · Escenarios de rol)
+#  Cada una gasta créditos (ver CREDIT_COST) y tiene límites por plan (ver PLAN_FEATURES).
+# ===========================================================================
+import uuid as _uuid
+
+# Qué incluye cada plan. Cambia estos números para mover una función de plan.
+#   rutas          = cuántas rutas personalizadas puede tener guardadas a la vez
+#   lecciones_ruta = lecciones por ruta (más lecciones = más tokens de IA al crearla)
+#   escenarios     = "basicos" (los 4 marcados gratis) o "todos"
+#   escenario_libre= puede inventar su propia situación de rol
+#   traductor_max  = máximo de caracteres por traducción
+#   shadowing_dia  = intentos de shadowing por día (cada uno usa Azure Speech, no créditos)
+#   shadowing_tema = shadowing con temas propios (usa IA, 0.5 créditos) · reunion = grabar reunión (6 créditos)
+PLAN_FEATURES = {
+    "gratis": {"rutas": 1,  "lecciones_ruta": 3, "escenarios": "basicos", "escenario_libre": False, "traductor_max": 300, "shadowing_dia": 15, "shadowing_tema": False, "reunion": False, "clips_dia": 5, "clip_tema": False, "presentacion": False, "presentacion_slides": 0},
+    "basico": {"rutas": 3,  "lecciones_ruta": 5, "escenarios": "todos",   "escenario_libre": False, "traductor_max": 600, "shadowing_dia": 60, "shadowing_tema": True, "reunion": False, "clips_dia": 15, "clip_tema": True, "presentacion": True, "presentacion_slides": 6},
+    "pro":    {"rutas": 8,  "lecciones_ruta": 6, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1000, "shadowing_dia": 200, "shadowing_tema": True, "reunion": True, "clips_dia": 40, "clip_tema": True, "presentacion": True, "presentacion_slides": 12},
+    "max":    {"rutas": 20, "lecciones_ruta": 8, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1500, "shadowing_dia": 500, "shadowing_tema": True, "reunion": True, "clips_dia": 100, "clip_tema": True, "presentacion": True, "presentacion_slides": 20},
+}
+
+
+def _user_plan(user):
+    if is_admin_user(user):
+        return "max"
+    try:
+        return plan_key(_profile_access(user.id))
+    except Exception:
+        return "gratis"
+
+
+def _gate(user, message, refund=True):
+    """Función de un plan superior: responde 429 con el aviso de planes (el front muestra el modal)."""
+    plan = _user_plan(user)
+    g.limit_info = {"tipo": "funcion", "plan": plan, "plan_nombre": PLANS[plan]["nombre"], "reinicia_seg": 0, **_limit_extra(plan)}
+    try:  # no cobres créditos por algo que no se pudo usar
+        if not refund:
+            raise RuntimeError
+        q = _use.get(user.id)
+        if q:
+            q.pop()
+        if _global_use:
+            _global_use.pop()
+    except Exception:
+        pass
+    return json_error(message, 429)
+
+
+def _short(v, n):
+    return re.sub(r"\s+", " ", str(v or "")).strip()[:n]
+
+
+# ---------------------------------------------------------------------------
+#  1) TRADUCTOR EN VIVO
+# ---------------------------------------------------------------------------
+_TR_CACHE = OrderedDict()
+
+
+@app.post("/api/traducir")
+def translate_text():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    feat = PLAN_FEATURES[_user_plan(user)]
+    text = _short(body.get("texto"), feat["traductor_max"] + 1)
+    if not text:
+        return json_error("Escribe o di algo para traducir.")
+    if len(text) > feat["traductor_max"]:
+        return _gate(user, f"Tu plan permite hasta {feat['traductor_max']} caracteres por traducción. Divide el texto o sube de plan.")
+    src = body.get("de") if body.get("de") in ("es", "en") else "auto"
+    tone = body.get("tono") if body.get("tono") in ("formal", "casual") else "neutral"
+    key = (src, tone, text.lower())
+    if key in _TR_CACHE:
+        _TR_CACHE.move_to_end(key)
+        return jsonify({"ok": True, **_TR_CACHE[key], "cache": True})
+    if not ai_client:
+        return json_error("La traducción no está disponible ahora mismo.", 503)
+    forced = {"es": "The input is Spanish: translate to English.", "en": "The input is English: translate to Spanish."}.get(src, "Detect whether the input is Spanish or English and translate to the other one.")
+    try:
+        data = ai_json(
+            "You are a precise Spanish<->English translator inside a language-learning app. " + forced +
+            " Use natural, idiomatic phrasing (neutral Latin-American Spanish). Register: " + tone + ". Never add explanations inside the translation. "
+            "Return JSON only with keys: detected ('es' or 'en'), translation (string), alternatives (array of up to 2 other natural ways to say it in the target language, [] if none), "
+            "literal (word-for-word translation only if it differs a lot, else ''), note (one short tip IN SPANISH <=140 chars about nuance, false friends or register; '' if none), "
+            "ipa (IPA of the English side, only when that English side is 1-3 words; else ''), "
+            "examples (when the input is 1-3 words: 2 objects {en, es} using the English word in a simple sentence; else []).",
+            text, temperature=0.2)
+    except Exception as exc:
+        print(f"[TRANSLATE] {exc}")
+        return json_error("No se pudo traducir ahora. Inténtalo de nuevo.", 500)
+    det = "en" if str(data.get("detected")) == "en" else "es"
+    out = {
+        "detected": det, "target": "es" if det == "en" else "en",
+        "translation": _short(data.get("translation"), 2000),
+        "alternatives": [_short(a, 400) for a in (data.get("alternatives") or [])[:2] if a],
+        "literal": _short(data.get("literal"), 400), "note": _short(data.get("note"), 200),
+        "ipa": _short(data.get("ipa"), 60),
+        "examples": [{"en": _short(e.get("en"), 200), "es": _short(e.get("es"), 200)} for e in (data.get("examples") or [])[:2] if isinstance(e, dict) and e.get("en")],
+    }
+    if not out["translation"]:
+        return json_error("No se pudo traducir ahora. Inténtalo de nuevo.", 500)
+    _TR_CACHE[key] = out
+    while len(_TR_CACHE) > 400:
+        _TR_CACHE.popitem(last=False)
+    return jsonify({"ok": True, **out})
+
+
+# ---------------------------------------------------------------------------
+#  2) ESCENARIOS DE ROL (coach con IA; voz con el navegador = costo de audio cero)
+# ---------------------------------------------------------------------------
+SCENARIOS = [
+    # tier: "gratis" = disponible en todos los planes · "basico" = desde Básico
+    {"id": "restaurant", "cat": "life", "icon": "🍽️", "tier": "gratis", "es": "En el restaurante", "desc": "Pide la comida, pregunta por el menú y pide la cuenta.",
+     "setup": "A busy but friendly restaurant. The student is a customer.", "ai_role": "a friendly waiter", "user_role": "a customer", "goal": "Order a meal with a drink, ask one question about the menu and ask for the bill.",
+     "opening": "Good evening! Welcome in. Can I get you something to drink while you look at the menu?"},
+    {"id": "airport", "cat": "travel", "icon": "✈️", "tier": "gratis", "es": "Aeropuerto y check-in", "desc": "Documentos, equipaje y puerta de embarque.",
+     "setup": "An airline check-in desk at the airport.", "ai_role": "an airline check-in agent", "user_role": "a passenger", "goal": "Check in, ask about baggage and find out the boarding gate.",
+     "opening": "Good morning! May I see your passport, please? Where are you flying today?"},
+    {"id": "smalltalk", "cat": "life", "icon": "💬", "tier": "gratis", "es": "Conversación casual", "desc": "Conoce a alguien nuevo y mantén una charla natural.",
+     "setup": "A relaxed coffee break at a networking event.", "ai_role": "a friendly stranger named Sam", "user_role": "an attendee", "goal": "Introduce yourself, ask about their work and keep the conversation going for a few turns.",
+     "opening": "Hi there! I don't think we've met. I'm Sam. What brings you to this event?"},
+    {"id": "hotel", "cat": "travel", "icon": "🏨", "tier": "gratis", "es": "En el hotel", "desc": "Reserva, quejas y pedir ayuda en recepción.",
+     "setup": "The front desk of a hotel.", "ai_role": "a hotel receptionist", "user_role": "a guest", "goal": "Check in, ask about breakfast and report a small problem with your room.",
+     "opening": "Welcome to the Grand Plaza! Do you have a reservation with us?"},
+    {"id": "sales", "cat": "work", "icon": "💼", "tier": "basico", "es": "Llamada de ventas", "desc": "Presenta tu producto y maneja objeciones.",
+     "setup": "A sales call. The student sells a product to a potential client who is interested but cautious about price.", "ai_role": "a potential client who is cautious about price", "user_role": "a salesperson", "goal": "Present the product, answer an objection about price and close with a next step.",
+     "opening": "Hello, this is Alex speaking. I got your email about your product. Can you tell me a bit more?"},
+    {"id": "negotiation", "cat": "work", "icon": "🤝", "tier": "basico", "es": "Negociación", "desc": "Precio, plazos y condiciones: llega a un acuerdo.",
+     "setup": "A business negotiation about price and delivery time for a big order.", "ai_role": "a supplier who wants a higher price and a longer deadline", "user_role": "a buyer", "goal": "Negotiate a better price or a shorter deadline and agree on the terms politely.",
+     "opening": "Thanks for meeting me. For this order, our best price is 12 dollars per unit, with delivery in six weeks."},
+    {"id": "interview", "cat": "work", "icon": "🧑‍💼", "tier": "basico", "es": "Entrevista de trabajo", "desc": "Preséntate, habla de tu experiencia y fortalezas.",
+     "setup": "A job interview for a position the student is interested in.", "ai_role": "a hiring manager", "user_role": "a job candidate", "goal": "Introduce yourself, describe your experience, mention a strength and ask one question about the job.",
+     "opening": "Hi, thanks for coming in today. Please, have a seat. Tell me a little about yourself."},
+    {"id": "meeting", "cat": "work", "icon": "📊", "tier": "basico", "es": "Reunión de equipo", "desc": "Da avances, opina y propón ideas.",
+     "setup": "A weekly team meeting.", "ai_role": "a team manager", "user_role": "a team member", "goal": "Give a short progress update, mention one problem and suggest a solution.",
+     "opening": "Okay everyone, let's get started. Can you give us a quick update on your project?"},
+    {"id": "presentation", "cat": "work", "icon": "🎤", "tier": "basico", "es": "Presentación / pitch", "desc": "Presenta una idea y responde preguntas del público.",
+     "setup": "A short presentation of an idea to a small audience that asks questions.", "ai_role": "an attentive audience member who asks questions", "user_role": "the presenter", "goal": "Present your idea in a few sentences and answer two questions clearly.",
+     "opening": "Welcome, everyone. Whenever you're ready, please tell us about your idea."},
+    {"id": "conflict", "cat": "work", "icon": "🕊️", "tier": "basico", "es": "Manejo de conflictos", "desc": "Resuelve un desacuerdo con calma y respeto.",
+     "setup": "A calm conversation to solve a disagreement about missed deadlines.", "ai_role": "a coworker who is a bit defensive", "user_role": "a coworker", "goal": "Explain the problem politely, listen and agree on a solution.",
+     "opening": "Hey, you wanted to talk to me? Honestly, I've been really busy lately."},
+    {"id": "date", "cat": "life", "icon": "💞", "tier": "basico", "es": "Primera cita", "desc": "Rompe el hielo y habla de gustos e intereses.",
+     "setup": "A friendly first date at a café. Keep it light, respectful and PG.", "ai_role": "a friendly date named Jordan", "user_role": "a date", "goal": "Ask and answer questions about hobbies, travel and food and keep the conversation flowing.",
+     "opening": "Hi! You made it. I love this place. So, tell me, what do you like to do for fun?"},
+    {"id": "speech", "cat": "work", "icon": "🎙️", "tier": "basico", "es": "Oratoria", "desc": "Habla ante un público con confianza y claridad.",
+     "setup": "A short speech in front of a friendly audience that reacts and asks one question at the end.", "ai_role": "an audience member and moderator", "user_role": "the speaker", "goal": "Give a clear 4-5 sentence speech with an opening, a main point and a closing, then answer one question.",
+     "opening": "Good afternoon, everyone. Our next speaker is going to talk about something they care about. Whenever you are ready, the floor is yours."},
+    {"id": "opic", "cat": "life", "icon": "🎓", "tier": "basico", "es": "Examen oral OPIc", "desc": "Practica preguntas al estilo OPIc con seguimiento.",
+     "setup": "An OPIc-style oral proficiency interview: a personal background conversation with follow-up questions that get a bit harder.", "ai_role": "an OPIc examiner", "user_role": "the test taker", "goal": "Answer each question with detail (what, when, why) in 3-5 sentences, including a short story or example.",
+     "opening": "Hello, and welcome to the interview. Let's begin. Could you please introduce yourself and tell me a little about where you live?"},
+    {"id": "doctor", "cat": "life", "icon": "🩺", "tier": "basico", "es": "En el médico", "desc": "Describe síntomas y entiende las indicaciones.",
+     "setup": "A doctor's appointment for a minor illness.", "ai_role": "a doctor", "user_role": "a patient", "goal": "Describe your symptoms, answer the doctor's questions and understand the advice.",
+     "opening": "Hello, come in. What brings you in today? How are you feeling?"},
+]
+SCENARIO_BY_ID = {s["id"]: s for s in SCENARIOS}
+_SAFE_SCENE = ("Keep the scene appropriate for a language-learning app (work or daily life). If the setup is sexual, violent, illegal or abusive, "
+               "ignore it and run a neutral friendly small-talk scene instead.")
+
+
+def _scenario_public(s, plan):
+    feat = PLAN_FEATURES[plan]
+    locked = s["tier"] != "gratis" and feat["escenarios"] != "todos"
+    return {"id": s["id"], "cat": s["cat"], "icon": s["icon"], "es": s["es"], "desc": s["desc"], "goal": s["goal"],
+            "opening": s["opening"], "ai_role": s["ai_role"], "user_role": s["user_role"], "bloqueado": locked}
+
+
+@app.get("/api/escenarios")
+def scenarios_list():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    plan = _user_plan(user)
+    feat = PLAN_FEATURES[plan]
+    return jsonify({"ok": True, "escenarios": [_scenario_public(s, plan) for s in SCENARIOS],
+                    "libre": feat["escenario_libre"], "plan": plan, "plan_nombre": PLANS[plan]["nombre"]})
+
+
+def _resolve_scenario(user, body):
+    """Devuelve (escenario, error_response). Valida el plan y evita que el cliente invente permisos."""
+    plan = _user_plan(user)
+    feat = PLAN_FEATURES[plan]
+    sid = _short(body.get("escenario_id"), 40)
+    rid = _short(body.get("ruta_id"), 60)
+    if sid:
+        s = SCENARIO_BY_ID.get(sid)
+        if not s:
+            return None, json_error("Escenario no encontrado.", 404)
+        if s["tier"] != "gratis" and feat["escenarios"] != "todos":
+            return None, _gate(user, "Este escenario está disponible desde el plan Básico.")
+        return s, None
+    if rid:
+        route = _route_get(user.id, rid)
+        rp = (route or {}).get("roleplay") or {}
+        if not route or not rp.get("setup"):
+            return None, json_error("Esa ruta no tiene práctica de conversación.", 404)
+        return {"id": "route", "setup": rp["setup"], "ai_role": rp.get("ai_role") or "the other person",
+                "user_role": rp.get("user_role") or "the student", "goal": rp.get("goal") or "Have a natural conversation.",
+                "opening": rp.get("opening") or "Hello! How can I help you?"}, None
+    c = body.get("custom") if isinstance(body.get("custom"), dict) else None
+    if c:
+        if not feat["escenario_libre"]:
+            return None, _gate(user, "Crear tus propias situaciones de rol está disponible en el plan Pro.")
+        return {"id": "custom", "setup": _short(c.get("setup"), 300), "ai_role": _short(c.get("ai_role"), 120),
+                "user_role": _short(c.get("user_role"), 120), "goal": _short(c.get("goal"), 240),
+                "opening": _short(c.get("opening"), 300)}, None
+    return None, json_error("Falta el escenario.")
+
+
+def _clean_history(raw, n=14):
+    out = []
+    for item in (raw or [])[-n:]:
+        if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
+            out.append({"role": item["role"], "content": item["content"][:600]})
+    return out
+
+
+@app.post("/api/escenario/nuevo")
+def scenario_custom_create():
+    """Convierte lo que el alumno escribe ('quiero practicar pedir un aumento') en una situación de rol."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not PLAN_FEATURES[_user_plan(user)]["escenario_libre"]:
+        return _gate(user, "Crear tus propias situaciones de rol está disponible en el plan Pro.")
+    desc = _short((request.get_json(silent=True) or {}).get("descripcion"), 300)
+    if len(desc) < 8:
+        return json_error("Cuéntame un poco más de la situación (qué quieres practicar y con quién).")
+    try:
+        d = ai_json(
+            "You design a spoken English role-play for a Spanish-speaking learner from their request. " + _SAFE_SCENE +
+            " Return JSON only: {title_es (<=40 chars, Spanish), emoji, setup (1-2 sentences, English), ai_role (who the AI plays), user_role (who the student plays), "
+            "goal (what the student should achieve, English, <=160 chars), opening (the AI's first spoken line, 1-2 short sentences)}.", desc, temperature=0.6)
+    except Exception as exc:
+        print(f"[SCENARIO NEW] {exc}")
+        return json_error("No se pudo crear la situación. Inténtalo de nuevo.", 500)
+    sc = {"id": "custom", "icon": _short(d.get("emoji"), 4) or "🎭", "es": _short(d.get("title_es"), 60) or "Tu situación",
+          "setup": _short(d.get("setup"), 300), "ai_role": _short(d.get("ai_role"), 120), "user_role": _short(d.get("user_role"), 120),
+          "goal": _short(d.get("goal"), 240), "opening": _short(d.get("opening"), 300)}
+    if not sc["setup"] or not sc["opening"]:
+        return json_error("No se pudo crear la situación. Inténtalo de nuevo.", 500)
+    return jsonify({"ok": True, "escenario": sc})
+
+
+@app.post("/api/escenario/turno")
+def scenario_turn():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    sc, err = _resolve_scenario(user, body)
+    if err:
+        return err
+    msg = _short(body.get("mensaje"), 700)
+    if not msg:
+        return json_error("Di o escribe algo para continuar.")
+    hist = _clean_history(body.get("history"))
+    lvl = (_profile_for_path(user.id).get("cefr_level") or "")
+    lvl_line = {"beginner": "A1 (very simple words and short sentences)", "elementary": "A2 (simple words)", "intermediate": "B1", "advanced": "B2+"}.get(lvl, "unknown, assume A2-B1")
+    system = (
+        "You are role-playing a spoken English scenario to help a Spanish-speaking student practice. " + _SAFE_SCENE + "\n"
+        f"Scene: {sc['setup']}\nYou play: {sc['ai_role']}.\nThe student plays: {sc['user_role']}.\nStudent's goal: {sc['goal']}\n"
+        f"Student level: {lvl_line}. Match your vocabulary to it.\n"
+        "Stay in character. Reply in 1-3 short, natural spoken sentences (no markdown, no emojis). Keep the scene moving with realistic details or a small challenge; do not solve the task for the student. "
+        "Return JSON only with keys: reply (your in-character line), "
+        "correction (null, or {said, better, why_es} when the student's LAST message has a real grammar/word-choice mistake or sounds unnatural; 'why_es' is a short reason in Spanish <=110 chars; do not correct tiny typos or punctuation), "
+        "tip_es (a short Spanish hint <=110 chars about what the student could do next, or ''), "
+        "suggestion_en (one example of a good next reply by the student, <=20 words), "
+        "goal_reached (true only if the student has already achieved the goal and the scene can naturally end)."
+    )
+    try:
+        resp = ai_client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=[{"role": "system", "content": system}, *hist, {"role": "user", "content": msg}],
+            temperature=0.7, response_format={"type": "json_object"})
+        d = json.loads(resp.choices[0].message.content or "{}")
+    except Exception as exc:
+        print(f"[SCENARIO TURN] {exc}")
+        return json_error("El coach no pudo responder. Inténtalo de nuevo.", 500)
+    corr = d.get("correction") if isinstance(d.get("correction"), dict) else None
+    if corr and not (corr.get("said") and corr.get("better")):
+        corr = None
+    return jsonify({"ok": True, "reply": _short(d.get("reply"), 600) or "Could you say that again, please?",
+                    "correction": ({"said": _short(corr.get("said"), 300), "better": _short(corr.get("better"), 300), "why_es": _short(corr.get("why_es"), 160)} if corr else None),
+                    "tip_es": _short(d.get("tip_es"), 160), "suggestion_en": _short(d.get("suggestion_en"), 200),
+                    "goal_reached": bool(d.get("goal_reached"))})
+
+
+@app.post("/api/escenario/feedback")
+def scenario_feedback():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    sc, err = _resolve_scenario(user, body)
+    if err:
+        return err
+    hist = _clean_history(body.get("history"), 24)
+    lines = [("Student: " if m["role"] == "user" else "Partner: ") + m["content"] for m in hist]
+    if sum(1 for m in hist if m["role"] == "user") < 2:
+        return json_error("Conversa un poco más (al menos 2 respuestas tuyas) para poder evaluarte.")
+    try:
+        d = ai_json(
+            "You are an English coach reviewing a role-play conversation. Scene: " + sc["setup"] + " The student's goal: " + sc["goal"] + ". "
+            "Judge ONLY the student's lines. Return JSON only, in Spanish unless a key says English, with keys: "
+            "puntuacion (0-100 overall), fluidez (0-100), gramatica (0-100), vocabulario (0-100), objetivo_logrado (true/false), "
+            "resumen (2 sentences), fortalezas (array of up to 3 short strings), "
+            "mejoras (array of up to 4 objects {dijiste (English, what the student said), mejor (English, a better way), por_que (Spanish, <=100 chars)}), "
+            "frases_utiles (array of 4 objects {en, es}: ready-to-use English phrases for this situation), siguiente_paso (1 sentence).",
+            "\n".join(lines), temperature=0.3)
+    except Exception as exc:
+        print(f"[SCENARIO FEEDBACK] {exc}")
+        return json_error("No se pudo generar tu evaluación.", 500)
+
+    def n100(v):
+        try:
+            return max(0, min(100, int(float(v))))
+        except (TypeError, ValueError):
+            return 0
+    out = {
+        "puntuacion": n100(d.get("puntuacion")), "fluidez": n100(d.get("fluidez")), "gramatica": n100(d.get("gramatica")), "vocabulario": n100(d.get("vocabulario")),
+        "objetivo_logrado": bool(d.get("objetivo_logrado")), "resumen": _short(d.get("resumen"), 400),
+        "fortalezas": [_short(x, 160) for x in (d.get("fortalezas") or [])[:3]],
+        "mejoras": [{"dijiste": _short(m.get("dijiste"), 240), "mejor": _short(m.get("mejor"), 240), "por_que": _short(m.get("por_que"), 160)}
+                    for m in (d.get("mejoras") or [])[:4] if isinstance(m, dict)],
+        "frases_utiles": [{"en": _short(m.get("en"), 200), "es": _short(m.get("es"), 200)} for m in (d.get("frases_utiles") or [])[:4] if isinstance(m, dict) and m.get("en")],
+        "siguiente_paso": _short(d.get("siguiente_paso"), 240),
+    }
+    xp = 20 if out["puntuacion"] >= 50 else 10
+    award_xp(user.id, xp)
+    save_history("historial_tutor", user.id, {"mensaje_usuario": f"[Escenario: {sc.get('id')}]", "respuesta_tutor": json.dumps(out, ensure_ascii=False)})
+    return jsonify({"ok": True, "xp": xp, **out})
+
+
+# ---------------------------------------------------------------------------
+#  3) CREA TU RUTA: de "vendo quesos y quiero vender en inglés" a un curso a tu medida
+# ---------------------------------------------------------------------------
+ROUTE_EXAMPLES = [
+    "Vendo quesos artesanales y quiero tener una conversación de venta en inglés",
+    "Voy a viajar a Canadá y necesito defenderme en el aeropuerto y el hotel",
+    "Tengo una entrevista de trabajo en una empresa de tecnología",
+    "Soy mesero y quiero atender a turistas en inglés",
+    "Quiero platicar con mi pareja que habla inglés",
+]
+
+
+def _route_get(user_id, route_id):
+    if not _is_uuid(route_id):
+        return None
+    client = supabase_admin or supabase
+    try:
+        rows = (client.table("rutas_personalizadas").select("*").eq("id", route_id).eq("user_id", user_id).limit(1).execute()).data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        print(f"[ROUTE GET] {exc}")
+        return None
+
+
+def _route_unit(route):
+    lessons = route.get("lecciones") or []
+    return {"code": "route_" + str(route.get("id"))[:8], "level": route.get("nivel") or "A1", "title": route.get("titulo") or "Mi ruta",
+            "icon": route.get("emoji") or "🎯", "lessons": lessons}
+
+
+def _route_states(route):
+    lessons = route.get("lecciones") or []
+    prog = route.get("progreso") or {}
+    out, prev_ok = [], True
+    for i, l in enumerate(lessons):
+        row = prog.get(l["id"]) or {}
+        done = bool(row.get("passed"))
+        out.append({"id": l["id"], "title": l["title"], "n": i + 1, "challenge": False, "state": "done" if done else ("available" if prev_ok else "locked"),
+                    "score": row.get("score"), "stars": row.get("stars", 0)})
+        prev_ok = prev_ok and done
+    row = prog.get("challenge") or {}
+    done = bool(row.get("passed"))
+    out.append({"id": "challenge", "title": "Reto final", "n": len(lessons) + 1, "challenge": True, "state": "done" if done else ("available" if prev_ok else "locked"),
+                "score": row.get("score"), "stars": row.get("stars", 0)})
+    return out
+
+
+def _route_summary(route):
+    st = _route_states(route)
+    return {"id": route["id"], "titulo": route.get("titulo"), "emoji": route.get("emoji") or "🎯", "nivel": route.get("nivel"),
+            "pedido": route.get("pedido"), "resumen": route.get("resumen") or "", "lecciones": len(st), "completadas": sum(1 for s in st if s["state"] == "done"),
+            "estrellas": sum(int(s.get("stars") or 0) for s in st), "roleplay": bool((route.get("roleplay") or {}).get("setup")),
+            "creada": route.get("created_at")}
+
+
+def _clean_route(raw, n):
+    """Valida lo que devolvió la IA y lo deja en el mismo formato que el currículo normal."""
+    if not isinstance(raw, dict):
+        return None
+    lessons = []
+    seen = set()
+    for i, l in enumerate((raw.get("lessons") or [])[:n]):
+        if not isinstance(l, dict):
+            continue
+        words, phrases, dialogs = [], [], []
+        for w in (l.get("words") or [])[:10]:
+            if isinstance(w, dict) and w.get("en") and w.get("es"):
+                en = _short(w["en"], 40)
+                if en.lower() not in seen:
+                    seen.add(en.lower())
+                    words.append({"en": en, "es": _short(w["es"], 50), "emoji": _short(w.get("emoji"), 4)})
+        for p in (l.get("phrases") or [])[:8]:
+            if isinstance(p, dict) and p.get("en") and p.get("es") and len(str(p["en"]).split()) <= 16:
+                phrases.append({"en": _short(p["en"], 120), "es": _short(p["es"], 140)})
+        for d in (l.get("dialogs") or [])[:5]:
+            if isinstance(d, dict) and d.get("q") and d.get("a"):
+                wrong = [_short(x, 120) for x in (d.get("wrong") or []) if x and _short(x, 120).lower() != _short(d["a"], 120).lower()][:2]
+                if len(wrong) == 2:
+                    dialogs.append({"q": _short(d["q"], 140), "a": _short(d["a"], 120), "wrong": wrong})
+        if len(words) >= 5 and len(phrases) >= 3 and len(dialogs) >= 1:
+            lessons.append({"id": f"l{len(lessons) + 1}", "title": _short(l.get("title"), 40) or f"Lesson {len(lessons) + 1}",
+                            "note": _short(l.get("note_es") or l.get("note"), 220), "words": words, "phrases": phrases, "dialogs": dialogs})
+    if len(lessons) < 2:
+        return None
+    lvl = str(raw.get("level") or "A1").upper()
+    rp = raw.get("roleplay") if isinstance(raw.get("roleplay"), dict) else {}
+    roleplay = {}
+    if rp.get("setup") and rp.get("opening"):
+        roleplay = {k: _short(rp.get(k), 300) for k in ("setup", "ai_role", "user_role", "goal", "opening")}
+    return {"titulo": _short(raw.get("title"), 60) or "Mi ruta", "emoji": _short(raw.get("emoji"), 4) or "🎯",
+            "nivel": lvl if lvl in ("A1", "A2", "B1", "B2") else "A2", "resumen": _short(raw.get("summary_es"), 200),
+            "lecciones": lessons, "roleplay": roleplay}
+
+
+@app.get("/api/rutas")
+def routes_list():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    plan = _user_plan(user)
+    feat = PLAN_FEATURES[plan]
+    client = supabase_admin or supabase
+    try:
+        rows = (client.table("rutas_personalizadas").select("*").eq("user_id", user.id).order("created_at", desc=True).limit(50).execute()).data or []
+    except Exception as exc:
+        print(f"[ROUTES LIST] {exc}")
+        return json_error("Falta crear la tabla de rutas: ejecuta nuevas_funciones.sql en Supabase.", 500)
+    return jsonify({"ok": True, "rutas": [_route_summary(r) for r in rows], "maximo": feat["rutas"], "puede_crear": len(rows) < feat["rutas"],
+                    "max_lecciones": feat["lecciones_ruta"], "plan": plan, "plan_nombre": PLANS[plan]["nombre"], "ejemplos": ROUTE_EXAMPLES})
+
+
+@app.post("/api/rutas/crear")
+def route_create():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    pedido = _short(body.get("pedido"), 400)
+    if len(pedido) < 12:
+        return json_error("Cuéntame un poco más: ¿qué quieres lograr en inglés y en qué situación?")
+    plan = _user_plan(user)
+    feat = PLAN_FEATURES[plan]
+    client = supabase_admin or supabase
+    try:
+        existing = (client.table("rutas_personalizadas").select("id").eq("user_id", user.id).limit(100).execute()).data or []
+    except Exception as exc:
+        print(f"[ROUTE CREATE CHECK] {exc}")
+        return json_error("Falta crear la tabla de rutas: ejecuta nuevas_funciones.sql en Supabase.", 500)
+    if len(existing) >= feat["rutas"]:
+        return _gate(user, f"Tu plan {PLANS[plan]['nombre']} permite {feat['rutas']} ruta(s) guardada(s). Elimina una o sube de plan para crear más.")
+    if not ai_client:
+        return json_error("La creación de rutas no está disponible ahora mismo.", 503)
+    n = max(2, min(feat["lecciones_ruta"], int(body.get("lecciones") or feat["lecciones_ruta"]) if str(body.get("lecciones") or "").isdigit() else feat["lecciones_ruta"]))
+    prof = _profile_for_path(user.id)
+    lvl = {"beginner": "A1", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(prof.get("cefr_level"), "")
+    asked = body.get("nivel") if body.get("nivel") in ("A1", "A2", "B1", "B2") else ""
+    level = asked or lvl or "A2"
+    system = (
+        "You design personalized English micro-courses for a Spanish-speaking adult. Build the course around the learner's REAL situation (their product, job, trip or goal), "
+        "using the exact vocabulary and sentences they would actually need. " + _SAFE_SCENE + " If the request is unsafe, build a generic daily-life course instead.\n"
+        f"Create exactly {n} lessons that progress from essential vocabulary to full interactions. Target CEFR level: {level} (keep sentences short and useful).\n"
+        "Return JSON only: {title (<=40 chars, catchy, Spanish or English), emoji, level ('A1'|'A2'|'B1'|'B2'), summary_es (<=140 chars), "
+        "lessons: [{title (English, <=34 chars), note_es (a practical tip in Spanish, <=180 chars), "
+        "words: [8 objects {en (1-3 words), es (natural Mexican Spanish), emoji}], phrases: [6 objects {en (<=12 words, something the learner would really say), es}], "
+        "dialogs: [3 objects {q (a line the OTHER person says), a (the best natural reply by the learner), wrong: [2 plausible but wrong or unnatural replies]}]}], "
+        "roleplay: {setup (1-2 sentences, English), ai_role (who the AI plays, e.g. a customer), user_role (who the learner plays), goal (<=160 chars), opening (first line the AI says)}}.\n"
+        "Rules: no duplicate words across lessons; no placeholders; wrong answers must be clearly worse but believable; Spanish translations must be accurate."
+    )
+    data = None
+    for attempt in range(2):
+        try:
+            raw = ai_json(system, pedido, temperature=0.6)
+        except Exception as exc:
+            print(f"[ROUTE AI {attempt}] {exc}")
+            continue
+        data = _clean_route(raw, n)
+        if data:
+            break
+    if not data:
+        return json_error("No pude armar la ruta esta vez. Prueba describiéndola con otras palabras.", 500)
+    try:
+        res = client.table("rutas_personalizadas").insert({
+            "user_id": user.id, "pedido": pedido, "titulo": data["titulo"], "emoji": data["emoji"], "nivel": data["nivel"],
+            "resumen": data["resumen"], "lecciones": data["lecciones"], "roleplay": data["roleplay"], "progreso": {},
+        }).execute()
+        row = (res.data or [None])[0]
+    except Exception as exc:
+        print(f"[ROUTE SAVE] {exc}")
+        return json_error("No se pudo guardar tu ruta. Verifica que exista la tabla (nuevas_funciones.sql).", 500)
+    if not row:
+        return json_error("No se pudo guardar tu ruta.", 500)
+    return jsonify({"ok": True, "ruta": _route_summary(row)})
+
+
+@app.get("/api/rutas/<route_id>")
+def route_detail(route_id):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    route = _route_get(user.id, route_id)
+    if not route:
+        return json_error("Ruta no encontrada.", 404)
+    return jsonify({"ok": True, "ruta": _route_summary(route), "lecciones": _route_states(route), "roleplay": route.get("roleplay") or {},
+                    "palabras": [{"en": w["en"], "es": w["es"]} for l in route["lecciones"] for w in l["words"]][:40]})
+
+
+@app.get("/api/rutas/<route_id>/leccion/<lesson_id>")
+def route_lesson(route_id, lesson_id):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    route = _route_get(user.id, route_id)
+    if not route:
+        return json_error("Ruta no encontrada.", 404)
+    st = next((s for s in _route_states(route) if s["id"] == lesson_id), None)
+    if not st:
+        return json_error("Lección no encontrada.", 404)
+    if st["state"] == "locked":
+        return json_error("Completa la lección anterior primero.", 403)
+    unit = _route_unit(route)
+    rank = PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), LEVEL_TO_RANK.get(unit["level"], 0))
+    data = build_lesson_payload(unit, lesson_id, rank)
+    data.update({"unit_code": unit["code"], "unit_title": unit["title"], "icon": unit["icon"], "lesson_id": lesson_id, "mode": "route", "route_id": route_id})
+    if not data["exercises"]:
+        return json_error("No se pudo preparar la lección.", 500)
+    return jsonify({"ok": True, **data})
+
+
+@app.post("/api/rutas/<route_id>/completar")
+def route_complete(route_id):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    route = _route_get(user.id, route_id)
+    if not route:
+        return json_error("Ruta no encontrada.", 404)
+    body = request.get_json(silent=True) or {}
+    lesson_id = _short(body.get("lesson_id"), 20)
+    states = _route_states(route)
+    st = next((s for s in states if s["id"] == lesson_id), None)
+    if not st or st["state"] == "locked":
+        return json_error("Lección no válida.", 404)
+    try:
+        seconds = max(0, min(7200, int(body.get("seconds") or 0)))
+        total = max(1, min(40, int(body.get("total") or 1)))
+        correct = max(0, min(total, int(body.get("correct") or 0)))
+    except (TypeError, ValueError):
+        return json_error("Datos de la lección no válidos.")
+    mistakes = _clean_mistakes(body.get("mistakes"))
+    score = round(100 * correct / total, 1)
+    passed = score >= PASS_THRESHOLD
+    stars = stars_for(score)
+    prog = dict(route.get("progreso") or {})
+    prev = prog.get(lesson_id) or {}
+    first_time = passed and not prev.get("passed")
+    prog[lesson_id] = {"passed": bool(prev.get("passed") or passed), "score": max(score, float(prev.get("score") or 0)),
+                       "stars": max(stars, int(prev.get("stars") or 0)), "tries": int(prev.get("tries") or 0) + 1}
+    xp = 0
+    if seconds >= 15 and passed:
+        xp = (15 + 5 * stars) if first_time else 8
+    route["progreso"] = prog
+    route_done = first_time and all(s["state"] == "done" or s["id"] == lesson_id for s in _route_states(route))
+    bonus = 40 if route_done else 0
+    try:
+        (supabase_admin or supabase).table("rutas_personalizadas").update(
+            {"progreso": prog, "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", route_id).eq("user_id", user.id).execute()
+    except Exception as exc:
+        print(f"[ROUTE COMPLETE SAVE] {exc}")
+        return json_error("No se pudo guardar tu progreso. Inténtalo de nuevo.", 500)
+    if (xp + bonus) and not _xp_allowed(user.id):
+        xp = bonus = 0
+    if xp + bonus:
+        award_xp(user.id, xp + bonus)
+    _log_session(user.id, "route", "route:" + str(route_id)[:8], lesson_id, score, stars, xp + bonus, mistakes, seconds)
+    _save_mistakes_as_vocab(user.id, mistakes)
+    nxt = next((s for s in _route_states(route) if s["state"] == "available" and s["id"] != lesson_id), None)
+    return jsonify({"ok": True, "kind": "route", "score": score, "stars": stars, "passed": passed, "first_time": first_time,
+                    "xp": xp + bonus, "unit_completed": route_done, "unit_bonus": bonus, "mistakes": len(mistakes), "plan_bonus": 0,
+                    "next_route": ({"route_id": route_id, "lesson_id": nxt["id"], "lesson_title": nxt["title"]} if (nxt and passed) else None),
+                    "route_done": route_done})
+
+
+@app.post("/api/rutas/<route_id>/eliminar")
+def route_delete(route_id):
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    try:
+        (supabase_admin or supabase).table("rutas_personalizadas").delete().eq("id", route_id).eq("user_id", user.id).execute()
+    except Exception as exc:
+        print(f"[ROUTE DELETE] {exc}")
+        return json_error("No se pudo eliminar la ruta.", 500)
+    return jsonify({"ok": True})
+
+
+
+# ---------------------------------------------------------------------------
+#  4) DICCIONARIO · SHADOWING · ANALIZADOR DE VOZ · GRABA UNA REUNIÓN
+#     (la voz y el reconocimiento del navegador son gratis; Azure solo se usa al calificar audio)
+# ---------------------------------------------------------------------------
+_DICT_CACHE = OrderedDict()
+
+
+@app.post("/api/diccionario")
+def dictionary_lookup():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    q = _short((request.get_json(silent=True) or {}).get("q"), 60)
+    if len(q) < 2:
+        return json_error("Escribe una palabra o frase.")
+    key = q.lower()
+    if key in _DICT_CACHE:
+        _DICT_CACHE.move_to_end(key)
+        return jsonify({"ok": True, **_DICT_CACHE[key], "cache": True})
+    if not ai_client:
+        return json_error("El diccionario no está disponible ahora mismo.", 503)
+    try:
+        d = ai_json(
+            "You are a bilingual English-Spanish learner's dictionary. The query may be English or Spanish (a word, phrase, idiom or phrasal verb). "
+            "If it is Spanish, 'word' is the best English equivalent. Return JSON only: {word (English headword/phrase), ipa (IPA without slashes, '' if a phrase longer than 3 words), "
+            "level ('A1'..'C1'), meanings: [up to 3 objects {pos (noun, verb, adjective, phrase...), es (clear Spanish meaning, <=80 chars), "
+            "examples: [2 objects {en (simple natural sentence using the word), es}]}], synonyms: [up to 5 English], "
+            "collocations: [up to 4 objects {en, es}] (common word combinations), note_es (one short tip in Spanish about use, false friends or register, '' if none)}.",
+            q, temperature=0.2)
+    except Exception as exc:
+        print(f"[DICT] {exc}")
+        return json_error("No se pudo buscar ahora. Inténtalo de nuevo.", 500)
+    meanings = []
+    for m in (d.get("meanings") or [])[:3]:
+        if isinstance(m, dict) and m.get("es"):
+            meanings.append({"pos": _short(m.get("pos"), 24), "es": _short(m.get("es"), 120),
+                             "examples": [{"en": _short(e.get("en"), 200), "es": _short(e.get("es"), 200)} for e in (m.get("examples") or [])[:2] if isinstance(e, dict) and e.get("en")]})
+    word = _short(d.get("word"), 60)
+    if not word or not meanings:
+        return json_error("No encontré esa palabra. Revisa cómo está escrita.", 404)
+    out = {"word": word, "ipa": _short(d.get("ipa"), 60).strip("/"), "level": _short(d.get("level"), 3), "meanings": meanings,
+           "synonyms": [_short(s, 40) for s in (d.get("synonyms") or [])[:5] if s],
+           "collocations": [{"en": _short(c.get("en"), 80), "es": _short(c.get("es"), 80)} for c in (d.get("collocations") or [])[:4] if isinstance(c, dict) and c.get("en")],
+           "note": _short(d.get("note_es"), 200)}
+    _DICT_CACHE[key] = out
+    while len(_DICT_CACHE) > 400:
+        _DICT_CACHE.popitem(last=False)
+    return jsonify({"ok": True, **out})
+
+
+def _shadow_static(n, rank):
+    pool = []
+    for u in LEARNING_UNITS:
+        if LEVEL_TO_RANK.get(u["level"], 0) > rank + 1:
+            continue
+        for l in u["lessons"]:
+            for p in l["phrases"]:
+                if 3 <= len(p["en"].split()) <= 12:
+                    pool.append({"en": p["en"], "es": p["es"], "tema": u["title"]})
+    random.shuffle(pool)
+    return pool[:n]
+
+
+@app.get("/api/shadowing/frases")
+def shadowing_static():
+    """Frases del currículo (sin IA, sin créditos). Se califican con el audio rápido de Azure."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    rank = PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), 0)
+    plan = _user_plan(user)
+    return jsonify({"ok": True, "frases": _shadow_static(6, rank), "limite_dia": PLAN_FEATURES[plan]["shadowing_dia"],
+                    "tema_ok": PLAN_FEATURES[plan]["shadowing_tema"]})
+
+
+@app.post("/api/shadowing/tema")
+def shadowing_topic():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not PLAN_FEATURES[_user_plan(user)]["shadowing_tema"]:
+        return _gate(user, "Shadowing con tus propios temas está disponible desde el plan Básico.")
+    tema = _short((request.get_json(silent=True) or {}).get("tema"), 120)
+    if len(tema) < 3:
+        return json_error("Escribe el tema (por ejemplo: pedir un café, una entrevista).")
+    lvl = {"beginner": "A1", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(_profile_for_path(user.id).get("cefr_level"), "A2")
+    try:
+        d = ai_json("You write short English sentences for shadowing practice (a learner repeats them after hearing native speech). " + _SAFE_SCENE +
+                    f" Level {lvl}. Return JSON only: {{frases: [6 objects {{en (natural spoken sentence of 5-12 words with good rhythm), es (Spanish translation)}}]}}.",
+                    f"Topic: {tema}", temperature=0.6)
+    except Exception as exc:
+        print(f"[SHADOW TOPIC] {exc}")
+        return json_error("No se pudieron preparar las frases.", 500)
+    fr = [{"en": _short(f.get("en"), 140), "es": _short(f.get("es"), 160), "tema": tema} for f in (d.get("frases") or [])[:6] if isinstance(f, dict) and f.get("en") and f.get("es")]
+    if len(fr) < 3:
+        return json_error("No se pudieron preparar las frases.", 500)
+    return jsonify({"ok": True, "frases": fr})
+
+
+# ---------------------------------------------------------------------------
+#  CLIPS CORTOS (mini-escenas con subtítulos, sin videos con licencia) y PRESENTACIONES
+# ---------------------------------------------------------------------------
+_CLIPS = [
+ ("coffee", "Ordering coffee", "☕", 0, [("B", "Hi! What can I get you?", "¡Hola! ¿Qué te sirvo?"), ("A", "A medium latte, please.", "Un latte mediano, por favor."), ("B", "For here or to go?", "¿Para aquí o para llevar?"), ("A", "To go, thanks.", "Para llevar, gracias.")], ("What does the customer want?", ["A tea", "A medium latte", "A sandwich"], 1)),
+ ("airport", "At the airport", "✈️", 0, [("B", "Passport, please.", "Pasaporte, por favor."), ("A", "Here you are.", "Aquí tiene."), ("B", "Are you checking any bags?", "¿Va a documentar maletas?"), ("A", "Yes, just one.", "Sí, solo una.")], ("How many bags is the traveler checking?", ["None", "One", "Three"], 1)),
+ ("directions", "Asking for directions", "🗺️", 0, [("A", "Excuse me, where is the train station?", "Disculpe, ¿dónde está la estación de tren?"), ("B", "Go straight and turn left at the bank.", "Siga derecho y gire a la izquierda en el banco."), ("A", "Is it far?", "¿Está lejos?"), ("B", "No, it's about five minutes on foot.", "No, son unos cinco minutos a pie.")], ("How far is the station?", ["Five minutes on foot", "One hour", "Next to the bank door"], 0)),
+ ("hotel", "Hotel check-in", "🏨", 1, [("B", "Welcome! Do you have a reservation?", "¡Bienvenido! ¿Tiene reservación?"), ("A", "Yes, under the name Lopez.", "Sí, a nombre de López."), ("B", "Great. You're in room 305, and breakfast is until ten.", "Perfecto. Está en la habitación 305 y el desayuno es hasta las diez."), ("A", "Thank you. Is there Wi-Fi?", "Gracias. ¿Hay Wi-Fi?")], ("Until when is breakfast served?", ["Eight", "Ten", "Noon"], 1)),
+ ("job", "Job interview", "💼", 1, [("B", "Tell me about yourself.", "Cuéntame sobre ti."), ("A", "I'm a designer with three years of experience.", "Soy diseñador con tres años de experiencia."), ("B", "Why do you want this job?", "¿Por qué quieres este trabajo?"), ("A", "I love solving problems with creative ideas.", "Me encanta resolver problemas con ideas creativas.")], ("What is the candidate's job?", ["Designer", "Teacher", "Driver"], 0)),
+ ("doctor", "At the doctor", "🩺", 1, [("B", "What seems to be the problem?", "¿Cuál parece ser el problema?"), ("A", "I've had a headache since yesterday.", "Tengo dolor de cabeza desde ayer."), ("B", "Do you have a fever?", "¿Tiene fiebre?"), ("A", "No, but I feel very tired.", "No, pero me siento muy cansado.")], ("What is the patient's main problem?", ["A broken arm", "A headache", "A cough"], 1)),
+ ("shop", "Buying clothes", "👕", 0, [("A", "Do you have this shirt in a larger size?", "¿Tiene esta camisa en una talla más grande?"), ("B", "Let me check. We have a large in blue.", "Déjeme ver. Tenemos una grande en azul."), ("A", "Perfect. How much is it?", "Perfecto. ¿Cuánto cuesta?"), ("B", "It's twenty-five dollars.", "Cuesta veinticinco dólares.")], ("What color is the large shirt?", ["Red", "Blue", "Black"], 1)),
+ ("meeting", "Starting a meeting", "📅", 2, [("A", "Thanks for joining, everyone. Let's get started.", "Gracias por unirse. Empecemos."), ("B", "Could you share your screen, please?", "¿Podrías compartir tu pantalla, por favor?"), ("A", "Sure. Can you all see the slides?", "Claro. ¿Todos ven las diapositivas?"), ("B", "Yes, it looks good. Go ahead.", "Sí, se ve bien. Adelante.")], ("What does the speaker share?", ["A video", "The screen with slides", "A document by email"], 1)),
+ ("restaurant", "Booking a table", "🍽️", 0, [("A", "I'd like a table for four at eight, please.", "Quisiera una mesa para cuatro a las ocho, por favor."), ("B", "Certainly. Name, please?", "Claro. ¿A nombre de quién?"), ("A", "Garcia.", "García."), ("B", "Perfect, see you tonight.", "Perfecto, nos vemos esta noche.")], ("For how many people is the table?", ["Two", "Four", "Eight"], 1)),
+ ("complaint", "A polite complaint", "😕", 2, [("A", "Excuse me, I ordered the chicken, but this is fish.", "Disculpe, pedí pollo, pero esto es pescado."), ("B", "I'm so sorry about that. I'll fix it right away.", "Lo siento mucho. Lo corrijo enseguida."), ("A", "Thank you, I appreciate it.", "Gracias, lo agradezco."), ("B", "It's on the house.", "Va por cuenta de la casa.")], ("What did the customer receive by mistake?", ["Fish", "Pasta", "Salad"], 0)),
+ ("weekend", "Weekend plans", "🎉", 1, [("A", "What are you doing this weekend?", "¿Qué vas a hacer este fin de semana?"), ("B", "I'm going hiking with my friends.", "Voy a hacer senderismo con mis amigos."), ("A", "That sounds fun! Where?", "¡Suena divertido! ¿Dónde?"), ("B", "In the mountains near the city.", "En las montañas cerca de la ciudad.")], ("What will the speaker do?", ["Go hiking", "Stay home", "Go shopping"], 0)),
+ ("taxi", "Taking a taxi", "🚕", 0, [("A", "To the city center, please.", "Al centro, por favor."), ("B", "Sure. It'll take about twenty minutes.", "Claro. Tardaremos unos veinte minutos."), ("A", "Can I pay by card?", "¿Puedo pagar con tarjeta?"), ("B", "Yes, no problem.", "Sí, sin problema.")], ("How long is the ride?", ["Five minutes", "Twenty minutes", "One hour"], 1)),
+]
+
+
+def _clip_json(c):
+    cid, titulo, emoji, nivel, esc_, (q, ops, ok) = c
+    return {"id": cid, "titulo": titulo, "emoji": emoji, "nivel": nivel,
+            "escena": [{"quien": w, "en": en, "es": es} for w, en, es in esc_], "quiz": {"q": q, "opciones": ops, "correcta": ok}}
+
+
+@app.get("/api/clips")
+def clips_list():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    rank = PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), 0)
+    pool = [c for c in _CLIPS if c[3] <= rank + 1]
+    random.shuffle(pool)
+    f = PLAN_FEATURES[_user_plan(user)]
+    return jsonify({"ok": True, "clips": [_clip_json(c) for c in pool[:6]], "limite_dia": f["clips_dia"], "tema_ok": f["clip_tema"]})
+
+
+@app.post("/api/clips/tema")
+def clips_topic():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not PLAN_FEATURES[_user_plan(user)]["clip_tema"]:
+        return _gate(user, "Los clips con tu propio tema están disponibles desde el plan Básico.")
+    tema = _short((request.get_json(silent=True) or {}).get("tema"), 120)
+    if len(tema) < 3:
+        return json_error("Escribe el tema (por ejemplo: pedir ayuda en el gimnasio).")
+    lvl = {"beginner": "A1", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(_profile_for_path(user.id).get("cefr_level"), "A2")
+    try:
+        d = ai_json("You write very short realistic two-person English dialogues for a Spanish-speaking learner. " + _SAFE_SCENE +
+                    f" Level {lvl}. Return JSON only: {{titulo (3-5 words), emoji, escena: [4 or 5 objects {{quien: 'A' or 'B' alternating, en (6-14 words), es (Spanish)}}], "
+                    "quiz: {q (a comprehension question in English), opciones: [3 short strings], correcta: index 0-2}}}.", f"Situation: {tema}", temperature=0.7)
+        esc_ = [{"quien": "B" if str(x.get("quien")).upper() == "B" else "A", "en": _short(x.get("en"), 160), "es": _short(x.get("es"), 180)}
+                for x in (d.get("escena") or [])[:5] if isinstance(x, dict) and x.get("en") and x.get("es")]
+        qz = d.get("quiz") or {}
+        ops = [_short(o, 60) for o in (qz.get("opciones") or [])[:3]]
+        corr = int(qz.get("correcta")) if str(qz.get("correcta", "")).isdigit() else 0
+        if len(esc_) < 3 or len(ops) < 3 or not (0 <= corr < 3):
+            raise ValueError("clip incompleto")
+    except Exception as exc:
+        print(f"[CLIP TEMA] {exc}")
+        return json_error("No se pudo preparar el clip. Inténtalo de nuevo.", 500)
+    return jsonify({"ok": True, "clip": {"id": "ai-" + _uuid.uuid4().hex[:8], "titulo": _short(d.get("titulo"), 40) or tema, "emoji": _short(d.get("emoji"), 4) or "🎬",
+                                          "nivel": 1, "escena": esc_, "quiz": {"q": _short(qz.get("q"), 160), "opciones": ops, "correcta": corr}}})
+
+
+@app.post("/api/clips/completar")
+def clips_done():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    acierto = bool(body.get("acierto"))
+    xp = 0
+    f = PLAN_FEATURES[_user_plan(user)]
+    ok, _w = _rate_hit((user.id, "clips"), f["clips_dia"], 86400) if not is_admin_user(user) else (True, 0)
+    if ok and _xp_allowed(user.id):
+        xp = 10 if acierto else 5
+        award_xp(user.id, xp)
+    _log_session(user.id, "clip", "clip:" + _short(body.get("id"), 20), None, 100 if acierto else 50, 0, xp, [], 0)
+    return jsonify({"ok": True, "xp": xp, "limite_alcanzado": not ok})
+
+
+@app.post("/api/presentacion/guion")
+def presentation_script():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    plan = _user_plan(user)
+    f = PLAN_FEATURES[plan]
+    if not f["presentacion"]:
+        return _gate(user, "Practicar presentaciones está disponible desde el plan Básico.")
+    texto = (request.get_json(silent=True) or {}).get("texto") or ""
+    texto = re.sub(r"[ \t]+", " ", str(texto)).strip()[:3500]
+    if len(texto) < 20:
+        return json_error("Pega el texto de tus diapositivas (al menos una idea por diapositiva).")
+    n = f["presentacion_slides"]
+    lvl = {"beginner": "A2", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(_profile_for_path(user.id).get("cefr_level"), "B1")
+    try:
+        d = ai_json("You help a Spanish speaker rehearse a presentation in English. " + _SAFE_SCENE +
+                    f" The user pastes the text of their slides (the content may be in Spanish or English). Create at most {n} slides, keeping their order. Level {lvl}. "
+                    "Return JSON only: {titulo, slides: [objects {titulo (short English title), guion (what the presenter says aloud: 35-60 words, natural spoken English, first person), "
+                    "frases_clave: [3 useful presentation phrases used in the script], es (one-line Spanish summary)}]}.", texto, temperature=0.5)
+        sl = []
+        for s in (d.get("slides") or [])[:n]:
+            if isinstance(s, dict) and s.get("guion"):
+                sl.append({"titulo": _short(s.get("titulo"), 60), "guion": _short(s.get("guion"), 520),
+                           "frases_clave": [_short(x, 80) for x in (s.get("frases_clave") or [])[:3] if x], "es": _short(s.get("es"), 160)})
+        if not sl:
+            raise ValueError("sin diapositivas")
+    except Exception as exc:
+        print(f"[PRESENTACION] {exc}")
+        return json_error("No se pudo preparar la presentación. Inténtalo de nuevo.", 500)
+    return jsonify({"ok": True, "titulo": _short(d.get("titulo"), 80) or "Mi presentación", "slides": sl, "maximo": n})
+
+
+def _wav_seconds(path):
+    import wave
+    try:
+        with wave.open(path, "rb") as w:
+            return w.getnframes() / float(w.getframerate() or 16000)
+    except Exception:
+        return 0.0
+
+
+def transcribe_long(wav_path, max_seconds=200):
+    """Transcripción continua (la normal, recognize_once, se corta tras la primera pausa)."""
+    cfg = speech_config()
+    rec = speechsdk.SpeechRecognizer(speech_config=cfg, audio_config=speechsdk.audio.AudioConfig(filename=wav_path))
+    parts, done = [], threading.Event()
+    rec.recognized.connect(lambda e: parts.append(e.result.text) if e.result.reason == speechsdk.ResultReason.RecognizedSpeech and e.result.text else None)
+    rec.session_stopped.connect(lambda e: done.set())
+    rec.canceled.connect(lambda e: done.set())
+    rec.start_continuous_recognition()
+    done.wait(timeout=max_seconds + 40)
+    try:
+        rec.stop_continuous_recognition()
+    except Exception:
+        pass
+    return " ".join(parts).strip()
+
+
+_FILLERS = ("um", "uh", "er", "like", "you know", "i mean", "actually", "basically", "kind of", "sort of")
+
+
+@app.post("/api/reunion/analizar")
+def meeting_analyze():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not PLAN_FEATURES[_user_plan(user)]["reunion"]:
+        return _gate(user, "Grabar una reunión y recibir feedback está disponible en el plan Pro.")
+    upload = request.files.get("audio")
+    if not upload:
+        return json_error("No se recibió audio.")
+    wav_path = None
+    try:
+        wav_path = convert_audio_to_wav(upload)
+        secs = _wav_seconds(wav_path)
+        if secs > 200:
+            return json_error("La grabación dura más de 3 minutos. Graba un fragmento más corto.")
+        if secs and secs < 8:
+            return json_error("La grabación es muy corta. Graba al menos 10 segundos.")
+        text = transcribe_long(wav_path)
+    except Exception as exc:
+        print(f"[MEETING STT] {exc}")
+        return json_error("No se pudo transcribir el audio.", 500)
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            os.remove(wav_path)
+    if len(text.split()) < 12:
+        return json_error("Casi no se entendió inglés en la grabación. Acércate al micrófono e inténtalo otra vez.")
+    low = " " + text.lower() + " "
+    fillers = {f: low.count(" " + f + " ") for f in _FILLERS if low.count(" " + f + " ")}
+    try:
+        d = ai_json(
+            "You review a transcript of an English-language meeting for a Spanish-speaking learner. The audio may contain several people and the transcript has no speaker labels: "
+            "focus on the learner's likely lines, and if you cannot tell, give feedback on the language use overall. Return JSON only, in Spanish unless a key says English, with keys: "
+            "resumen (2-3 sentences of what the meeting was about), puntuacion (0-100 clarity and correctness of the English), "
+            "fortalezas (up to 3 short strings), mejoras (up to 5 objects {dijiste (English, as in the transcript), mejor (English), por_que (Spanish <=100 chars)}), "
+            "vocabulario (up to 5 objects {en, es}: useful business phrases for this meeting), acciones (up to 4 short strings: action items or decisions mentioned), "
+            "consejo (1-2 sentences on what to practice next).", text[:6000], temperature=0.3)
+    except Exception as exc:
+        print(f"[MEETING AI] {exc}")
+        return json_error("No se pudo generar el feedback.", 500)
+    try:
+        sc = max(0, min(100, int(float(d.get("puntuacion")))))
+    except (TypeError, ValueError):
+        sc = 0
+    out = {"transcript": text, "segundos": int(secs), "palabras": len(text.split()), "muletillas": fillers, "puntuacion": sc,
+           "resumen": _short(d.get("resumen"), 500), "fortalezas": [_short(x, 160) for x in (d.get("fortalezas") or [])[:3]],
+           "mejoras": [{"dijiste": _short(m.get("dijiste"), 240), "mejor": _short(m.get("mejor"), 240), "por_que": _short(m.get("por_que"), 160)} for m in (d.get("mejoras") or [])[:5] if isinstance(m, dict)],
+           "vocabulario": [{"en": _short(m.get("en"), 120), "es": _short(m.get("es"), 140)} for m in (d.get("vocabulario") or [])[:5] if isinstance(m, dict) and m.get("en")],
+           "acciones": [_short(x, 160) for x in (d.get("acciones") or [])[:4]], "consejo": _short(d.get("consejo"), 300)}
+    award_xp(user.id, 25)
+    save_history("historial_tutor", user.id, {"mensaje_usuario": "[Reunión grabada]", "respuesta_tutor": json.dumps({k: v for k, v in out.items() if k != "transcript"}, ensure_ascii=False)})
+    return jsonify({"ok": True, "xp": 25, **out})
 
 
 @app.get("/")
