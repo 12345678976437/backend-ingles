@@ -9,6 +9,8 @@ import hashlib
 import math
 import platform
 import requests
+from concurrent.futures import ThreadPoolExecutor
+from xml.sax.saxutils import escape as _xml_escape
 from collections import defaultdict, deque, OrderedDict
 from datetime import datetime, timezone, timedelta
 
@@ -18,7 +20,7 @@ except Exception:  # pragma: no cover
     ZoneInfo = None
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, Response, g
+from flask import Flask, jsonify, request, Response, g, stream_with_context
 from flask_cors import CORS
 from openai import OpenAI
 from pydub import AudioSegment
@@ -176,6 +178,7 @@ RATE_RULES = {
     "/api/sintetizar-audio": (120, 3600),
     "/api/transcribir-audio": (60, 3600),
     "/api/resumen-llamada": (10, 3600),
+    "/api/llamada/turno": (70, 3600),
     "/analizar-escritura": (20, 3600),
     "/evaluar-lectura": (30, 3600),
     "/evaluar-dictado": (40, 3600),
@@ -243,6 +246,7 @@ PLANS = {
 # Cuánto cuesta cada acción (lo caro de Azure cuesta más créditos; 1 crédito ≈ 1 mensaje al tutor).
 CREDIT_COST = {
     "/api/tutor": 1, "/api/resumen-llamada": 3, "/api/transcribir-audio": 1,
+    "/api/llamada/turno": 2.1,   # un turno de llamada = transcribir (1) + tutor (1) + voz (0.1), igual que antes pero en una sola petición
     "/api/sintetizar-audio": 0.1,
     "/analizar-escritura": 2, "/evaluar-lectura": 2, "/evaluar-dictado": 1.5,
     "/analizar-audio-real": 2, "/api/assess-reading": 2, "/api/assess-unscripted": 2,
@@ -605,6 +609,35 @@ def _rate_peek(key, limit, window):
         return len(q) >= limit
 
 
+_auth_cache = {}            # sha256(token) -> (expira, user)
+_auth_lock = threading.Lock()
+AUTH_CACHE_SECONDS = 45     # si cierras sesión o te bloquean, el cambio tarda como máximo esto en notarse
+
+
+def _auth_key(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _auth_cache_get(token):
+    now = time.time()
+    with _auth_lock:
+        hit = _auth_cache.get(_auth_key(token))
+        if hit and hit[0] > now:
+            return hit[1]
+    return None
+
+
+def _auth_cache_put(token, user):
+    now = time.time()
+    with _auth_lock:
+        if len(_auth_cache) > 2000:
+            for k in [k for k, v in _auth_cache.items() if v[0] <= now]:
+                _auth_cache.pop(k, None)
+            if len(_auth_cache) > 2000:
+                _auth_cache.clear()
+        _auth_cache[_auth_key(token)] = (now + AUTH_CACHE_SECONDS, user)
+
+
 def authenticated_user(require_subscription=True):
     if not supabase:
         return None, ("Supabase no está configurado.", 500)
@@ -625,8 +658,12 @@ def authenticated_user(require_subscription=True):
         return None, ("Sesión inválida.", 401)
 
     try:
-        result = supabase.auth.get_user(token)
-        user = result.user
+        user = _auth_cache_get(token)
+        if user is None:
+            result = supabase.auth.get_user(token)
+            user = result.user
+            if user:
+                _auth_cache_put(token, user)
     except Exception as exc:
         print(f"[AUTH] {exc}")
         _rate_hit(("authfail", ip), 25, 300)
@@ -2882,6 +2919,185 @@ def transcribe_audio():
             os.remove(wav_path)
 
 
+# ---------------------------------------------------------------------------
+# LLAMADA EN VIVO (streaming): una sola petición por turno.
+#   audio del alumno -> texto -> respuesta de la IA frase por frase -> voz de cada frase
+# El navegador empieza a reproducir la 1.ª frase mientras la IA todavía escribe la 2.ª.
+# ---------------------------------------------------------------------------
+_tts_http = requests.Session()
+_tts_http.mount("https://", requests.adapters.HTTPAdapter(pool_connections=4, pool_maxsize=16))
+_VOICE_RE = re.compile(r"en-[A-Z]{2}-[A-Za-z]+Neural")
+_DEFAULT_VOICE = "en-US-AvaMultilingualNeural"
+
+
+def tts_bytes(text, voice=_DEFAULT_VOICE):
+    """MP3 de una frase (con la misma caché que /api/sintetizar-audio). Devuelve bytes o None."""
+    text = (text or "").strip()[:600]
+    if not text or not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
+        return None
+    if not _VOICE_RE.fullmatch(voice or ""):
+        voice = _DEFAULT_VOICE
+    cache_key = hashlib.sha256(f"{voice}|{text}".encode("utf-8")).hexdigest()
+    with _tts_lock:
+        cached = _tts_cache.get(cache_key)
+        if cached is not None:
+            _tts_cache.move_to_end(cache_key)
+            return cached
+    audio = None
+    try:
+        ssml = f"<speak version='1.0' xml:lang='en-US'><voice name='{voice}'>{_xml_escape(text)}</voice></speak>"
+        r = _tts_http.post(
+            f"https://{AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1",
+            headers={"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY, "Content-Type": "application/ssml+xml",
+                     "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3", "User-Agent": "talvo-english"},
+            data=ssml.encode("utf-8"), timeout=15)
+        if r.status_code == 200 and r.content:
+            audio = r.content
+        else:
+            print(f"[TTS REST] {r.status_code}")
+    except Exception as exc:
+        print(f"[TTS REST] {exc}")
+    if audio is None:  # respaldo: el SDK de siempre
+        try:
+            config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
+            config.speech_synthesis_voice_name = voice
+            config.set_speech_synthesis_output_format(speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3)
+            result = speechsdk.SpeechSynthesizer(speech_config=config, audio_config=None).speak_text_async(text).get()
+            if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                audio = bytes(result.audio_data)
+        except Exception as exc:
+            print(f"[TTS SDK] {exc}")
+    if audio and len(audio) <= 200_000:
+        with _tts_lock:
+            _tts_cache[cache_key] = audio
+            while len(_tts_cache) > 80:
+                _tts_cache.popitem(last=False)
+    return audio
+
+
+_SENT_END = re.compile(r"[.!?…]+[\"')\]]*\s")
+
+
+def _cut_sentence(buf, min_len):
+    """Si en el texto ya hay una frase completa (de al menos min_len letras), devuelve (frase, resto)."""
+    for m in _SENT_END.finditer(buf):
+        if m.end() >= min_len:
+            return buf[:m.end()].strip(), buf[m.end():]
+    return None, buf
+
+
+def _ndjson(obj):
+    return json.dumps(obj, ensure_ascii=False) + "\n"
+
+
+@app.post("/api/llamada/turno")
+def call_turn():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not ai_client:
+        return json_error("Azure OpenAI no está configurado en el servidor.", 500)
+    upload = request.files.get("audio")
+    if not upload:
+        return json_error("No se recibió audio.")
+    try:
+        history = json.loads(request.form.get("history") or "[]")
+    except Exception:
+        history = []
+    safe_history = []
+    for item in (history if isinstance(history, list) else [])[-12:]:
+        role = item.get("role") if isinstance(item, dict) else None
+        content = item.get("content") if isinstance(item, dict) else None
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            safe_history.append({"role": role, "content": content[:1500]})
+    voice = (request.form.get("voz") or _DEFAULT_VOICE).strip()
+    uid = user.id
+
+    # mientras se convierte y transcribe el audio, ya vamos pidiendo el contexto del alumno
+    ctx_future = _ctx_pool.submit(_tutor_context, uid)
+    try:
+        wav_path = convert_audio_to_wav(upload)
+    except Exception as exc:
+        return json_error(_err_log("No se pudo leer el audio", exc), 500)
+
+    def generate():
+        said = ""
+        try:
+            recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(),
+                                                    audio_config=speechsdk.audio.AudioConfig(filename=wav_path))
+            result = recognizer.recognize_once()
+            if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                said = (result.text or "").strip()
+        except Exception as exc:
+            print(f"[CALL STT] {exc}")
+            yield _ndjson({"type": "error", "message": "No se pudo transcribir el audio. Inténtalo de nuevo."})
+            return
+        finally:
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
+        if not said:
+            yield _ndjson({"type": "empty"})
+            return
+        yield _ndjson({"type": "user", "text": said})
+
+        try:
+            level, prior = ctx_future.result(timeout=10)
+        except Exception:
+            level, prior = None, ""
+        system_prompt = build_tutor_system_prompt(level, prior, "llamada", "")
+        full, buf, pending, first = "", "", [], True
+
+        def push(sentence):
+            pending.append((sentence, _tts_pool.submit(tts_bytes, sentence, voice)))
+
+        def drain(wait=False):
+            import base64
+            while pending and (wait or pending[0][1].done()):
+                sentence, fut = pending.pop(0)
+                try:
+                    audio = fut.result(timeout=20)
+                except Exception:
+                    audio = None
+                yield _ndjson({"type": "ai", "text": sentence,
+                               "audio": base64.b64encode(audio).decode("ascii") if audio else None})
+
+        try:
+            stream = ai_client.chat.completions.create(
+                model=AZURE_OPENAI_DEPLOYMENT,
+                messages=[{"role": "system", "content": system_prompt}, *safe_history, {"role": "user", "content": said[:1500]}],
+                temperature=0.8, max_tokens=170, stream=True, timeout=40)
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if not delta:
+                    continue
+                full += delta
+                buf += delta
+                while True:
+                    sentence, rest = _cut_sentence(buf, 14 if first else 24)
+                    if not sentence:
+                        break
+                    buf, first = rest, False
+                    push(sentence)
+                yield from drain()
+            if buf.strip():
+                push(buf.strip())
+            yield from drain(wait=True)
+        except Exception as exc:
+            print(f"[CALL LLM] {exc}")
+            if not full:
+                yield _ndjson({"type": "error", "message": "El tutor no pudo responder. Inténtalo de nuevo."})
+                return
+        reply = full.strip() or "Let's keep practicing. Tell me more."
+        threading.Thread(target=save_history, args=("historial_tutor", uid, {
+            "mensaje_usuario": said, "respuesta_tutor": reply}), daemon=True).start()
+        yield _ndjson({"type": "done", "reply": reply})
+
+    return Response(stream_with_context(generate()), mimetype="application/x-ndjson",
+                    headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
 @app.post("/api/resumen-llamada")
 def call_summary():
     user, error = authenticated_user()
@@ -2978,7 +3194,7 @@ _USO_TIPOS = {
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -3814,6 +4030,77 @@ def admin_sistema():
     })
 
 
+_ctx_cache = {}
+_ctx_lock = threading.Lock()
+_ctx_pool = ThreadPoolExecutor(max_workers=6)
+_tts_pool = ThreadPoolExecutor(max_workers=8)
+
+
+def _cached_call(key, ttl, fn, *args):
+    now = time.time()
+    with _ctx_lock:
+        hit = _ctx_cache.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+    value = fn(*args)
+    with _ctx_lock:
+        if len(_ctx_cache) > 3000:
+            _ctx_cache.clear()
+        _ctx_cache[key] = (now + ttl, value)
+    return value
+
+
+def _tutor_context(user_id):
+    """(nivel, contexto previo) del alumno. Se piden a la vez y se guardan unos minutos:
+    antes eran 5 consultas a Supabase una detrás de otra en cada mensaje."""
+    f_level = _ctx_pool.submit(_cached_call, ("level", user_id), 300, estimate_level, user_id)
+    f_prior = _ctx_pool.submit(_cached_call, ("prior", user_id), 120, recent_tutor_context, user_id)
+    try:
+        level = f_level.result(timeout=8)
+    except Exception as exc:
+        print(f"[LEVEL] {exc}")
+        level = None
+    try:
+        prior = f_prior.result(timeout=8)
+    except Exception as exc:
+        print(f"[CONTEXT] {exc}")
+        prior = ""
+    return level, prior
+
+
+def build_tutor_system_prompt(level, prior_context, modo="", categoria=""):
+    """Prompt de Palanqueta. Lo usan el chat del tutor y la llamada en vivo."""
+    level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
+
+    call_line = (
+        "\n\nThis is a LIVE VOICE CALL, not a text chat: reply in 1-3 short spoken sentences, "
+        "no lists, no markdown, no emojis — just natural words that sound good read aloud."
+        if modo == "llamada" else ""
+    )
+    category_lines = {
+        "grammar": "\n\nFocus this session on grammar: naturally work grammar points into the conversation, invite the student to build full sentences, and be a bit more explicit (but still kind) when correcting grammar patterns.",
+        "vocabulary": "\n\nFocus this session on vocabulary: introduce a couple of useful new English words naturally in context each reply, and check that the student understood them.",
+        "pronunciation": "\n\nFocus this session on pronunciation: ask the student to say or type short phrases, and since you cannot hear audio, give general tips on how tricky words or sounds in their message are typically pronounced.",
+        "free": "\n\nThis is free-form conversation: follow the student's lead on whatever topic they bring up.",
+    }
+    category_line = category_lines.get(categoria, "")
+
+    return (
+        "You are Palanqueta, the friendly hen mascot and personal English conversation tutor at Talvo English. "
+        "You can make a light, natural hen-themed joke or expression once in a while (e.g. comparing progress to 'hatching' a new skill), but never overdo it — you are a real tutor first, a character second. "
+        "Your job is to have a real, engaging conversation in English — not to interrogate or lecture. "
+        "Style: warm, encouraging, a little informal, like a good friend who happens to be a great teacher. Keep replies short (2-4 sentences), never a wall of text.\n\n"
+        "How to correct mistakes: never list errors or break character to give a grammar lecture. "
+        "Instead, use natural 'recasting' — if the student makes a mistake, weave the corrected form naturally into your own next sentence, the way a native speaker would casually rephrase, without pointing it out directly. "
+        "Only explicitly flag a mistake if it is a significant, repeated pattern, and even then do it briefly and kindly, then move on.\n\n"
+        "Conversation flow: always end your reply with one genuine follow-up question that keeps the conversation going and invites the student to speak more.\n\n"
+        f"{level_line}\n\n"
+        f"{prior_context}"
+        f"{call_line}"
+        f"{category_line}"
+    )
+
+
 @app.post("/api/tutor")
 def tutor():
     user, error = authenticated_user()
@@ -3834,37 +4121,8 @@ def tutor():
         if role in {"user", "assistant"} and isinstance(content, str):
             safe_history.append({"role": role, "content": content[:2000]})
 
-    level = estimate_level(user.id)
-    level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
-    prior_context = recent_tutor_context(user.id)
-
-    call_line = (
-        "\n\nThis is a LIVE VOICE CALL, not a text chat: reply in 1-3 short spoken sentences, "
-        "no lists, no markdown, no emojis — just natural words that sound good read aloud."
-        if modo == "llamada" else ""
-    )
-    category_lines = {
-        "grammar": "\n\nFocus this session on grammar: naturally work grammar points into the conversation, invite the student to build full sentences, and be a bit more explicit (but still kind) when correcting grammar patterns.",
-        "vocabulary": "\n\nFocus this session on vocabulary: introduce a couple of useful new English words naturally in context each reply, and check that the student understood them.",
-        "pronunciation": "\n\nFocus this session on pronunciation: ask the student to say or type short phrases, and since you cannot hear audio, give general tips on how tricky words or sounds in their message are typically pronounced.",
-        "free": "\n\nThis is free-form conversation: follow the student's lead on whatever topic they bring up.",
-    }
-    category_line = category_lines.get(categoria, "")
-
-    system_prompt = (
-        "You are Palanqueta, the friendly hen mascot and personal English conversation tutor at Talvo English. "
-        "You can make a light, natural hen-themed joke or expression once in a while (e.g. comparing progress to 'hatching' a new skill), but never overdo it — you are a real tutor first, a character second. "
-        "Your job is to have a real, engaging conversation in English — not to interrogate or lecture. "
-        "Style: warm, encouraging, a little informal, like a good friend who happens to be a great teacher. Keep replies short (2-4 sentences), never a wall of text.\n\n"
-        "How to correct mistakes: never list errors or break character to give a grammar lecture. "
-        "Instead, use natural 'recasting' — if the student makes a mistake, weave the corrected form naturally into your own next sentence, the way a native speaker would casually rephrase, without pointing it out directly. "
-        "Only explicitly flag a mistake if it is a significant, repeated pattern, and even then do it briefly and kindly, then move on.\n\n"
-        "Conversation flow: always end your reply with one genuine follow-up question that keeps the conversation going and invites the student to speak more.\n\n"
-        f"{level_line}\n\n"
-        f"{prior_context}"
-        f"{call_line}"
-        f"{category_line}"
-    )
+    level, prior_context = _tutor_context(user.id)
+    system_prompt = build_tutor_system_prompt(level, prior_context, modo, categoria)
 
     try:
         response = ai_client.chat.completions.create(
@@ -3877,10 +4135,10 @@ def tutor():
             temperature=0.8,
         )
         reply = response.choices[0].message.content or "Let's keep practicing. Tell me more."
-        save_history("historial_tutor", user.id, {
+        threading.Thread(target=save_history, args=("historial_tutor", user.id, {
             "mensaje_usuario": message,
             "respuesta_tutor": reply,
-        })
+        }), daemon=True).start()
         return jsonify({"ok": True, "respuesta": reply})
     except Exception as exc:
         return json_error(_err_log("El tutor no pudo responder", exc), 500)
