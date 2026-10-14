@@ -3067,7 +3067,7 @@ def call_turn():
             stream = ai_client.chat.completions.create(
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=[{"role": "system", "content": system_prompt}, *safe_history, {"role": "user", "content": said[:1500]}],
-                temperature=0.8, max_tokens=170, stream=True, timeout=40)
+                temperature=0.8, stream=True, timeout=40)
             for chunk in stream:
                 delta = chunk.choices[0].delta.content if chunk.choices else None
                 if not delta:
@@ -3085,10 +3085,31 @@ def call_turn():
                 push(buf.strip())
             yield from drain(wait=True)
         except Exception as exc:
-            print(f"[CALL LLM] {exc}")
+            print(f"[CALL LLM stream] {exc}")
             if not full:
-                yield _ndjson({"type": "error", "message": "El tutor no pudo responder. Inténtalo de nuevo."})
-                return
+                # respaldo: misma petición sin streaming (por si el modelo/versión no lo admite)
+                try:
+                    r = ai_client.chat.completions.create(
+                        model=AZURE_OPENAI_DEPLOYMENT,
+                        messages=[{"role": "system", "content": system_prompt}, *safe_history, {"role": "user", "content": said[:1500]}],
+                        temperature=0.8, timeout=40)
+                    full = (r.choices[0].message.content or "").strip()
+                    buf = full + " "
+                    first = True
+                    while True:
+                        sentence, rest = _cut_sentence(buf, 14 if first else 24)
+                        if not sentence:
+                            break
+                        buf, first = rest, False
+                        push(sentence)
+                    if buf.strip():
+                        push(buf.strip())
+                    yield from drain(wait=True)
+                except Exception as exc2:
+                    print(f"[CALL LLM fallback] {exc2}")
+                if not full:
+                    yield _ndjson({"type": "error", "message": "El tutor no pudo responder. Inténtalo de nuevo."})
+                    return
         reply = full.strip() or "Let's keep practicing. Tell me more."
         threading.Thread(target=save_history, args=("historial_tutor", uid, {
             "mensaje_usuario": said, "respuesta_tutor": reply}), daemon=True).start()
