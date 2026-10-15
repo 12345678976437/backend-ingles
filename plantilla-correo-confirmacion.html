@@ -1,0 +1,14 @@
+<!-- Pega esto en Supabase → Authentication → Emails (Email Templates) → "Confirm signup".
+     Asunto sugerido:  Confirma tu cuenta de Talvo English ✉️
+     Funciona con el botón (enlace) y con el código de 6 dígitos que se escribe en la pantalla de verificación. -->
+<div style="background:#05081a;padding:32px 16px;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:480px;margin:0 auto;background:#0b1124;border:1px solid #243056;border-radius:14px;padding:30px 24px;text-align:center;color:#e8edff">
+    <div style="font-size:38px">🐔</div>
+    <h1 style="margin:10px 0 6px;font-size:22px;color:#ffffff">¡Bienvenido a Talvo English!</h1>
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.5;color:#b6c0e6">Solo falta un paso para activar tu <b style="color:#3de8ff">prueba gratis</b>. Confirma que este correo es tuyo:</p>
+    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;border-radius:8px;background:linear-gradient(90deg,#3de8ff,#7b86ff);color:#04101a;font-weight:700;font-size:16px;text-decoration:none">Confirmar mi correo</a>
+    <p style="margin:22px 0 6px;font-size:13px;color:#8d99c7">¿Prefieres escribir un código? Ponlo en la pantalla de Talvo:</p>
+    <div style="display:inline-block;padding:10px 22px;border:1px dashed #3a4a85;border-radius:8px;font-size:28px;letter-spacing:8px;font-weight:700;color:#ffffff">{{ .Token }}</div>
+    <p style="margin:22px 0 0;font-size:12px;line-height:1.5;color:#6f7ba8">Si no creaste esta cuenta, ignora este mensaje.<br>If you didn't create this account, you can ignore this email.</p>
+  </div>
+</div>
