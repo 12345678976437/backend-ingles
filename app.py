@@ -1741,7 +1741,7 @@ def sessions_today(user_id):
         start = datetime.now(timezone.utc).date().isoformat()
         rows = (client.table("learning_sessions").select("id,kind").eq("user_id", user_id)
                 .gte("created_at", start).limit(80).execute()).data or []
-        return sum(1 for r in rows if r.get("kind") != "plan_bonus")
+        return sum(1 for r in rows if r.get("kind") not in ("plan_bonus", "level_change"))
     except Exception:
         return 0
 
@@ -1831,6 +1831,7 @@ def compute_path(progress, level_rank, goal, gem_unlocked):
     unit_by_code = {u["code"]: u for u in LEARNING_UNITS}
     for si, sdef in enumerate(SECTION_DEFS):
         sec_open = si == 0 or si <= level_rank or prev_pct >= 0.6
+        placed = si < level_rank   # el examen/tu desempeño ya te ubicó por encima de esta sección
         units_out = []
         done_total = lesson_total = 0
         for code in sdef["units"]:
@@ -1840,7 +1841,7 @@ def compute_path(progress, level_rank, goal, gem_unlocked):
             for i, t in enumerate(u["topics"]):
                 row = progress.get((code, t["id"]))
                 completed = bool(row)
-                avail = unit_open and (i == 0 or lessons[i - 1]["completed"])
+                avail = unit_open and (placed or i == 0 or lessons[i - 1]["completed"])  # en secciones superadas puedes repasar en cualquier orden
                 lessons.append({
                     "id": t["id"], "title": t["title"], "challenge": bool(t.get("challenge")),
                     "completed": completed, "score": row.get("score") if row else None,
@@ -1858,9 +1859,10 @@ def compute_path(progress, level_rank, goal, gem_unlocked):
                 "recommended": bool(goal and u["goal"] == goal and unit_open and done < len(lessons)),
                 "stars": sum(l["stars"] for l in lessons), "max_stars": 3 * len(lessons),
             })
-        prev_pct = (done_total / lesson_total) if lesson_total else 0
+        prev_pct = 1.0 if placed else ((done_total / lesson_total) if lesson_total else 0)
         sections_out.append({
-            "code": sdef["code"], "title": sdef["title"], "level": sdef["level"], "open": sec_open,
+            "code": sdef["code"], "title": sdef["title"], "level": sdef["level"], "open": sec_open, "placed": placed,
+            "current": si == level_rank,
             "done": done_total, "total": lesson_total, "units": units_out,
         })
 
@@ -3239,7 +3241,7 @@ def _act_norm(tipo, table, r, prev_col, score_col):
     """Convierte una fila de cualquier tabla de actividad a un evento común (o None si no cuenta)."""
     if table == "learning_sessions":
         k = str(r.get("kind") or "")
-        if k == "plan_bonus":
+        if k in ("plan_bonus", "level_change"):
             return None
         det = " · ".join(x for x in (str(r.get("unit_code") or ""), str(r.get("lesson_id") or "")) if x) or k
         return {"tipo": "ruta" if k == "route" else ("clip" if k == "clip" else "leccion"), "detalle": det[:140], "score": _num(r.get("score")),
@@ -4520,6 +4522,52 @@ def _path_for_user(user_id):
     return prof, level_rank, progress, gems, sections, nxt
 
 
+LEVEL_NAMES = ["beginner", "elementary", "intermediate", "advanced"]
+LEVEL_LABEL = {"beginner": "A1 · Beginner", "elementary": "A2 · Elementary", "intermediate": "B1 · Intermediate", "advanced": "B2 · Advanced"}
+
+
+def _adapt_level(user_id, level_rank):
+    """Sube o baja tu nivel según tus últimas lecciones del nivel actual. Devuelve dict o None.
+    Sube: 6+ lecciones de tu nivel con promedio >= 90 (y casi todas >= 80). Baja: 5+ con promedio <= 55."""
+    client = supabase_admin or supabase
+    if not client:
+        return None
+    try:
+        rows = (client.table("learning_sessions").select("kind,unit_code,score,created_at").eq("user_id", user_id)
+                .order("created_at", desc=True).limit(40).execute()).data or []
+    except Exception as exc:
+        print(f"[ADAPT] {exc}")
+        return None
+    recent = []
+    for r in rows:                      # de la más nueva a la más vieja, hasta el último cambio de nivel
+        if r.get("kind") == "level_change":
+            break
+        if r.get("kind") == "lesson" and r.get("score") is not None:
+            u = get_unit(r.get("unit_code") or "")
+            if u and LEVEL_TO_RANK.get(u["level"], 0) == level_rank:
+                recent.append(float(r["score"]))
+    new_rank = None
+    if len(recent) >= 6 and level_rank < 3:
+        last = recent[:6]
+        if sum(last) / 6 >= 90 and sum(1 for x in last if x >= 80) >= 5:
+            new_rank = level_rank + 1
+    elif len(recent) >= 5 and level_rank > 0:
+        last = recent[:5]
+        if sum(last) / 5 <= 55:
+            new_rank = level_rank - 1
+    if new_rank is None:
+        return None
+    try:
+        client.table("profiles").update({"cefr_level": LEVEL_NAMES[new_rank]}).eq("id", user_id).execute()
+        _log_session(user_id, "level_change", LEVEL_NAMES[new_rank], None, 100, 0, 0, [], 0)
+    except Exception as exc:
+        print(f"[ADAPT SAVE] {exc}")
+        return None
+    return {"from": LEVEL_NAMES[level_rank], "to": LEVEL_NAMES[new_rank], "label": LEVEL_LABEL[LEVEL_NAMES[new_rank]],
+            "direction": "up" if new_rank > level_rank else "down"}
+
+
+
 @app.get("/api/learning-path")
 def learning_path():
     user, error = authenticated_user()
@@ -4537,7 +4585,7 @@ def learning_path():
     today = sessions_today(user.id)
     return jsonify({
         "ok": True, "xp": prof["xp"], "sections": sections, "units": units_flat, "next": nxt,
-        "profile": {"level": prof["cefr_level"] or "beginner", "goal": prof["learning_goal"],
+        "profile": {"level": prof["cefr_level"] or "beginner", "level_label": LEVEL_LABEL.get(prof["cefr_level"] or "beginner", ""), "goal": prof["learning_goal"],
                     "goal_label": GOAL_LABELS.get(prof["learning_goal"], ""),
                     "daily_minutes": prof["daily_goal_minutes"]},
         "today": {"lessons": today, "target": daily_target_lessons(prof["daily_goal_minutes"])},
@@ -4702,6 +4750,12 @@ def learning_path_complete():
     if kind != "sound":
         _save_mistakes_as_vocab(user.id, mistakes)
 
+    level_change = None
+    if kind == "lesson":
+        try:
+            level_change = _adapt_level(user.id, PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), 0))
+        except Exception as exc:
+            print(f"[ADAPT] {exc}")
     next_step = None
     try:
         next_step = _path_for_user(user.id)[5]
@@ -4719,7 +4773,7 @@ def learning_path_complete():
     return jsonify({
         "ok": True, "kind": kind, "score": score, "best": best, "stars": stars, "passed": passed,
         "first_time": first_time, "xp": xp, "unit_bonus": unit_bonus, "unit_completed": unit_completed,
-        "mistakes": len(mistakes), "next": next_step, "plan_bonus": plan_bonus,
+        "mistakes": len(mistakes), "next": next_step, "plan_bonus": plan_bonus, "level_change": level_change,
     })
 
 
