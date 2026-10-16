@@ -1149,7 +1149,7 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .sk-stats div{min-width:76px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(4,6,13,.55);text-align:center}
 .sk-stats b{display:block;font-family:var(--display);font-size:20px;color:var(--sk)}
 .sk-stats small{display:block;margin-top:1px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
-#sec-escritura{--sk:#a78bfa}#sec-lectura{--sk:#3ee8ff}#sec-escucha{--sk:#3df0b0}
+#sec-pronunciacion{--sk:#ff7ab6}#sec-escritura{--sk:#a78bfa}#sec-lectura{--sk:#3ee8ff}#sec-escucha{--sk:#3df0b0}
 @media(max-width:760px){.sk-hero{grid-template-columns:auto 1fr;gap:14px;padding:16px}.sk-ico{width:54px;height:54px;font-size:26px;border-radius:14px}.sk-stats{grid-column:1/-1}.sk-stats div{flex:1;min-width:0}}
 @media(prefers-reduced-motion:reduce){.sk-scan,.sk-ico::after,.sk-main .eyebrow::before{animation:none}}
 /* Writing entry */
@@ -1172,6 +1172,11 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .w-console textarea:focus{border-color:var(--sk)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--sk) 18%,transparent)!important;outline:0}
 .w-prog{height:5px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:10px;overflow:hidden}.w-prog i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--sk),var(--cyan));transition:width .25s}.w-prog.ok i{background:var(--success)}
 @media(max-width:600px){#writing-level-bar{grid-template-columns:1fr!important}#writing-level-bar .mode{grid-template-columns:auto 1fr;align-items:center;column-gap:10px}#writing-level-bar .mode::after{grid-column:2}}
+#sec-pronunciacion .modebar{display:flex!important;gap:8px;flex-wrap:wrap;border:0;overflow:visible}
+#sec-pronunciacion .modebar .mode{flex:1 1 auto;padding:11px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(8,12,24,.55);transition:.18s}
+#sec-pronunciacion .modebar .mode:hover{border-color:color-mix(in srgb,var(--sk) 60%,transparent)}
+#sec-pronunciacion .modebar .mode.active{border-color:var(--sk);background:color-mix(in srgb,var(--sk) 14%,#0a1022);box-shadow:0 0 18px color-mix(in srgb,var(--sk) 22%,transparent)}
+#sec-pronunciacion .modebar .mode.active::after{display:none}
 /* Library + Reading/Listening entry */
 #reading-filter-bar,#listening-filter-bar{display:flex!important;gap:8px;flex-wrap:wrap;border:0;margin-top:14px;overflow:visible}
 #reading-filter-bar .mode,#listening-filter-bar .mode{flex:0 0 auto;padding:8px 16px;border:1px solid var(--line);border-radius:999px;background:rgba(8,12,24,.55);font-size:13px}
@@ -1712,7 +1717,7 @@ function pronWrap(el){
   });
   document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList&&e.target.classList.contains('pw')){e.preventDefault();e.target.click()}});
 })();
-function pronPost(d,score){
+function pronPost(d,score){try{skRecord('pron',Math.round(score||0))}catch(e){}
   const g=$('global-score');g.style.setProperty('--p',Math.max(0,Math.min(100,Math.round(score))));
   const res=$('pron-result');let v=$('pron-verdict');
   if(!v){v=document.createElement('div');v.id='pron-verdict';res.insertBefore(v,res.firstChild)}
@@ -1737,7 +1742,7 @@ function pronPost(d,score){
 function showPhonemes(item){state.phWord=item.palabra||'';$('phonemes').style.display='block';$('phoneme-title').textContent=`${item.palabra||'Word'} · ${item.precision??item.puntuacion??0}%`;$('chips').innerHTML=(item.fonemas||[]).map(p=>`<span class="chip">/${esc(p.fonema)}/ · ${p.precision??0}%</span>`).join('')||'<span style="color:var(--muted);font-size:11px">No phoneme detail available.</span>'}
 async function sendRecording(){const blob=new Blob(state.chunks,{type:state.chunks[0]?.type||'audio/webm'});if(state.lastRecordingUrl)URL.revokeObjectURL(state.lastRecordingUrl);state.lastRecordingUrl=URL.createObjectURL(blob);const fd=new FormData();fd.append('audio',blob,'recording.webm');let path='/analizar-audio-real';if(state.pron==='lectura'){fd.append('frase_esperada',$('phrase').textContent.trim());fd.append('modo','lectura')}else if(state.pron==='trabalenguas'){fd.append('frase_esperada',$('twister').textContent.trim());fd.append('modo','trabalenguas')}else{path='/api/assess-unscripted';fd.append('topic',$('free-topic').textContent.trim());fd.append('modo','habla_libre')}try{const d=await jsonFetch(path,{method:'POST',body:fd});renderPron(d)}catch(e){toast(e.message)}finally{$('record-btn').textContent='Start recording';$('record-btn').classList.remove('recording');state.chunks=[]}}
 /* --- Skill hero --- */
-const SK_CFG={escritura:{k:'write',ic:'✍️'},lectura:{k:'read',ic:'📖'},escucha:{k:'listen',ic:'🎧'}};
+const SK_CFG={pronunciacion:{k:'pron',ic:'🎙️'},escritura:{k:'write',ic:'✍️'},lectura:{k:'read',ic:'📖'},escucha:{k:'listen',ic:'🎧'}};
 function skGet(k){try{return JSON.parse(localStorage.getItem('talvo_sk_'+k))||{n:0,best:0,sum:0}}catch(e){return{n:0,best:0,sum:0}}}
 function skStats(k){const el=document.querySelector('.sk-hero[data-k="'+k+'"] .sk-stats');if(!el)return;const d=skGet(k);el.innerHTML=[[d.n,'Sessions'],[d.best||'—','Best score'],[d.n?Math.round(d.sum/d.n):'—','Average']].map(([v,l])=>'<div><b>'+v+'</b><small>'+T(l)+'</small></div>').join('')}
 function skRecord(k,score){const d=skGet(k);d.n++;d.sum+=score||0;d.best=Math.max(d.best,score||0);try{localStorage.setItem('talvo_sk_'+k,JSON.stringify(d))}catch(e){}skStats(k)}
