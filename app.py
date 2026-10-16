@@ -6145,6 +6145,176 @@ def meeting_analyze():
     return jsonify({"ok": True, "xp": 25, **out})
 
 
+# ---------------------------------------------------------------------------
+#  NOTIFICACIONES PUSH (Web Push / VAPID, gratis). Tabla: push_subscriptions
+# ---------------------------------------------------------------------------
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = env("VAPID_SUBJECT", "mailto:a07077189@tec.mx")
+_EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,24}$")
+
+
+def _push_ready():
+    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and supabase_admin)
+
+
+def _push_parse_sub(b):
+    sub = b.get("subscription") if isinstance(b, dict) else None
+    if not isinstance(sub, dict):
+        return None
+    ep = sub.get("endpoint")
+    keys = sub.get("keys") or {}
+    p256, auth = keys.get("p256dh"), keys.get("auth")
+    if not (isinstance(ep, str) and ep.startswith("https://") and len(ep) <= 1000):
+        return None
+    if not (isinstance(p256, str) and isinstance(auth, str) and 10 <= len(p256) <= 200 and 8 <= len(auth) <= 100):
+        return None
+    return {"endpoint": ep, "p256dh": p256, "auth": auth}
+
+
+def _push_user_optional():
+    """(user|None, error|None). Sin token => anónimo (permitido solo con correo)."""
+    if not get_bearer_token():
+        return None, None
+    user, error = authenticated_user(require_subscription=False)
+    return user, error
+
+
+@app.get("/api/push/key")
+def push_key():
+    return jsonify({"ok": True, "ready": _push_ready(), "key": VAPID_PUBLIC_KEY if _push_ready() else ""})
+
+
+@app.post("/api/push/subscribe")
+def push_subscribe():
+    """Guarda (o actualiza) la suscripción de este dispositivo. Con sesión la liga al usuario;
+    sin sesión (justo al crear la cuenta) la guarda con el correo y se liga al iniciar sesión."""
+    if not _push_ready():
+        return json_error("Las notificaciones aún no están disponibles.", 503)
+    ok, _w = _rate_hit(("push-sub", _client_ip()), 40, 3600)
+    if not ok:
+        return json_error("Demasiados intentos. Espera un momento.", 429)
+    b = request.get_json(silent=True) or {}
+    sub = _push_parse_sub(b)
+    if not sub:
+        return json_error("Suscripción inválida.")
+    user, error = _push_user_optional()
+    if error:
+        return json_error(error[0], error[1])
+    row = dict(sub)
+    if user:
+        row["user_id"] = user.id
+        row["email"] = (getattr(user, "email", None) or "")[:254].lower() or None
+    else:
+        email = _short(b.get("email"), 254).strip().lower()
+        if not _EMAIL_RE.match(email):
+            return json_error("Correo requerido.")
+        row["email"] = email
+    hr = _num(b.get("hour"))
+    if hr is not None:
+        row["hour"] = max(0, min(int(hr), 23))
+    if b.get("tz"):
+        row["tz"] = _short(b.get("tz"), 64)
+    row["lang"] = "en" if b.get("lang") == "en" else "es"
+    row["ua"] = _short(request.headers.get("User-Agent"), 200)
+    row.update({"enabled": True, "fail_count": 0, "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    try:
+        supabase_admin.table("push_subscriptions").upsert(row, on_conflict="endpoint").execute()
+    except Exception as exc:
+        return json_error(_err_log("No se pudo guardar la suscripción", exc), 500)
+    return jsonify({"ok": True})
+
+
+@app.post("/api/push/unsubscribe")
+def push_unsubscribe():
+    if not supabase_admin:
+        return json_error("No disponible.", 503)
+    ok, _w = _rate_hit(("push-sub", _client_ip()), 40, 3600)
+    if not ok:
+        return json_error("Demasiados intentos. Espera un momento.", 429)
+    b = request.get_json(silent=True) or {}
+    ep = b.get("endpoint")
+    if not (isinstance(ep, str) and ep.startswith("https://") and len(ep) <= 1000):
+        return json_error("Suscripción inválida.")
+    try:
+        supabase_admin.table("push_subscriptions").delete().eq("endpoint", ep).execute()
+    except Exception as exc:
+        return json_error(_err_log("No se pudo desactivar", exc), 500)
+    return jsonify({"ok": True})
+
+
+@app.post("/api/push/prefs")
+def push_prefs():
+    """Cambia la hora preferida del recordatorio de este dispositivo."""
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    b = request.get_json(silent=True) or {}
+    ep = b.get("endpoint")
+    hr = _num(b.get("hour"))
+    if not (isinstance(ep, str) and ep.startswith("https://")) or hr is None:
+        return json_error("Datos inválidos.")
+    upd = {"hour": max(0, min(int(hr), 23))}
+    if b.get("tz"):
+        upd["tz"] = _short(b.get("tz"), 64)
+    try:
+        supabase_admin.table("push_subscriptions").update(upd).eq("endpoint", ep).eq("user_id", user.id).execute()
+    except Exception as exc:
+        return json_error(_err_log("No se pudo guardar", exc), 500)
+    return jsonify({"ok": True})
+
+
+def _push_send(row, title, body, url="./", tag="talvo"):
+    """Envía una notificación a una suscripción. Devuelve True/False y limpia las caducadas."""
+    if not _push_ready():
+        return False
+    try:
+        from pywebpush import webpush, WebPushException
+    except Exception:
+        return False
+    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag}, ensure_ascii=False)
+    try:
+        webpush(subscription_info={"endpoint": row["endpoint"], "keys": {"p256dh": row["p256dh"], "auth": row["auth"]}},
+                data=payload, vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
+        try:
+            supabase_admin.table("push_subscriptions").update(
+                {"last_sent_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "fail_count": 0}).eq("endpoint", row["endpoint"]).execute()
+        except Exception:
+            pass
+        return True
+    except WebPushException as exc:
+        code = getattr(getattr(exc, "response", None), "status_code", None)
+        try:
+            if code in (404, 410):
+                supabase_admin.table("push_subscriptions").delete().eq("endpoint", row["endpoint"]).execute()
+            else:
+                supabase_admin.table("push_subscriptions").update(
+                    {"fail_count": int(row.get("fail_count") or 0) + 1}).eq("endpoint", row["endpoint"]).execute()
+        except Exception:
+            pass
+        return False
+    except Exception:
+        return False
+
+
+@app.post("/api/push/test")
+def push_test():
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    if not _push_ready():
+        return json_error("Las notificaciones aún no están disponibles.", 503)
+    ok, _w = _rate_hit((user.id, "push-test"), 5, 3600)
+    if not ok:
+        return json_error("Ya enviaste varias pruebas. Intenta más tarde.", 429)
+    try:
+        rows = supabase_admin.table("push_subscriptions").select("*").eq("user_id", user.id).eq("enabled", True).execute().data or []
+    except Exception as exc:
+        return json_error(_err_log("No se pudo enviar la prueba", exc), 500)
+    sent = sum(1 for r in rows if _push_send(r, "¡Funciona! 🐔", "Palanqueta te avisará cuando sea hora de practicar.", "./", "talvo-test"))
+    return jsonify({"ok": True, "enviadas": sent, "dispositivos": len(rows)})
+
+
 @app.get("/")
 def root():
     return jsonify({"ok": True, "service": "Talvo English API"})
