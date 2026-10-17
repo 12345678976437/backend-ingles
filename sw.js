@@ -9,7 +9,7 @@ self.addEventListener('push',e=>{
     const list=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     list.forEach(c=>{try{c.postMessage({type:'talvo-push',title:d.title||'Talvo English',body:d.body||''})}catch(_){}});
     await self.registration.showNotification(d.title||'Talvo English',{
-      body:d.body||'',icon:'icons/notif-icon.png',badge:'icons/notif-badge.png',image:'icons/notif-banner.png',
+      body:d.body||'',icon:'notif-icon.png',badge:'notif-badge.png',image:'notif-banner.png',
       tag:d.tag||'talvo',renotify:true,vibrate:[120,60,120,60,220],
       actions:[{action:'open',title:'Practicar ahora'}],
       data:{url:d.url||'./'},lang:'es'

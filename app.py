@@ -6360,6 +6360,21 @@ _PUSH_MSGS = {
 }
 
 
+def _push_practiced_today(uid, ln, trust_local):
+    """last_activity_date está en UTC: de noche (hora local) puede caer en "mañana". Confirma con la última sesión real."""
+    try:
+        ev = (supabase_admin.table("learning_sessions").select("created_at,kind").eq("user_id", uid)
+              .order("created_at", desc=True).limit(6).execute().data) or []
+        for e in ev:
+            if e.get("kind") in ("plan_bonus", "level_change"):
+                continue
+            dt = datetime.fromisoformat(str(e["created_at"]).replace("Z", "+00:00")).astimezone(ln.tzinfo)
+            return dt.date() == ln.date()
+        return bool(trust_local)
+    except Exception:
+        return bool(trust_local)
+
+
 def _push_local_now(tz):
     try:
         from zoneinfo import ZoneInfo
@@ -6412,10 +6427,10 @@ def push_cron():
     profs = {}
     try:
         if ids:
-            for p in supabase_admin.table("profiles").select("id,email,streak_days,last_activity_date").in_("id", ids).execute().data or []:
+            for p in supabase_admin.table("profiles").select("id,email,streak_days,last_activity_date,is_subscribed,trial_ends_at").in_("id", ids).execute().data or []:
                 profs[p["id"]] = p
         if emails:
-            for p in supabase_admin.table("profiles").select("id,email,streak_days,last_activity_date").in_("email", emails).execute().data or []:
+            for p in supabase_admin.table("profiles").select("id,email,streak_days,last_activity_date,is_subscribed,trial_ends_at").in_("email", emails).execute().data or []:
                 profs["e:" + (p.get("email") or "").lower()] = p
     except Exception as exc:
         return json_error(_err_log("No se pudieron leer los perfiles", exc), 500)
@@ -6428,8 +6443,20 @@ def push_cron():
         last = prof.get("last_activity_date")
         today_local = ln.date().isoformat()
         today_utc = now_utc.date().isoformat()
-        if PUSH_SKIP_PRACTICED and last in (today_local, today_utc):
+        if PUSH_SKIP_PRACTICED and last in (today_local, today_utc) and _push_practiced_today(prof.get("id"), ln, last == today_local):
             continue  # ya practicó hoy
+        if not has_active_access(prof):
+            continue  # prueba vencida o sin plan: no insistir
+        try:
+            idle = (ln.date() - datetime.fromisoformat(str(last)[:10]).date()).days if last else None
+        except Exception:
+            idle = None
+        # No saturar: a quien lleva días sin entrar se le avisa cada vez más espaciado (hasta ~1 mes).
+        if idle is None:
+            if int(r.get("sent_count") or 0) >= 4:
+                continue
+        elif idle > 3 and idle not in (5, 7, 10, 14, 21, 30):
+            continue
         yesterday = {(ln.date() - timedelta(days=1)).isoformat(), (now_utc.date() - timedelta(days=1)).isoformat()}
         at_risk = last in yesterday
         key, title, body = _push_pick(r.get("lang") or "es", at_risk, int(prof.get("streak_days") or 0), r.get("last_kind"))
