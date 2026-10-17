@@ -1169,6 +1169,13 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 @keyframes pbBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @media(prefers-reduced-motion:reduce){#push-banner.show{animation:pbFade .2s forwards}#push-banner .pb-pq,#push-banner .pb-bar,#push-banner .pb-st{animation:none!important}@keyframes pbFade{to{opacity:1;transform:translate(-50%,0)}}}
 
+/* Push banner: diseño oscuro con color por estado */
+#push-banner{--pm:#3ee8ff;background:linear-gradient(135deg,rgba(10,16,34,.97),rgba(14,22,46,.97));border:1px solid color-mix(in srgb,var(--pm) 55%,transparent);box-shadow:0 18px 44px rgba(0,0,0,.6),0 0 30px color-mix(in srgb,var(--pm) 28%,transparent);color:var(--text)}
+#push-banner::before{background:radial-gradient(circle at 12% 40%,color-mix(in srgb,var(--pm) 38%,transparent),transparent 52%)}
+#push-banner b{color:#fff}#push-banner small{color:var(--muted);font-weight:500}
+#push-banner .pb-bar{background:var(--pm)}
+#push-banner .pb-pq{width:62px;height:62px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5))}
+#push-banner[data-mood=streak]{--pm:#ff7a45}#push-banner[data-mood=miss]{--pm:#7c78ff}#push-banner[data-mood=verify]{--pm:#3df0b0}
 /* ---- Skill hero + entry (Writing/Reading/Listening) ---- */
 .sk-hero{position:relative;overflow:hidden;isolation:isolate;display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;padding:22px 26px;margin-bottom:6px;border:1px solid color-mix(in srgb,var(--sk) 38%,transparent);border-radius:14px;background:linear-gradient(120deg,color-mix(in srgb,var(--sk) 16%,#0a1022),rgba(8,12,24,.92) 62%)}
 .sk-hero::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:linear-gradient(100deg,#000,transparent 75%);mask-image:linear-gradient(100deg,#000,transparent 75%)}
@@ -2391,12 +2398,15 @@ $('push-hour')?.addEventListener('change',async e=>{
   try{await jsonFetch('/api/push/prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint,hour:h,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||''})});toast(T('Saved'))}catch(err){toast(err.message)}
 });
 (function(){
-  if(!('serviceWorker' in navigator))return;
   let tm;
+  const ICONS={streak:['🔥','✨','🔥'],miss:['💤','🌙','💤'],verify:['✉️','✨','⭐'],cheer:['⭐','✨','⭐']};
+  const LAND={streak:['🔥 Your streak needs you!','A quick lesson keeps your flame alive.'],miss:['I missed you! 🥺','Come back with a short lesson.'],cheer:['🐔 Time to practice!','Your goal for today is ready.'],verify:['Almost there! ✉️','Confirm your email to start your free trial.']};
   function hide(){const b=$('push-banner');if(b)b.classList.remove('show')}
-  function show(d){const b=$('push-banner');if(!b)return;$('pb-title').textContent=d.title||'Palanqueta';$('pb-body').textContent=d.body||'';b.classList.remove('show');void b.offsetWidth;b.classList.add('show');clearTimeout(tm);tm=setTimeout(hide,6500)}
-  navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='talvo-push')show(e.data)});
+  function show(d){const b=$('push-banner');if(!b)return;const m=ICONS[d.mood]?d.mood:'cheer';b.dataset.mood=m;b.querySelectorAll('.pb-st').forEach((e,i)=>e.textContent=ICONS[m][i]);$('pb-title').textContent=d.title||'Palanqueta';$('pb-body').textContent=d.body||'';b.classList.remove('show');void b.offsetWidth;b.classList.add('show');clearTimeout(tm);tm=setTimeout(hide,6500)}
+  if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='talvo-push')show(e.data)});
   $('push-banner')?.addEventListener('click',hide);
+  /* al tocar la notificación con la app cerrada: Palanqueta saluda con animación */
+  try{const q=new URLSearchParams(location.search).get('pq');if(q){history.replaceState(null,'',location.pathname);const L=LAND[q]||LAND.cheer;setTimeout(()=>show({mood:q,title:T(L[0]),body:T(L[1])}),1800)}}catch(e){}
 })();
 $('push-test')?.addEventListener('click',async()=>{
   busy('push-test',true,'Sending...');
@@ -4067,6 +4077,8 @@ window.TalvoClips={onSection(n){if(n==='clips')clipsHome();else if(n==='presenta
 (function(){
 'use strict';
 var PAIRS=[
+['🔥 Your streak needs you!','🔥 ¡Tu racha te necesita!'],['A quick lesson keeps your flame alive.','Una lección corta mantiene viva tu llama.'],['I missed you! 🥺','¡Te extrañé! 🥺'],['Come back with a short lesson.','Vuelve con una lección cortita.'],['🐔 Time to practice!','🐔 ¡Hora de practicar!'],['Your goal for today is ready.','Tu meta de hoy está lista.'],['Almost there! ✉️','¡Casi listo! ✉️'],['Confirm your email to start your free trial.','Confirma tu correo para empezar tu prueba gratis.'],
+
 ['Reminders','Recordatorios'],['Remind me at','Recordarme a las'],['🔔 Send a test notification','🔔 Enviar notificación de prueba'],['Sending...','Enviando...'],['Want Palanqueta to remind you to practice?','¿Quieres que Palanqueta te recuerde practicar?'],['A short daily nudge so you keep your streak. You can turn it off anytime in My account.','Un aviso corto al día para mantener tu racha. Puedes apagarlo cuando quieras en Mi cuenta.'],['Turn on','Activar'],['Not now','Ahora no'],['Reminders on! 🔔','¡Recordatorios activados! 🔔'],['Reminders off.','Recordatorios apagados.'],['Saved','Guardado'],['Sent! Check your notifications.','¡Enviada! Revisa tus notificaciones.'],['No active device found. Turn reminders off and on again.','No hay dispositivos activos. Apaga y vuelve a activar los recordatorios.'],['On — Palanqueta will remind you to practice.','Activados: Palanqueta te recordará practicar.'],['Off — turn on to get a daily practice reminder.','Apagados: actívalos para recibir un recordatorio diario.'],['Notifications are blocked. Enable them in your browser or phone settings for this site.','Las notificaciones están bloqueadas. Actívalas en los ajustes de tu navegador o teléfono para este sitio.'],['On iPhone: tap Share → Add to Home Screen, open Talvo from there and turn on reminders.','En iPhone: toca Compartir → Añadir a pantalla de inicio, abre Talvo desde ahí y activa los recordatorios.'],['This browser does not support notifications.','Este navegador no admite notificaciones.'],['We could not connect reminders right now. Try again in a moment.','No pudimos conectar los recordatorios ahora. Intenta de nuevo en un momento.'],['We could not turn on reminders on this device.','No pudimos activar los recordatorios en este dispositivo.'],
 
 ['Surprise me','Sorpréndeme'],['No items for this level.','No hay elementos para este nivel.'],['New audio','Nuevo audio'],

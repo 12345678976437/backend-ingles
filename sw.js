@@ -4,15 +4,17 @@ self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.
 self.addEventListener('push',e=>{
   let d={};
   try{d=e.data?e.data.json():{}}catch(_){d={body:e.data?e.data.text():''}}
+  const mood=['cheer','streak','miss','verify'].includes(d.mood)?d.mood:'cheer';
+  const en=d.lang==='en';
   e.waitUntil((async()=>{
-    // Si la app está abierta, también muestra el aviso animado dentro de la app.
+    /* Si la app está abierta, también muestra el aviso animado dentro de la app. */
     const list=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-    list.forEach(c=>{try{c.postMessage({type:'talvo-push',title:d.title||'Talvo English',body:d.body||''})}catch(_){}});
+    list.forEach(c=>{try{c.postMessage({type:'talvo-push',title:d.title||'Talvo English',body:d.body||'',mood})}catch(_){}});
     await self.registration.showNotification(d.title||'Talvo English',{
-      body:d.body||'',icon:'notif-icon.png',badge:'notif-badge.png',image:'notif-banner.png',
+      body:d.body||'',icon:'icons/pq-icon.png',badge:'icons/pq-badge.png',image:'icons/notif-'+mood+'.png',
       tag:d.tag||'talvo',renotify:true,vibrate:[120,60,120,60,220],
-      actions:[{action:'open',title:'Practicar ahora'}],
-      data:{url:d.url||'./'},lang:'es'
+      actions:[{action:'open',title:en?'Practice now':'Practicar ahora'}],
+      data:{url:d.url||'./?pq='+mood},lang:en?'en':'es'
     });
   })());
 });

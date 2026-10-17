@@ -6264,7 +6264,7 @@ def push_prefs():
     return jsonify({"ok": True})
 
 
-def _push_send(row, title, body, url="./", tag="talvo", touch=True):
+def _push_send(row, title, body, url="./", tag="talvo", touch=True, mood="cheer"):
     """Envía una notificación a una suscripción. Devuelve True/False y limpia las caducadas."""
     if not _push_ready():
         return False
@@ -6272,7 +6272,7 @@ def _push_send(row, title, body, url="./", tag="talvo", touch=True):
         from pywebpush import webpush, WebPushException
     except Exception:
         return False
-    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag}, ensure_ascii=False)
+    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag, "mood": mood, "lang": row.get("lang") or "es"}, ensure_ascii=False)
     try:
         webpush(subscription_info={"endpoint": row["endpoint"], "keys": {"p256dh": row["p256dh"], "auth": row["auth"]}},
                 data=payload, vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
@@ -6313,7 +6313,7 @@ def push_test():
         rows = supabase_admin.table("push_subscriptions").select("*").eq("user_id", user.id).eq("enabled", True).execute().data or []
     except Exception as exc:
         return json_error(_err_log("No se pudo enviar la prueba", exc), 500)
-    sent = sum(1 for r in rows if _push_send(r, "¡Funciona! 🐔", "Palanqueta te avisará cuando sea hora de practicar.", "./", "talvo-test", touch=False))
+    sent = sum(1 for r in rows if _push_send(r, "¡Funciona! 🐔", "Palanqueta te avisará cuando sea hora de practicar.", "./?pq=cheer", "talvo-test", touch=False))
     return jsonify({"ok": True, "enviadas": sent, "dispositivos": len(rows)})
 
 
@@ -6460,11 +6460,12 @@ def push_cron():
         yesterday = {(ln.date() - timedelta(days=1)).isoformat(), (now_utc.date() - timedelta(days=1)).isoformat()}
         at_risk = last in yesterday
         key, title, body = _push_pick(r.get("lang") or "es", at_risk, int(prof.get("streak_days") or 0), r.get("last_kind"))
-        jobs.append((r, key, title, body))
+        mood = "streak" if key.startswith("s") else ("miss" if (idle or 0) >= 2 else "cheer")
+        jobs.append((r, key, title, body, mood))
 
     def _go(job):
-        r, key, title, body = job
-        if _push_send(r, title, body, "./", "talvo-recordatorio"):
+        r, key, title, body, mood = job
+        if _push_send(r, title, body, "./?pq=" + mood, "talvo-recordatorio", mood=mood):
             try:
                 supabase_admin.table("push_subscriptions").update(
                     {"last_kind": key, "sent_count": int(r.get("sent_count") or 0) + 1}).eq("endpoint", r["endpoint"]).execute()
