@@ -6322,6 +6322,8 @@ def push_test():
 #  RECORDATORIOS AUTOMÁTICOS (paso 2). Lo llama un cron gratis cada 15 min.
 # ---------------------------------------------------------------------------
 CRON_SECRET = env("CRON_SECRET", "")
+# "1" (por defecto): no avisar a quien ya practicó hoy. Pon "0" en Render para avisar a todos.
+PUSH_SKIP_PRACTICED = env("PUSH_SKIP_PRACTICED", "1") != "0"
 
 # (clave, título, cuerpo). {n} = días de racha. Se evita repetir la última que recibió el usuario.
 _PUSH_MSGS = {
@@ -6426,7 +6428,7 @@ def push_cron():
         last = prof.get("last_activity_date")
         today_local = ln.date().isoformat()
         today_utc = now_utc.date().isoformat()
-        if last in (today_local, today_utc):
+        if PUSH_SKIP_PRACTICED and last in (today_local, today_utc):
             continue  # ya practicó hoy
         yesterday = {(ln.date() - timedelta(days=1)).isoformat(), (now_utc.date() - timedelta(days=1)).isoformat()}
         at_risk = last in yesterday

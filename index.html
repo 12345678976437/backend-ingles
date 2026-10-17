@@ -1151,17 +1151,23 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 #push-ask .pa-ic{font-size:28px}#push-ask b{display:block;font-size:14px}#push-ask small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.4}
 #push-ask .pa-btns{display:flex;flex-direction:column;gap:6px}#push-ask .btn{min-height:34px;padding:0 12px;font-size:12.5px}
 /* ---- Aviso push animado dentro de la app ---- */
-#push-banner{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translate(-50%,-140%);z-index:90;width:min(440px,calc(100% - 24px));display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid rgba(var(--c1-rgb),.5);border-radius:16px;background:rgba(10,16,34,.97);box-shadow:0 16px 44px rgba(0,0,0,.6),0 0 0 0 rgba(var(--c1-rgb),.5);overflow:hidden;cursor:pointer;opacity:0;pointer-events:none}
-#push-banner.show{pointer-events:auto;animation:pbIn .55s cubic-bezier(.2,1.3,.4,1) forwards,pbPulse 1.6s .55s 2}
-#push-banner .pb-pq{width:46px;height:46px;object-fit:contain;flex:none;animation:pbHop 1.1s .5s 3 ease-in-out}
-#push-banner b{display:block;font-size:14px}#push-banner small{display:block;margin-top:2px;color:var(--muted);font-size:12.5px;line-height:1.4}
-#push-banner .pb-bar{position:absolute;left:0;bottom:0;height:3px;width:100%;background:linear-gradient(90deg,var(--c1,#4fd1ff),#3df0b0);transform-origin:left;transform:scaleX(0)}
+#push-banner{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translate(-50%,-150%);z-index:90;width:min(440px,calc(100% - 24px));display:flex;gap:12px;align-items:center;padding:12px 16px 14px 12px;border:0;border-radius:20px;background:linear-gradient(135deg,#25d9a0 0%,#3aa0ff 100%);color:#04101f;box-shadow:0 18px 44px rgba(0,0,0,.55);overflow:hidden;cursor:pointer;opacity:0;pointer-events:none}
+#push-banner::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 12% 20%,rgba(255,255,255,.35),transparent 40%),radial-gradient(circle at 90% 90%,rgba(255,255,255,.22),transparent 45%);pointer-events:none}
+#push-banner.show{pointer-events:auto;animation:pbIn .6s cubic-bezier(.2,1.4,.4,1) forwards,pbWiggle .7s .7s 2}
+#push-banner .pb-pq{position:relative;width:54px;height:54px;object-fit:contain;flex:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3));animation:pbHop 1s .6s 4 ease-in-out}
+#push-banner .pb-tx{position:relative;flex:1;min-width:0}
+#push-banner b{display:block;font-size:15px;font-weight:800;color:#04101f}#push-banner small{display:block;margin-top:2px;color:rgba(4,16,31,.78);font-size:13px;line-height:1.4;font-weight:600}
+#push-banner .pb-st{position:absolute;font-size:14px;opacity:0}
+#push-banner.show .pb-st{animation:pbStar 1.8s ease-out 3}
+#push-banner .pb-st.s1{right:14px;top:8px}#push-banner .pb-st.s2{right:44px;bottom:12px;animation-delay:.5s}#push-banner .pb-st.s3{left:70px;top:6px;animation-delay:.9s}
+#push-banner .pb-bar{position:absolute;left:0;bottom:0;height:4px;width:100%;background:rgba(255,255,255,.85);transform-origin:left;transform:scaleX(0)}
 #push-banner.show .pb-bar{animation:pbBar 6.5s linear forwards}
-@keyframes pbIn{0%{transform:translate(-50%,-140%);opacity:0}100%{transform:translate(-50%,0);opacity:1}}
-@keyframes pbHop{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-8px) rotate(-6deg)}60%{transform:translateY(0) rotate(5deg)}}
-@keyframes pbPulse{0%{box-shadow:0 16px 44px rgba(0,0,0,.6),0 0 0 0 rgba(var(--c1-rgb),.5)}100%{box-shadow:0 16px 44px rgba(0,0,0,.6),0 0 0 14px rgba(var(--c1-rgb),0)}}
+@keyframes pbIn{0%{transform:translate(-50%,-150%) scale(.9);opacity:0}100%{transform:translate(-50%,0) scale(1);opacity:1}}
+@keyframes pbHop{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-10px) rotate(-8deg)}60%{transform:translateY(0) rotate(6deg)}}
+@keyframes pbWiggle{0%,100%{transform:translate(-50%,0) rotate(0)}25%{transform:translate(-50%,0) rotate(-1.6deg)}75%{transform:translate(-50%,0) rotate(1.6deg)}}
+@keyframes pbStar{0%{opacity:0;transform:scale(.3) rotate(0)}30%{opacity:1;transform:scale(1.2) rotate(40deg)}100%{opacity:0;transform:scale(.6) translateY(-14px) rotate(90deg)}}
 @keyframes pbBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
-@media(prefers-reduced-motion:reduce){#push-banner.show{animation:pbFade .2s forwards}#push-banner .pb-pq,#push-banner .pb-bar{animation:none!important}@keyframes pbFade{to{opacity:1;transform:translate(-50%,0)}}}
+@media(prefers-reduced-motion:reduce){#push-banner.show{animation:pbFade .2s forwards}#push-banner .pb-pq,#push-banner .pb-bar,#push-banner .pb-st{animation:none!important}@keyframes pbFade{to{opacity:1;transform:translate(-50%,0)}}}
 
 /* ---- Skill hero + entry (Writing/Reading/Listening) ---- */
 .sk-hero{position:relative;overflow:hidden;isolation:isolate;display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;padding:22px 26px;margin-bottom:6px;border:1px solid color-mix(in srgb,var(--sk) 38%,transparent);border-radius:14px;background:linear-gradient(120deg,color-mix(in srgb,var(--sk) 16%,#0a1022),rgba(8,12,24,.92) 62%)}
@@ -1517,7 +1523,7 @@ window.TalvoTheme.apply(window.TalvoTheme.current());</script>
 <button type="button" class="vf-link" id="vf-change">Usar otro correo · Use another email</button>
 </div></div>
 <div id="push-ask" role="dialog" aria-label="Reminders"><div class="pa-ic">🐔</div><div style="flex:1;min-width:0"><b>Want Palanqueta to remind you to practice?</b><small>A short daily nudge so you keep your streak. You can turn it off anytime in My account.</small></div><div class="pa-btns"><button type="button" class="btn primary" id="pa-yes">Turn on</button><button type="button" class="btn" id="pa-no">Not now</button></div></div>
-<div id="push-banner" role="status" aria-live="polite"><img class="pb-pq" src="palanqueta-asoma.webp" alt=""><div style="flex:1;min-width:0"><b id="pb-title"></b><small id="pb-body"></small></div><div class="pb-bar"></div></div>
+<div id="push-banner" role="status" aria-live="polite"><span class="pb-st s1">⭐</span><span class="pb-st s2">✨</span><span class="pb-st s3">⭐</span><img class="pb-pq" src="palanqueta-asoma.webp" alt=""><div class="pb-tx"><b id="pb-title"></b><small id="pb-body"></small></div><div class="pb-bar"></div></div>
 <div id="auth-modal" class="modal"><div class="modal-card"><h2 id="auth-title">Sign in</h2><p style="color:var(--muted);font-size:11px">Use your Talvo English account.</p><input id="auth-email" class="input" type="email" autocomplete="username" maxlength="254" placeholder="Email"><input id="auth-password" class="input" type="password" autocomplete="current-password" maxlength="128" placeholder="Password"><div id="turnstile-box" style="display:flex;justify-content:center;margin:8px 0;min-height:65px"></div><div id="auth-error" class="auth-error"></div><button type="button" id="auth-submit" class="btn primary">Sign in</button><button type="button" id="auth-forgot" class="btn" style="font-size:11px;padding:6px">¿Olvidaste tu contraseña?</button><button type="button" id="auth-toggle" class="btn">Create an account</button><button type="button" id="auth-close" class="btn danger">Cancel</button></div></div>
 <div id="reset-modal" class="modal"><div class="modal-card"><h2>Nueva contraseña</h2><p style="color:var(--muted);font-size:11px">Escribe tu nueva contraseña para tu cuenta.</p><input id="reset-password" class="input" type="password" autocomplete="new-password" maxlength="128" placeholder="Nueva contraseña (mín. 8, letras y números)"><div id="reset-error" class="auth-error"></div><button type="button" id="reset-submit" class="btn primary">Guardar nueva contraseña</button></div></div>
 <div id="toast" class="toast"></div>
