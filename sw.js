@@ -4,10 +4,17 @@ self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.
 self.addEventListener('push',e=>{
   let d={};
   try{d=e.data?e.data.json():{}}catch(_){d={body:e.data?e.data.text():''}}
-  e.waitUntil(self.registration.showNotification(d.title||'Talvo English',{
-    body:d.body||'',icon:'icons/icon-192.png',badge:'icons/icon-192.png',
-    tag:d.tag||'talvo',data:{url:d.url||'./'},lang:'es'
-  }));
+  e.waitUntil((async()=>{
+    // Si la app está abierta, también muestra el aviso animado dentro de la app.
+    const list=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    list.forEach(c=>{try{c.postMessage({type:'talvo-push',title:d.title||'Talvo English',body:d.body||''})}catch(_){}});
+    await self.registration.showNotification(d.title||'Talvo English',{
+      body:d.body||'',icon:'icons/icon-192.png',badge:'icons/icon-192.png',
+      tag:d.tag||'talvo',renotify:true,vibrate:[120,60,120,60,220],
+      actions:[{action:'open',title:'Practicar ahora'}],
+      data:{url:d.url||'./'},lang:'es'
+    });
+  })());
 });
 self.addEventListener('notificationclick',e=>{
   e.notification.close();

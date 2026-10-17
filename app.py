@@ -6264,7 +6264,7 @@ def push_prefs():
     return jsonify({"ok": True})
 
 
-def _push_send(row, title, body, url="./", tag="talvo"):
+def _push_send(row, title, body, url="./", tag="talvo", touch=True):
     """Envía una notificación a una suscripción. Devuelve True/False y limpia las caducadas."""
     if not _push_ready():
         return False
@@ -6277,8 +6277,10 @@ def _push_send(row, title, body, url="./", tag="talvo"):
         webpush(subscription_info={"endpoint": row["endpoint"], "keys": {"p256dh": row["p256dh"], "auth": row["auth"]}},
                 data=payload, vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
         try:
-            supabase_admin.table("push_subscriptions").update(
-                {"last_sent_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "fail_count": 0}).eq("endpoint", row["endpoint"]).execute()
+            upd_ok = {"fail_count": 0}
+            if touch:
+                upd_ok["last_sent_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            supabase_admin.table("push_subscriptions").update(upd_ok).eq("endpoint", row["endpoint"]).execute()
         except Exception:
             pass
         return True
@@ -6311,8 +6313,140 @@ def push_test():
         rows = supabase_admin.table("push_subscriptions").select("*").eq("user_id", user.id).eq("enabled", True).execute().data or []
     except Exception as exc:
         return json_error(_err_log("No se pudo enviar la prueba", exc), 500)
-    sent = sum(1 for r in rows if _push_send(r, "¡Funciona! 🐔", "Palanqueta te avisará cuando sea hora de practicar.", "./", "talvo-test"))
+    sent = sum(1 for r in rows if _push_send(r, "¡Funciona! 🐔", "Palanqueta te avisará cuando sea hora de practicar.", "./", "talvo-test", touch=False))
     return jsonify({"ok": True, "enviadas": sent, "dispositivos": len(rows)})
+
+
+
+# ---------------------------------------------------------------------------
+#  RECORDATORIOS AUTOMÁTICOS (paso 2). Lo llama un cron gratis cada 15 min.
+# ---------------------------------------------------------------------------
+CRON_SECRET = env("CRON_SECRET", "")
+
+# (clave, título, cuerpo). {n} = días de racha. Se evita repetir la última que recibió el usuario.
+_PUSH_MSGS = {
+    "es": {
+        "plain": [
+            ("p1", "Palanqueta te extraña 🐔", "Solo 5 minutos hoy y tu inglés sigue creciendo."),
+            ("p2", "¿Practicamos un poquito? 🎧", "Una lección corta y listo. ¡Tú puedes!"),
+            ("p3", "Hora de tu inglés ✨", "Entra, haz una práctica rápida y cierra el día con una victoria."),
+            ("p4", "¡Cuack! Es tu hora 🐥", "Palanqueta ya está lista. ¿Y tú?"),
+            ("p5", "Un minuto basta 💪", "Repasa unas palabras y mantén el hábito vivo."),
+            ("p6", "Tu futuro yo te lo agradece 🚀", "Hoy toca practicar un poco. Abre Talvo."),
+        ],
+        "streak": [
+            ("s1", "¡Tu racha de {n} días está en juego! 🔥", "Practica hoy y no la pierdas."),
+            ("s2", "No rompas tu racha de {n} días 🔥", "Con una práctica corta la salvas."),
+            ("s3", "{n} días seguidos… ¡vamos por uno más! 🏅", "Palanqueta te espera."),
+        ],
+    },
+    "en": {
+        "plain": [
+            ("p1", "Palanqueta misses you 🐔", "Just 5 minutes today keeps your English growing."),
+            ("p2", "Shall we practice a bit? 🎧", "One short lesson and you're done. You've got this!"),
+            ("p3", "Your English time ✨", "Hop in, do a quick practice, and end the day with a win."),
+            ("p4", "Cluck! It's your time 🐥", "Palanqueta is ready. Are you?"),
+            ("p5", "One minute is enough 💪", "Review a few words and keep the habit alive."),
+            ("p6", "Future you says thanks 🚀", "Time for a little practice. Open Talvo."),
+        ],
+        "streak": [
+            ("s1", "Your {n}-day streak is on the line! 🔥", "Practice today and keep it alive."),
+            ("s2", "Don't break your {n}-day streak 🔥", "A short practice saves it."),
+            ("s3", "{n} days in a row… let's make it one more! 🏅", "Palanqueta is waiting."),
+        ],
+    },
+}
+
+
+def _push_local_now(tz):
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(tz)) if tz else datetime.now(timezone.utc)
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
+def _push_pick(lang, streak_at_risk, streak, last_kind):
+    pool = _PUSH_MSGS.get(lang) or _PUSH_MSGS["es"]
+    items = pool["streak"] if (streak_at_risk and streak >= 2) else pool["plain"]
+    options = [m for m in items if m[0] != last_kind] or items
+    key, title, body = random.choice(options)
+    return key, title.replace("{n}", str(streak)), body.replace("{n}", str(streak))
+
+
+@app.post("/api/push/cron")
+def push_cron():
+    """Envía el recordatorio a quien tiene activadas las notificaciones, ya es su hora y no ha practicado hoy."""
+    import hmac
+    if not CRON_SECRET or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
+        return json_error("No autorizado.", 401)
+    if not _push_ready():
+        return json_error("Las notificaciones aún no están disponibles.", 503)
+    try:
+        rows = supabase_admin.table("push_subscriptions").select("*").eq("enabled", True).lt("fail_count", 5).execute().data or []
+    except Exception as exc:
+        return json_error(_err_log("No se pudieron leer las suscripciones", exc), 500)
+
+    now_utc = datetime.now(timezone.utc)
+    due = []
+    for r in rows:
+        ln = _push_local_now(r.get("tz"))
+        if ln.hour != int(r.get("hour") if r.get("hour") is not None else 19):
+            continue
+        ls = r.get("last_sent_at")
+        if r.get("last_kind") and ls:
+            try:
+                if now_utc - datetime.fromisoformat(str(ls).replace("Z", "+00:00")) < timedelta(hours=20):
+                    continue  # ya se le avisó hoy
+            except Exception:
+                pass
+        due.append((r, ln))
+    if not due:
+        return jsonify({"ok": True, "revisadas": len(rows), "enviadas": 0})
+
+    # Perfiles: por user_id, o por correo si la suscripción se guardó antes de iniciar sesión.
+    ids = list({r["user_id"] for r, _ in due if r.get("user_id")})
+    emails = list({(r.get("email") or "").lower() for r, _ in due if not r.get("user_id") and r.get("email")})
+    profs = {}
+    try:
+        if ids:
+            for p in supabase_admin.table("profiles").select("id,email,streak_days,last_activity_date").in_("id", ids).execute().data or []:
+                profs[p["id"]] = p
+        if emails:
+            for p in supabase_admin.table("profiles").select("id,email,streak_days,last_activity_date").in_("email", emails).execute().data or []:
+                profs["e:" + (p.get("email") or "").lower()] = p
+    except Exception as exc:
+        return json_error(_err_log("No se pudieron leer los perfiles", exc), 500)
+
+    jobs = []
+    for r, ln in due:
+        prof = profs.get(r.get("user_id")) or profs.get("e:" + (r.get("email") or "").lower())
+        if not prof:
+            continue  # sin cuenta confirmada todavía: no se manda nada
+        last = prof.get("last_activity_date")
+        today_local = ln.date().isoformat()
+        today_utc = now_utc.date().isoformat()
+        if last in (today_local, today_utc):
+            continue  # ya practicó hoy
+        yesterday = {(ln.date() - timedelta(days=1)).isoformat(), (now_utc.date() - timedelta(days=1)).isoformat()}
+        at_risk = last in yesterday
+        key, title, body = _push_pick(r.get("lang") or "es", at_risk, int(prof.get("streak_days") or 0), r.get("last_kind"))
+        jobs.append((r, key, title, body))
+
+    def _go(job):
+        r, key, title, body = job
+        if _push_send(r, title, body, "./", "talvo-recordatorio"):
+            try:
+                supabase_admin.table("push_subscriptions").update(
+                    {"last_kind": key, "sent_count": int(r.get("sent_count") or 0) + 1}).eq("endpoint", r["endpoint"]).execute()
+            except Exception:
+                pass
+            return True
+        return False
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        sent = sum(1 for ok in ex.map(_go, jobs) if ok)
+    return jsonify({"ok": True, "revisadas": len(rows), "a_la_hora": len(due), "enviadas": sent})
 
 
 @app.get("/")
