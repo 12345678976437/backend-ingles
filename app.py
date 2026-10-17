@@ -6576,7 +6576,7 @@ def _email_render(kind, name, email, idle=0, streak=0):
 <tr><td style="padding:10px 30px 4px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">{steps}</table></td></tr>
 <tr><td align="center" style="padding:18px 30px 30px"><a href="{link}" style="display:inline-block;background:#3ee8ff;background-image:linear-gradient(90deg,#3ee8ff,#7c78ff);color:#04101a;text-decoration:none;font:700 16px Arial,sans-serif;padding:15px 34px;border-radius:12px">{k['cta']} &rarr;</a>
 <div style="margin-top:12px;font:12px Arial,sans-serif;color:#6f7f9c">¿No abre el botón? Copia este enlace: <a href="{link}" style="color:#3ee8ff">{escape(link)}</a></div></td></tr>
-<tr><td style="padding:16px 30px 24px;border-top:1px solid #1e2b4f;font:12px/1.6 Arial,sans-serif;color:#6f7f9c">Recibes este correo porque creaste una cuenta en Talvo English. Te escribimos pocas veces y nunca más de uno cada tres días.<br>¿Ya no quieres recordatorios? <a href="{unsub}" style="color:#93a3bd">Darme de baja</a>.</td></tr>
+<tr><td style="padding:16px 30px 24px;border-top:1px solid #1e2b4f;font:12px/1.6 Arial,sans-serif;color:#6f7f9c">Recibes este correo porque creaste una cuenta en Talvo English. Te escribimos cada par de días hasta que actives tus recordatorios.<br>¿Ya no quieres recordatorios? <a href="{unsub}" style="color:#93a3bd">Darme de baja</a>.</td></tr>
 </table></td></tr></table></body></html>"""
     text = f"{title}\n\n{re.sub('<[^>]+>', '', body)}\n\n{k['cta']}: {link}\n\nDarme de baja: {unsub}"
     return subject, html, text
@@ -6604,42 +6604,32 @@ def _send_email(to, subject, html, text=""):
 
 
 def _email_pick(created, confirmed, prof, has_push, logs, now_mx):
-    """Decide qué correo (si alguno) toca. logs = [(kind, datetime)]. Devuelve (kind, idle, streak) o None."""
-    if len(logs) >= 6:
+    """Decide qué correo (si alguno) toca. logs = [(kind, datetime)]. Devuelve (kind, idle, streak) o None.
+    Constante: como máximo uno cada 2 días por persona, sin tope total, hasta que la persona actúe o se dé de baja."""
+    def since(kind=None):
+        ds = [dt for k, dt in logs if kind is None or k == kind]
+        return (now_mx - max(ds)).total_seconds() / 86400 if ds else 99
+    if since() < 2 - 1 / 24:
         return None
-    if logs and (now_mx - max(dt for _k, dt in logs)).total_seconds() < 3 * 86400 - 3600:
-        return None  # máximo un correo cada 3 días
-    cnt = lambda k: sum(1 for kk, _ in logs if kk == k)
-    last_of = lambda k: max([dt for kk, dt in logs if kk == k] or [None]) if cnt(k) else None
     age = (now_mx - created).total_seconds() / 86400
     if not confirmed:
-        if cnt("verify") == 0 and age >= 0.8:
-            return ("verify", 0, 0)
-        if cnt("verify") == 1 and age >= 3:
-            return ("verify", 0, 0)
-        return None
+        return ("verify", 0, 0) if age >= 0.8 else None
     if not prof or not has_active_access(prof):
         return None
     last = prof.get("last_activity_date")
     if not last:
-        if cnt("start") == 0 and age >= 1:
-            return ("start", 0, 0)
-        if cnt("start") == 1 and age >= 4:
-            return ("start", 0, 0)
-        return None
+        return ("start", 0, 0) if age >= 1 else None
     try:
         idle = (now_mx.date() - datetime.fromisoformat(str(last)[:10]).date()).days
     except Exception:
         return None
     streak = int(prof.get("streak_days") or 0) if idle <= 1 else 0
     if has_push:
-        return None  # ya recibe notificaciones: el correo sería de más
-    if cnt("nopush") == 0 and idle >= 1:
-        return ("nopush", idle, streak)
-    if cnt("nopush") == 1 and (now_mx - last_of("nopush")).days >= 10:
-        return ("nopush", idle, streak)
-    if idle >= 4 and cnt("comeback") < 3 and (cnt("comeback") == 0 or (now_mx - last_of("comeback")).days >= 7):
+        return None  # ya recibe notificaciones diarias
+    if idle >= 3:
         return ("comeback", idle, 0)
+    if idle >= 1 or since("nopush") >= 4:
+        return ("nopush", idle, streak)
     return None
 
 
