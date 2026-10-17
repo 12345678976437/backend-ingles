@@ -6479,6 +6479,283 @@ def push_cron():
     return jsonify({"ok": True, "revisadas": len(rows), "a_la_hora": len(due), "enviadas": sent})
 
 
+# ---------------------------------------------------------------------------
+#  CORREOS DE RECORDATORIO (gratis). Render gratis bloquea SMTP, así que se envían por HTTPS:
+#   - EMAIL_WEBHOOK_URL + EMAIL_WEBHOOK_SECRET: un Google Apps Script que manda desde tu Gmail (100/día), o
+#   - BREVO_API_KEY + EMAIL_FROM: Brevo (300/día) con un remitente verificado.
+#  Tablas: email_log, email_optout. Lo dispara el mismo cron de GitHub (cada 15 min; aquí se filtra la hora).
+# ---------------------------------------------------------------------------
+APP_URL = env("APP_URL", "https://english-academy-cabex1.vercel.app").rstrip("/")
+BACKEND_PUBLIC_URL = env("BACKEND_PUBLIC_URL", "https://backend-ingles-e3ms.onrender.com").rstrip("/")
+EMAIL_WEBHOOK_URL = env("EMAIL_WEBHOOK_URL", "")
+EMAIL_WEBHOOK_SECRET = env("EMAIL_WEBHOOK_SECRET", "")
+BREVO_API_KEY = env("BREVO_API_KEY", "")
+EMAIL_FROM = env("EMAIL_FROM", "")
+EMAIL_MAX_PER_RUN = int(env("EMAIL_MAX_PER_RUN", "40") or 40)
+EMAIL_HOURS = (10, 11)  # hora de México en la que se envían (el cron corre cada 15 min)
+
+
+def _email_ready():
+    return bool(EMAIL_WEBHOOK_URL and EMAIL_WEBHOOK_SECRET) or bool(BREVO_API_KEY and EMAIL_FROM)
+
+
+def _unsub_token(email):
+    import hmac, hashlib
+    return hmac.new((CRON_SECRET or "x").encode(), (email or "").lower().encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _unsub_url(email):
+    from urllib.parse import quote
+    return f"{BACKEND_PUBLIC_URL}/api/email/unsub?e={quote((email or '').lower())}&t={_unsub_token(email)}"
+
+
+# kind -> (asunto, titular, cuerpo, pasos, texto del botón, ruta del botón)
+_EMAIL_KINDS = {
+    "verify": {
+        "subject": "✉️ {name}, falta un paso para empezar tu prueba gratis",
+        "pre": "Confirma tu correo y entra a practicar inglés con Palanqueta.",
+        "title": "¡Casi listo, {name}!",
+        "body": "Creaste tu cuenta en <b>Talvo English</b>, pero todavía no confirmas tu correo. Sin ese paso no podemos activar tu <b>prueba gratis de 7 días</b>.",
+        "steps": ["Toca el botón de abajo para abrir Talvo.", "Pulsa <b>Reenviar correo</b> (llega en segundos; revisa Spam o Promociones).", "Abre el mensaje, confirma… ¡y listo!"],
+        "cta": "Confirmar mi correo", "path": "/?verify={email_q}",
+    },
+    "start": {
+        "subject": "🚀 {name}, tu primera lección te está esperando",
+        "pre": "Solo 5 minutos y Palanqueta personaliza tu ruta de inglés.",
+        "title": "Empecemos con tu primera lección",
+        "body": "Tu cuenta ya está lista, pero aún no practicas. Con solo <b>5 minutos</b> Palanqueta conoce tu nivel y arma una ruta hecha para ti.",
+        "steps": ["Haz el examen rápido de nivel.", "Completa tu primera lección y gana tu primera racha 🔥", "Activa los recordatorios para no olvidarlo."],
+        "cta": "Empezar ahora", "path": "/",
+    },
+    "nopush": {
+        "subject": "🔔 {name}, activa los recordatorios y no pierdas tu racha",
+        "pre": "Un aviso al día, a la hora que tú elijas. Toma 10 segundos.",
+        "title": "Que Palanqueta te avise por ti",
+        "body": "Practicar un poquito cada día es lo que más funciona, y un recordatorio ayuda mucho. Actívalo y Palanqueta te escribe a la hora que elijas. {streak}",
+        "steps": ["Entra a <b>Mi cuenta</b>.", "Activa <b>Recordatorios</b> y acepta el permiso.", "Elige tu hora favorita. ¡Eso es todo!"],
+        "cta": "Activar recordatorios", "path": "/?go=cuenta",
+    },
+    "comeback": {
+        "subject": "🥺 {name}, Palanqueta te extraña",
+        "pre": "Tu progreso sigue intacto. Vuelve con una lección cortita.",
+        "title": "¡Te extrañamos, {name}!",
+        "body": "Llevas <b>{idle} días</b> sin practicar. No pasa nada: tu ruta y tu progreso siguen donde los dejaste. Una lección de 5 minutos y recuperas el ritmo.",
+        "steps": ["Abre Talvo.", "Retoma tu ruta justo donde la dejaste.", "Activa los recordatorios para que no se te pase."],
+        "cta": "Volver a practicar", "path": "/",
+    },
+}
+
+
+def _email_render(kind, name, email, idle=0, streak=0):
+    """Devuelve (asunto, html, texto)."""
+    from html import escape
+    from urllib.parse import quote
+    k = _EMAIL_KINDS[kind]
+    nm = escape((name or "").strip().split(" ")[0].capitalize() or "amigo")
+    fmt = {"name": nm, "idle": int(idle or 0), "email_q": quote(email or ""),
+           "streak": (f"Llevas <b>{int(streak)} días</b> de racha: ¡cuídala!" if streak and int(streak) >= 2 else "")}
+    subject = k["subject"].format(**fmt)
+    title = k["title"].format(**fmt)
+    body = k["body"].format(**fmt)
+    link = APP_URL + k["path"].format(**fmt)
+    gif = f"{APP_URL}/email/pq-{kind}.gif"
+    steps = "".join(
+        f'<tr><td width="34" valign="top" style="padding:7px 0"><div style="width:26px;height:26px;border-radius:13px;background:#3ee8ff;color:#04101a;'
+        f'font:700 13px/26px Arial,sans-serif;text-align:center">{i}</div></td>'
+        f'<td style="padding:8px 0 8px 8px;font:15px/1.5 Arial,sans-serif;color:#d6e0f5">{s}</td></tr>' for i, s in enumerate(k["steps"], 1))
+    unsub = _unsub_url(email)
+    html = f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(subject)}</title></head>
+<body style="margin:0;padding:0;background:#04060d">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#04060d">{escape(k['pre'])}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#04060d" style="background:#04060d"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#0a1022;border:1px solid #1e2b4f;border-radius:18px;overflow:hidden">
+<tr><td style="padding:0"><img src="{gif}" width="600" alt="Palanqueta" style="display:block;width:100%;max-width:600px;height:auto;border:0"></td></tr>
+<tr><td style="padding:26px 30px 8px"><div style="font:700 12px Arial,sans-serif;letter-spacing:.14em;color:#3ee8ff;text-transform:uppercase">Talvo English</div>
+<h1 style="margin:8px 0 12px;font:700 26px/1.2 Arial,sans-serif;color:#ffffff">{title}</h1>
+<p style="margin:0;font:16px/1.6 Arial,sans-serif;color:#b8c5de">{body}</p></td></tr>
+<tr><td style="padding:10px 30px 4px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">{steps}</table></td></tr>
+<tr><td align="center" style="padding:18px 30px 30px"><a href="{link}" style="display:inline-block;background:#3ee8ff;background-image:linear-gradient(90deg,#3ee8ff,#7c78ff);color:#04101a;text-decoration:none;font:700 16px Arial,sans-serif;padding:15px 34px;border-radius:12px">{k['cta']} &rarr;</a>
+<div style="margin-top:12px;font:12px Arial,sans-serif;color:#6f7f9c">¿No abre el botón? Copia este enlace: <a href="{link}" style="color:#3ee8ff">{escape(link)}</a></div></td></tr>
+<tr><td style="padding:16px 30px 24px;border-top:1px solid #1e2b4f;font:12px/1.6 Arial,sans-serif;color:#6f7f9c">Recibes este correo porque creaste una cuenta en Talvo English. Te escribimos pocas veces y nunca más de uno cada tres días.<br>¿Ya no quieres recordatorios? <a href="{unsub}" style="color:#93a3bd">Darme de baja</a>.</td></tr>
+</table></td></tr></table></body></html>"""
+    text = f"{title}\n\n{re.sub('<[^>]+>', '', body)}\n\n{k['cta']}: {link}\n\nDarme de baja: {unsub}"
+    return subject, html, text
+
+
+def _send_email(to, subject, html, text=""):
+    """Envía un correo por HTTPS. Devuelve (ok, detalle)."""
+    try:
+        if EMAIL_WEBHOOK_URL and EMAIL_WEBHOOK_SECRET:
+            r = requests.post(EMAIL_WEBHOOK_URL, json={"secret": EMAIL_WEBHOOK_SECRET, "to": to, "subject": subject,
+                                                       "html": html, "text": text, "name": "Palanqueta · Talvo English"}, timeout=30)
+            try:
+                d = r.json()
+            except Exception:
+                return False, f"webhook {r.status_code}"
+            return bool(d.get("ok")), str(d.get("error") or d.get("left") or "")
+        if BREVO_API_KEY and EMAIL_FROM:
+            r = requests.post("https://api.brevo.com/v3/smtp/email", headers={"api-key": BREVO_API_KEY, "accept": "application/json"},
+                              json={"sender": {"name": "Palanqueta · Talvo English", "email": EMAIL_FROM}, "to": [{"email": to}],
+                                    "subject": subject, "htmlContent": html, "textContent": text}, timeout=30)
+            return r.status_code in (200, 201), f"brevo {r.status_code}"
+    except Exception as exc:
+        return False, type(exc).__name__
+    return False, "sin proveedor"
+
+
+def _email_pick(created, confirmed, prof, has_push, logs, now_mx):
+    """Decide qué correo (si alguno) toca. logs = [(kind, datetime)]. Devuelve (kind, idle, streak) o None."""
+    if len(logs) >= 6:
+        return None
+    if logs and (now_mx - max(dt for _k, dt in logs)).total_seconds() < 3 * 86400 - 3600:
+        return None  # máximo un correo cada 3 días
+    cnt = lambda k: sum(1 for kk, _ in logs if kk == k)
+    last_of = lambda k: max([dt for kk, dt in logs if kk == k] or [None]) if cnt(k) else None
+    age = (now_mx - created).total_seconds() / 86400
+    if not confirmed:
+        if cnt("verify") == 0 and age >= 0.8:
+            return ("verify", 0, 0)
+        if cnt("verify") == 1 and age >= 3:
+            return ("verify", 0, 0)
+        return None
+    if not prof or not has_active_access(prof):
+        return None
+    last = prof.get("last_activity_date")
+    if not last:
+        if cnt("start") == 0 and age >= 1:
+            return ("start", 0, 0)
+        if cnt("start") == 1 and age >= 4:
+            return ("start", 0, 0)
+        return None
+    try:
+        idle = (now_mx.date() - datetime.fromisoformat(str(last)[:10]).date()).days
+    except Exception:
+        return None
+    streak = int(prof.get("streak_days") or 0) if idle <= 1 else 0
+    if has_push:
+        return None  # ya recibe notificaciones: el correo sería de más
+    if cnt("nopush") == 0 and idle >= 1:
+        return ("nopush", idle, streak)
+    if cnt("nopush") == 1 and (now_mx - last_of("nopush")).days >= 10:
+        return ("nopush", idle, streak)
+    if idle >= 4 and cnt("comeback") < 3 and (cnt("comeback") == 0 or (now_mx - last_of("comeback")).days >= 7):
+        return ("comeback", idle, 0)
+    return None
+
+
+@app.post("/api/email/cron")
+def email_cron():
+    """Correos de recordatorio para quien no confirmó, no ha practicado o no activó notificaciones.
+    ?dry=1 solo lista a quién se enviaría; ?force=1 ignora la ventana de horas."""
+    import hmac
+    from zoneinfo import ZoneInfo
+    if not CRON_SECRET or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
+        return json_error("No autorizado.", 401)
+    dry = request.args.get("dry") == "1"
+    force = request.args.get("force") == "1"
+    tz = ZoneInfo("America/Mexico_City")
+    now_mx = datetime.now(timezone.utc).astimezone(tz)
+    if not force and now_mx.hour not in EMAIL_HOURS:
+        return jsonify({"ok": True, "enviados": 0, "motivo": "fuera de horario"})
+    if not dry and not _email_ready():
+        return json_error("Falta configurar el envío de correos (EMAIL_WEBHOOK_URL o BREVO_API_KEY).", 503)
+    if not supabase_admin:
+        return json_error("Supabase no está configurado.", 500)
+    try:
+        users = _list_auth_users(supabase_admin)
+        profs = {p["id"]: p for p in (supabase_admin.table("profiles").select(
+            "id,email,username,streak_days,last_activity_date,is_subscribed,trial_ends_at").limit(5000).execute().data or [])}
+        push_users = {r["user_id"] for r in (supabase_admin.table("push_subscriptions").select("user_id").eq("enabled", True).execute().data or []) if r.get("user_id")}
+        logs = {}
+        for r in (supabase_admin.table("email_log").select("email,kind,sent_at").limit(20000).execute().data or []):
+            try:
+                dt = datetime.fromisoformat(str(r["sent_at"]).replace("Z", "+00:00")).astimezone(tz)
+            except Exception:
+                continue
+            logs.setdefault((r.get("email") or "").lower(), []).append((r.get("kind"), dt))
+        optout = {(r.get("email") or "").lower() for r in (supabase_admin.table("email_optout").select("email").limit(20000).execute().data or [])}
+    except Exception as exc:
+        return json_error(_err_log("No se pudieron leer los datos", exc), 500)
+
+    plan = []
+    for u in users:
+        email = (getattr(u, "email", "") or "").lower()
+        if not email or email in optout:
+            continue
+        try:
+            ca = getattr(u, "created_at", None)
+            created = (ca if isinstance(ca, datetime) else datetime.fromisoformat(str(ca).replace("Z", "+00:00"))).astimezone(tz)
+        except Exception:
+            continue
+        confirmed = bool(getattr(u, "email_confirmed_at", None))
+        pick = _email_pick(created, confirmed, profs.get(str(u.id)), str(u.id) in push_users, logs.get(email, []), now_mx)
+        if pick:
+            prof = profs.get(str(u.id)) or {}
+            plan.append({"uid": str(u.id), "email": email, "name": prof.get("username") or email.split("@")[0],
+                         "kind": pick[0], "idle": pick[1], "streak": pick[2]})
+    plan = plan[:EMAIL_MAX_PER_RUN]
+    if dry:
+        return jsonify({"ok": True, "dry": True, "usuarios": len(users), "se_enviarian": [{"email": p["email"][:3] + "…", "kind": p["kind"]} for p in plan]})
+    sent, failed = 0, 0
+    for p in plan:
+        subject, html, text = _email_render(p["kind"], p["name"], p["email"], p["idle"], p["streak"])
+        ok, detail = _send_email(p["email"], subject, html, text)
+        if ok:
+            sent += 1
+            try:
+                supabase_admin.table("email_log").insert({"user_id": p["uid"], "email": p["email"], "kind": p["kind"]}).execute()
+            except Exception:
+                pass
+        else:
+            failed += 1
+            if detail and ("quota" in detail.lower() or "límite" in detail.lower() or "limit" in detail.lower()):
+                break  # cuota diaria agotada: se reintenta mañana
+    return jsonify({"ok": True, "usuarios": len(users), "enviados": sent, "fallidos": failed})
+
+
+@app.post("/api/email/test")
+def email_test():
+    """Solo admin: te manda a ti mismo un ejemplo de cada correo (?kind=verify|start|nopush|comeback)."""
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    if not is_admin_user(user):
+        return json_error("Solo el administrador.", 403)
+    ok, _w = _rate_hit((user.id, "email-test"), 10, 3600)
+    if not ok:
+        return json_error("Demasiadas pruebas. Espera un momento.", 429)
+    kind = (request.get_json(silent=True) or {}).get("kind")
+    kinds = [kind] if kind in _EMAIL_KINDS else list(_EMAIL_KINDS)
+    if not _email_ready():
+        return json_error("Falta configurar el envío de correos (EMAIL_WEBHOOK_URL o BREVO_API_KEY).", 503)
+    sent = 0
+    for k in kinds:
+        subject, html, text = _email_render(k, user.email.split("@")[0], user.email, idle=5, streak=4)
+        ok2, _d = _send_email(user.email, "[Prueba] " + subject, html, text)
+        sent += 1 if ok2 else 0
+    return jsonify({"ok": True, "enviados": sent, "de": len(kinds)})
+
+
+@app.get("/api/email/unsub")
+def email_unsub():
+    import hmac
+    from html import escape
+    e = (request.args.get("e") or "").strip().lower()[:254]
+    ok = bool(e) and hmac.compare_digest(request.args.get("t", ""), _unsub_token(e))
+    if ok and supabase_admin:
+        try:
+            supabase_admin.table("email_optout").upsert({"email": e}, on_conflict="email").execute()
+        except Exception:
+            ok = False
+    msg = ("Listo, ya no recibirás recordatorios por correo." if ok else "El enlace no es válido o caducó.")
+    page = (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Talvo English</title>'
+            f'<body style="margin:0;background:#04060d;color:#f2f6ff;font-family:Arial,sans-serif;display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px">'
+            f'<div><img src="{APP_URL}/palanqueta-asoma.webp" width="120" alt=""><h2>{escape(msg)}</h2>'
+            f'<p style="color:#93a3bd">Puedes seguir practicando cuando quieras.</p>'
+            f'<a href="{APP_URL}" style="display:inline-block;margin-top:10px;background:#3ee8ff;color:#04101a;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700">Ir a Talvo English</a></div>')
+    return Response(page, mimetype="text/html")
+
+
 @app.get("/")
 def root():
     return jsonify({"ok": True, "service": "Talvo English API"})
