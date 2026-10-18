@@ -6507,15 +6507,15 @@ def _unsub_url(email):
 # kind -> (asunto, titular, cuerpo, pasos, texto del botón, ruta del botón)
 _EMAIL_KINDS = {
     "verify": {
-        "subject": "✉️ {name}, falta un paso para empezar tu prueba gratis",
+        "subject": "{name}, falta un paso para activar tu cuenta de Talvo English",
         "pre": "Confirma tu correo y entra a practicar inglés con Palanqueta.",
         "title": "¡Casi listo, {name}!",
-        "body": "Creaste tu cuenta en <b>Talvo English</b>, pero todavía no confirmas tu correo. Sin ese paso no podemos activar tu <b>prueba gratis de 7 días</b>.",
+        "body": "Creaste tu cuenta en <b>Talvo English</b>, pero todavía no confirmas tu correo. Sin ese paso no podemos activar tu <b>prueba de 7 días</b>.",
         "steps": ["Toca el botón de abajo para abrir Talvo.", "Pulsa <b>Reenviar correo</b> (llega en segundos; revisa Spam o Promociones).", "Abre el mensaje, confirma… ¡y listo!"],
         "cta": "Confirmar mi correo", "path": "/?verify={email_q}",
     },
     "start": {
-        "subject": "🚀 {name}, tu primera lección te está esperando",
+        "subject": "{name}, tu primera lección de inglés te está esperando",
         "pre": "Solo 5 minutos y Palanqueta personaliza tu ruta de inglés.",
         "title": "Empecemos con tu primera lección",
         "body": "Tu cuenta ya está lista, pero aún no practicas. Con solo <b>5 minutos</b> Palanqueta conoce tu nivel y arma una ruta hecha para ti.",
@@ -6523,7 +6523,7 @@ _EMAIL_KINDS = {
         "cta": "Empezar ahora", "path": "/",
     },
     "nopush": {
-        "subject": "🔔 {name}, activa los recordatorios y no pierdas tu racha",
+        "subject": "{name}, activa tus recordatorios de práctica",
         "pre": "Un aviso al día, a la hora que tú elijas. Toma 10 segundos.",
         "title": "Que Palanqueta te avise por ti",
         "body": "Practicar un poquito cada día es lo que más funciona, y un recordatorio ayuda mucho. Actívalo y Palanqueta te escribe a la hora que elijas. {streak}",
@@ -6531,7 +6531,7 @@ _EMAIL_KINDS = {
         "cta": "Activar recordatorios", "path": "/?go=cuenta",
     },
     "comeback": {
-        "subject": "🥺 {name}, Palanqueta te extraña",
+        "subject": "{name}, Palanqueta te extraña en Talvo English",
         "pre": "Tu progreso sigue intacto. Vuelve con una lección cortita.",
         "title": "¡Te extrañamos, {name}!",
         "body": "Llevas <b>{idle} días</b> sin practicar. No pasa nada: tu ruta y tu progreso siguen donde los dejaste. Una lección de 5 minutos y recuperas el ritmo.",
@@ -6539,6 +6539,10 @@ _EMAIL_KINDS = {
         "cta": "Volver a practicar", "path": "/",
     },
 }
+
+
+def _email_gif(kind):
+    return f"{BACKEND_PUBLIC_URL}/email/pq-{kind}.gif"
 
 
 def _email_render(kind, name, email, idle=0, streak=0):
@@ -6553,7 +6557,7 @@ def _email_render(kind, name, email, idle=0, streak=0):
     title = k["title"].format(**fmt)
     body = k["body"].format(**fmt)
     link = APP_URL + k["path"].format(**fmt)
-    gif = f"{BACKEND_PUBLIC_URL}/email/pq-{kind}.gif"
+    gif = _email_gif(kind)
     steps = "".join(
         f'<tr><td width="34" valign="top" style="padding:7px 0"><div style="width:26px;height:26px;border-radius:13px;background:#3ee8ff;color:#04101a;'
         f'font:700 13px/26px Arial,sans-serif;text-align:center">{i}</div></td>'
@@ -6561,7 +6565,7 @@ def _email_render(kind, name, email, idle=0, streak=0):
     unsub = _unsub_url(email)
     html = f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(subject)}</title></head>
 <body style="margin:0;padding:0;background:#04060d">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#04060d">{escape(k['pre'])}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#04060d">{escape(k['pre'])}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#04060d" style="background:#04060d"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#0a1022;border:1px solid #1e2b4f;border-radius:18px;overflow:hidden">
 <tr><td style="padding:0"><img src="{gif}" width="600" alt="Palanqueta" style="display:block;width:100%;max-width:600px;height:auto;border:0"></td></tr>
@@ -6570,19 +6574,20 @@ def _email_render(kind, name, email, idle=0, streak=0):
 <p style="margin:0;font:16px/1.6 Arial,sans-serif;color:#b8c5de">{body}</p></td></tr>
 <tr><td style="padding:10px 30px 4px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">{steps}</table></td></tr>
 <tr><td align="center" style="padding:18px 30px 30px"><a href="{link}" style="display:inline-block;background:#3ee8ff;background-image:linear-gradient(90deg,#3ee8ff,#7c78ff);color:#04101a;text-decoration:none;font:700 16px Arial,sans-serif;padding:15px 34px;border-radius:12px">{k['cta']} &rarr;</a>
-<div style="margin-top:12px;font:12px Arial,sans-serif;color:#6f7f9c">¿No abre el botón? Copia este enlace: <a href="{link}" style="color:#3ee8ff">{escape(link)}</a></div></td></tr>
+<div style="margin-top:14px;font:13px/1.5 Arial,sans-serif;color:#93a3bd">¿Dudas? Solo responde este correo y te leemos.</div></td></tr>
 <tr><td style="padding:16px 30px 24px;border-top:1px solid #1e2b4f;font:12px/1.6 Arial,sans-serif;color:#6f7f9c">Recibes este correo porque creaste una cuenta en Talvo English. Te escribimos cada par de días hasta que actives tus recordatorios.<br>¿Ya no quieres recordatorios? <a href="{unsub}" style="color:#93a3bd">Darme de baja</a>.</td></tr>
 </table></td></tr></table></body></html>"""
-    text = f"{title}\n\n{re.sub('<[^>]+>', '', body)}\n\n{k['cta']}: {link}\n\nDarme de baja: {unsub}"
+    text = f"{title}\n\n{re.sub('<[^>]+>', '', body)}\n\n{k['cta']}: {link}\n\nResponde este correo si tienes dudas.\n\nDarme de baja: {unsub}"
     return subject, html, text
 
 
-def _send_email(to, subject, html, text=""):
+def _send_email(to, subject, html, text="", inline_url=None):
     """Envía un correo por HTTPS. Devuelve (ok, detalle)."""
     try:
         if EMAIL_WEBHOOK_URL and EMAIL_WEBHOOK_SECRET:
             r = requests.post(EMAIL_WEBHOOK_URL, json={"secret": EMAIL_WEBHOOK_SECRET, "to": to, "subject": subject,
-                                                       "html": html, "text": text, "name": "Palanqueta · Talvo English"}, timeout=30)
+                                                       "html": html, "text": text, "name": "Palanqueta · Talvo English",
+                                                       "inline": ({"cid": "pq", "url": inline_url} if inline_url else None)}, timeout=60)
             try:
                 d = r.json()
             except Exception:
@@ -6684,7 +6689,7 @@ def email_cron():
     sent, failed = 0, 0
     for p in plan:
         subject, html, text = _email_render(p["kind"], p["name"], p["email"], p["idle"], p["streak"])
-        ok, detail = _send_email(p["email"], subject, html, text)
+        ok, detail = _send_email(p["email"], subject, html, text, _email_gif(p["kind"]))
         if ok:
             sent += 1
             try:
@@ -6720,7 +6725,7 @@ def email_test():
     sent = 0
     for k in kinds:
         subject, html, text = _email_render(k, dest.split("@")[0], dest, idle=5, streak=4)
-        ok2, _d = _send_email(dest, "[Prueba] " + subject, html, text)
+        ok2, _d = _send_email(dest, subject, html, text, _email_gif(k))
         sent += 1 if ok2 else 0
     return jsonify({"ok": True, "enviados": sent, "de": len(kinds)})
 
