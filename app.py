@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover
     ZoneInfo = None
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, Response, g, stream_with_context
+from flask import Flask, jsonify, request, Response, g, stream_with_context, send_from_directory
 from flask_cors import CORS
 from openai import OpenAI
 from pydub import AudioSegment
@@ -6558,7 +6558,7 @@ def _email_render(kind, name, email, idle=0, streak=0):
     title = k["title"].format(**fmt)
     body = k["body"].format(**fmt)
     link = APP_URL + k["path"].format(**fmt)
-    gif = f"{APP_URL}/email/pq-{kind}.gif"
+    gif = f"{BACKEND_PUBLIC_URL}/email/pq-{kind}.gif"
     steps = "".join(
         f'<tr><td width="34" valign="top" style="padding:7px 0"><div style="width:26px;height:26px;border-radius:13px;background:#3ee8ff;color:#04101a;'
         f'font:700 13px/26px Arial,sans-serif;text-align:center">{i}</div></td>'
@@ -6730,6 +6730,16 @@ def email_test():
     return jsonify({"ok": True, "enviados": sent, "de": len(kinds)})
 
 
+@app.get("/email/<path:name>")
+def email_asset(name):
+    """Imágenes animadas de los correos (públicas, para que se vean en cualquier bandeja)."""
+    if not re.match(r"^pq-[a-z]+\.gif$", name):
+        return json_error("No encontrado.", 404)
+    resp = send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "email"), name, mimetype="image/gif")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 @app.get("/api/email/unsub")
 def email_unsub():
     import hmac
@@ -6744,7 +6754,7 @@ def email_unsub():
     msg = ("Listo, ya no recibirás recordatorios por correo." if ok else "El enlace no es válido o caducó.")
     page = (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Talvo English</title>'
             f'<body style="margin:0;background:#04060d;color:#f2f6ff;font-family:Arial,sans-serif;display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px">'
-            f'<div><img src="{APP_URL}/palanqueta-asoma.webp" width="120" alt=""><h2>{escape(msg)}</h2>'
+            f'<div><img src="{BACKEND_PUBLIC_URL}/email/pq-start.gif" width="240" alt=""><h2>{escape(msg)}</h2>'
             f'<p style="color:#93a3bd">Puedes seguir practicando cuando quieras.</p>'
             f'<a href="{APP_URL}" style="display:inline-block;margin-top:10px;background:#3ee8ff;color:#04101a;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700">Ir a Talvo English</a></div>')
     return Response(page, mimetype="text/html")
