@@ -1195,7 +1195,7 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .sk-stats b{display:block;font-family:var(--display);font-size:20px;color:var(--sk)}
 .sk-stats small{display:block;margin-top:1px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
 #sec-tutor{--sk:#7c78ff}#sec-llamada{--sk:#3df0b0}#sec-vocabulario{--sk:#ffb347}#sec-traductor{--sk:#3ee8ff}#sec-escenarios{--sk:#ff7ab6}#sec-voz{--sk:#a78bfa}#sec-clips{--sk:#ff7a45}#sec-presentacion{--sk:#4da3ff}#sec-rutas{--sk:#2dd4bf}#sec-historial{--sk:#4da3ff}#sec-logros{--sk:#ffb347}
-#sec-shop{--sk:#4da3ff}#sec-notificaciones{--sk:#ff7a45}#sec-configuracion{--sk:#a78bfa}#sec-soporte{--sk:#3df0b0}#sec-cuenta{--sk:#3ee8ff}
+#sec-admin{--sk:#ff5c7a}#sec-shop{--sk:#4da3ff}#sec-notificaciones{--sk:#ff7a45}#sec-configuracion{--sk:#a78bfa}#sec-soporte{--sk:#3df0b0}#sec-cuenta{--sk:#3ee8ff}
 #sec-pronunciacion{--sk:#ff7ab6}#sec-escritura{--sk:#a78bfa}#sec-lectura{--sk:#3ee8ff}#sec-escucha{--sk:#3df0b0}
 @media(max-width:760px){.sk-hero{grid-template-columns:auto 1fr;gap:14px;padding:16px}.sk-ico{width:54px;height:54px;font-size:26px;border-radius:14px}.sk-stats{grid-column:1/-1}.sk-stats div{flex:1;min-width:0}}
 @media(prefers-reduced-motion:reduce){.sk-scan,.sk-ico::after,.sk-main .eyebrow::before{animation:none}}
@@ -1807,6 +1807,7 @@ shop:{k:'shop',ic:'💎',tiles:[['💎','Earn gems'],['🎁','Rewards']]},
 notificaciones:{k:'notif',ic:'🔔',tiles:[['🔥','Streak'],['🎯','Goals']]},
 configuracion:{k:'set',ic:'⚙️'},
 soporte:{k:'help',ic:'💬',tiles:[['⚡','Fast replies'],['💡','Ideas welcome']]},
+admin:{k:'admin',ic:'🛰️',tiles:[['👥','Usuarios'],['📈','En vivo']]},
 cuenta:{k:'acct',ic:'👤',tiles:[['🛡️','Secure'],['🔔','Reminders']]}};
 function skGet(k){try{return JSON.parse(localStorage.getItem('talvo_sk_'+k))||{n:0,best:0,sum:0}}catch(e){return{n:0,best:0,sum:0}}}
 function skStats(k){const el=document.querySelector('.sk-hero[data-k="'+k+'"] .sk-stats');if(!el)return;const d=skGet(k);el.innerHTML=[[d.n,'Sessions'],[d.best||'—','Best score'],[d.n?Math.round(d.sum/d.n):'—','Average']].map(([v,l])=>'<div><b>'+v+'</b><small>'+T(l)+'</small></div>').join('')}
