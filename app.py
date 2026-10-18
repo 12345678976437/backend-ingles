@@ -6451,12 +6451,7 @@ def push_cron():
             idle = (ln.date() - datetime.fromisoformat(str(last)[:10]).date()).days if last else None
         except Exception:
             idle = None
-        # No saturar: a quien lleva días sin entrar se le avisa cada vez más espaciado (hasta ~1 mes).
-        if idle is None:
-            if int(r.get("sent_count") or 0) >= 4:
-                continue
-        elif idle > 3 and idle not in (5, 7, 10, 14, 21, 30):
-            continue
+        # Constante: un aviso al día a su hora, mientras tenga el permiso activo (se quita desde Mi cuenta).
         yesterday = {(ln.date() - timedelta(days=1)).isoformat(), (now_utc.date() - timedelta(days=1)).isoformat()}
         at_risk = last in yesterday
         key, title, body = _push_pick(r.get("lang") or "es", at_risk, int(prof.get("streak_days") or 0), r.get("last_kind"))
