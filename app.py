@@ -6714,14 +6714,18 @@ def email_test():
     ok, _w = _rate_hit((user.id, "email-test"), 10, 3600)
     if not ok:
         return json_error("Demasiadas pruebas. Espera un momento.", 429)
-    kind = (request.get_json(silent=True) or {}).get("kind")
+    body = request.get_json(silent=True) or {}
+    kind = body.get("kind")
+    dest = (body.get("to") or user.email or "").strip().lower()[:254]
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", dest):
+        return json_error("Correo de destino no válido.", 400)
     kinds = [kind] if kind in _EMAIL_KINDS else list(_EMAIL_KINDS)
     if not _email_ready():
         return json_error("Falta configurar el envío de correos (EMAIL_WEBHOOK_URL o BREVO_API_KEY).", 503)
     sent = 0
     for k in kinds:
-        subject, html, text = _email_render(k, user.email.split("@")[0], user.email, idle=5, streak=4)
-        ok2, _d = _send_email(user.email, "[Prueba] " + subject, html, text)
+        subject, html, text = _email_render(k, dest.split("@")[0], dest, idle=5, streak=4)
+        ok2, _d = _send_email(dest, "[Prueba] " + subject, html, text)
         sent += 1 if ok2 else 0
     return jsonify({"ok": True, "enviados": sent, "de": len(kinds)})
 

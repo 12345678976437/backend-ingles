@@ -2412,8 +2412,8 @@ $('push-hour')?.addEventListener('change',async e=>{
 })();
 setInterval(()=>{const n=$('nav-admin'),b=$('email-test');if(b&&n)b.style.display=(n.style.display&&n.style.display!=='none')?'':'none'},3000);
 $('email-test')?.addEventListener('click',async()=>{
-  busy('email-test',true,'Enviando...');
-  try{const d=await jsonFetch('/api/email/test',{method:'POST',body:JSON.stringify({})});toast('Enviados '+d.enviados+' de '+d.de+'. Revisa tu correo (y Spam).')}catch(e){toast(e.message)}finally{busy('email-test',false,'✉️ Enviarme correos de prueba (admin)')}
+  const to=prompt('¿A qué correo mando la prueba?',(state.user&&state.user.email)||'');if(!to)return;busy('email-test',true,'Enviando...');
+  try{const d=await jsonFetch('/api/email/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:to.trim()})});toast('Enviados '+d.enviados+' de '+d.de+'. Revisa tu correo (y Spam).')}catch(e){toast(e.message)}finally{busy('email-test',false,'✉️ Enviarme correos de prueba (admin)')}
 });
 $('push-test')?.addEventListener('click',async()=>{
   busy('push-test',true,'Sending...');
