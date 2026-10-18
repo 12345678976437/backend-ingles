@@ -6485,7 +6485,7 @@ def push_cron():
 #   - BREVO_API_KEY + EMAIL_FROM: Brevo (300/día) con un remitente verificado.
 #  Tablas: email_log, email_optout. Lo dispara el mismo cron de GitHub (cada 15 min; aquí se filtra la hora).
 # ---------------------------------------------------------------------------
-APP_URL = env("APP_URL", "https://english-academy-cabex1.vercel.app").rstrip("/")
+APP_URL = env("APP_URL", "https://english-academy-mu-five.vercel.app").rstrip("/")
 BACKEND_PUBLIC_URL = env("BACKEND_PUBLIC_URL", "https://backend-ingles-e3ms.onrender.com").rstrip("/")
 EMAIL_WEBHOOK_URL = env("EMAIL_WEBHOOK_URL", "")
 EMAIL_WEBHOOK_SECRET = env("EMAIL_WEBHOOK_SECRET", "")
