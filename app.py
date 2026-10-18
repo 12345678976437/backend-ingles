@@ -6727,6 +6727,7 @@ def email_test():
         subject, html, text = _email_render(k, dest.split("@")[0], dest, idle=5, streak=4)
         ok2, _d = _send_email(dest, subject, html, text, _email_gif(k))
         sent += 1 if ok2 else 0
+        time.sleep(8) if len(kinds) > 1 and k != kinds[-1] else None  # no mandar 4 seguidos en segundos: parece spam
     return jsonify({"ok": True, "enviados": sent, "de": len(kinds)})
 
 
