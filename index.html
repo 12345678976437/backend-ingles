@@ -1194,6 +1194,7 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .sk-stats div{min-width:76px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(4,6,13,.55);text-align:center}
 .sk-stats b{display:block;font-family:var(--display);font-size:20px;color:var(--sk)}
 .sk-stats small{display:block;margin-top:1px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+#sec-tutor{--sk:#7c78ff}#sec-llamada{--sk:#3df0b0}#sec-vocabulario{--sk:#ffb347}#sec-traductor{--sk:#3ee8ff}#sec-escenarios{--sk:#ff7ab6}#sec-voz{--sk:#a78bfa}#sec-clips{--sk:#ff7a45}#sec-presentacion{--sk:#4da3ff}#sec-rutas{--sk:#2dd4bf}#sec-historial{--sk:#4da3ff}#sec-logros{--sk:#ffb347}
 #sec-pronunciacion{--sk:#ff7ab6}#sec-escritura{--sk:#a78bfa}#sec-lectura{--sk:#3ee8ff}#sec-escucha{--sk:#3df0b0}
 @media(max-width:760px){.sk-hero{grid-template-columns:auto 1fr;gap:14px;padding:16px}.sk-ico{width:54px;height:54px;font-size:26px;border-radius:14px}.sk-stats{grid-column:1/-1}.sk-stats div{flex:1;min-width:0}}
 @media(prefers-reduced-motion:reduce){.sk-scan,.sk-ico::after,.sk-main .eyebrow::before{animation:none}}
@@ -1790,17 +1791,27 @@ function pronPost(d,score){try{skRecord('pron',Math.round(score||0))}catch(e){}
 function showPhonemes(item){state.phWord=item.palabra||'';$('phonemes').style.display='block';$('phoneme-title').textContent=`${item.palabra||'Word'} · ${item.precision??item.puntuacion??0}%`;$('chips').innerHTML=(item.fonemas||[]).map(p=>`<span class="chip">/${esc(p.fonema)}/ · ${p.precision??0}%</span>`).join('')||'<span style="color:var(--muted);font-size:11px">No phoneme detail available.</span>'}
 async function sendRecording(){const blob=new Blob(state.chunks,{type:state.chunks[0]?.type||'audio/webm'});if(state.lastRecordingUrl)URL.revokeObjectURL(state.lastRecordingUrl);state.lastRecordingUrl=URL.createObjectURL(blob);const fd=new FormData();fd.append('audio',blob,'recording.webm');let path='/analizar-audio-real';if(state.pron==='lectura'){fd.append('frase_esperada',$('phrase').textContent.trim());fd.append('modo','lectura')}else if(state.pron==='trabalenguas'){fd.append('frase_esperada',$('twister').textContent.trim());fd.append('modo','trabalenguas')}else{path='/api/assess-unscripted';fd.append('topic',$('free-topic').textContent.trim());fd.append('modo','habla_libre')}try{const d=await jsonFetch(path,{method:'POST',body:fd});renderPron(d)}catch(e){toast(e.message)}finally{$('record-btn').textContent='Start recording';$('record-btn').classList.remove('recording');state.chunks=[]}}
 /* --- Skill hero --- */
-const SK_CFG={pronunciacion:{k:'pron',ic:'🎙️'},escritura:{k:'write',ic:'✍️'},lectura:{k:'read',ic:'📖'},escucha:{k:'listen',ic:'🎧'}};
+const SK_CFG={pronunciacion:{k:'pron',ic:'🎙️'},escritura:{k:'write',ic:'✍️'},lectura:{k:'read',ic:'📖'},escucha:{k:'listen',ic:'🎧'},
+tutor:{k:'tutor',ic:'🤖',tiles:[['⚡','Instant feedback'],['🗣️','Voice or text']]},
+llamada:{k:'call',ic:'📞',tiles:[['🎧','Hands-free'],['⏱️','Live call']]},
+vocabulario:{k:'vocab',ic:'🧠',tiles:[['📚','Daily words'],['🔁','Spaced review']]},
+traductor:{k:'trans',ic:'🌐',tiles:[['⚡','Instant'],['🔊','Hear it']]},
+escenarios:{k:'role',ic:'🎭',tiles:[['🎤','Real roles'],['🧭','Coach tips']]},
+voz:{k:'voice',ic:'🎚️',tiles:[['🔬','Analyze'],['🪞','Shadowing']]},
+clips:{k:'clips',ic:'🎬',tiles:[['📝','Live subtitles'],['✅','Quick quiz']]},
+presentacion:{k:'pres',ic:'📊',tiles:[['📜','Script'],['🎙️','Practice aloud']]},
+rutas:{k:'routes',ic:'🧭',tiles:[['🎯','Your goal'],['🛣️','Custom path']]},
+historial:{k:'prog',ic:'📈'},logros:{k:'ach',ic:'🏆'}};
 function skGet(k){try{return JSON.parse(localStorage.getItem('talvo_sk_'+k))||{n:0,best:0,sum:0}}catch(e){return{n:0,best:0,sum:0}}}
 function skStats(k){const el=document.querySelector('.sk-hero[data-k="'+k+'"] .sk-stats');if(!el)return;const d=skGet(k);el.innerHTML=[[d.n,'Sessions'],[d.best||'—','Best score'],[d.n?Math.round(d.sum/d.n):'—','Average']].map(([v,l])=>'<div><b>'+v+'</b><small>'+T(l)+'</small></div>').join('')}
 function skRecord(k,score){const d=skGet(k);d.n++;d.sum+=score||0;d.best=Math.max(d.best,score||0);try{localStorage.setItem('talvo_sk_'+k,JSON.stringify(d))}catch(e){}skStats(k)}
 function skHero(id){
   const sec=$('sec-'+id),c=SK_CFG[id];if(!sec||sec.querySelector('.sk-hero'))return;
   const h=document.createElement('div');h.className='sk-hero';h.dataset.k=c.k;
-  h.innerHTML='<i class="sk-scan"></i><div class="sk-ico">'+c.ic+'</div><div class="sk-main"></div><div class="sk-stats"></div>';
+  h.innerHTML='<i class="sk-scan"></i><div class="sk-ico">'+c.ic+'</div><div class="sk-main"></div><div class="sk-stats"></div>';if(c.tiles){h.querySelector('.sk-stats').innerHTML=c.tiles.map(t=>'<div><b>'+t[0]+'</b><small data-t="'+t[1]+'">'+T(t[1])+'</small></div>').join('')}else if(!['pron','write','read','listen'].includes(c.k))h.querySelector('.sk-stats').remove();
   const m=h.querySelector('.sk-main');
   ['.eyebrow','.page-title','.page-desc'].forEach(q=>{const e=sec.querySelector(':scope>'+q);if(e)m.appendChild(e)});
-  sec.insertBefore(h,sec.firstChild);skStats(c.k);
+  sec.insertBefore(h,sec.firstChild);if(['pron','write','read','listen'].includes(c.k))skStats(c.k);
 }
 setTimeout(function(){Object.keys(SK_CFG).forEach(skHero);skEntryWriting()},0);
 const W_IC={easy:'🌱',intermediate:'⚡',advanced:'🚀'};
@@ -4089,7 +4100,7 @@ var PAIRS=[
 ['Reminders','Recordatorios'],['Remind me at','Recordarme a las'],['🔔 Send a test notification','🔔 Enviar notificación de prueba'],['Sending...','Enviando...'],['Want Palanqueta to remind you to practice?','¿Quieres que Palanqueta te recuerde practicar?'],['A short daily nudge so you keep your streak. You can turn it off anytime in My account.','Un aviso corto al día para mantener tu racha. Puedes apagarlo cuando quieras en Mi cuenta.'],['Turn on','Activar'],['Not now','Ahora no'],['Reminders on! 🔔','¡Recordatorios activados! 🔔'],['Reminders off.','Recordatorios apagados.'],['Saved','Guardado'],['Sent! Check your notifications.','¡Enviada! Revisa tus notificaciones.'],['No active device found. Turn reminders off and on again.','No hay dispositivos activos. Apaga y vuelve a activar los recordatorios.'],['On — Palanqueta will remind you to practice.','Activados: Palanqueta te recordará practicar.'],['Off — turn on to get a daily practice reminder.','Apagados: actívalos para recibir un recordatorio diario.'],['Notifications are blocked. Enable them in your browser or phone settings for this site.','Las notificaciones están bloqueadas. Actívalas en los ajustes de tu navegador o teléfono para este sitio.'],['On iPhone: tap Share → Add to Home Screen, open Talvo from there and turn on reminders.','En iPhone: toca Compartir → Añadir a pantalla de inicio, abre Talvo desde ahí y activa los recordatorios.'],['This browser does not support notifications.','Este navegador no admite notificaciones.'],['We could not connect reminders right now. Try again in a moment.','No pudimos conectar los recordatorios ahora. Intenta de nuevo en un momento.'],['We could not turn on reminders on this device.','No pudimos activar los recordatorios en este dispositivo.'],
 
 ['Surprise me','Sorpréndeme'],['No items for this level.','No hay elementos para este nivel.'],['New audio','Nuevo audio'],
-['Sessions','Sesiones'],['Best score','Mejor puntaje'],['Average','Promedio'],
+['Instant feedback','Respuesta al instante'],['Voice or text','Voz o texto'],['Hands-free','Manos libres'],['Live call','Llamada en vivo'],['Daily words','Palabras del día'],['Spaced review','Repaso espaciado'],['Instant','Al instante'],['Hear it','Escúchalo'],['Real roles','Roles reales'],['Coach tips','Consejos del coach'],['Analyze','Analiza'],['Shadowing','Shadowing'],['Live subtitles','Subtítulos en vivo'],['Quick quiz','Quiz rápido'],['Script','Guion'],['Practice aloud','Practica en voz alta'],['Your goal','Tu meta'],['Custom path','Ruta a tu medida'],['Sessions','Sesiones'],['Best score','Mejor puntaje'],['Average','Promedio'],
 ['Hide text','Ocultar texto'],['Show text','Mostrar texto'],['Excellent understanding!','¡Excelente comprensión!'],['Good comprehension — a few details to add.','Buena comprensión, agrega algunos detalles.'],['Nice effort — read once more and look for details.','Buen esfuerzo, lee otra vez y busca detalles.'],['Good start — try reading again, slowly.','Buen comienzo, intenta leer de nuevo, despacio.'],['👆 Tap any word to hear it','👆 Toca cualquier palabra para escucharla'],['Smaller text','Texto más pequeño'],['Larger text','Texto más grande'],['Slow','Lento'],['word','palabra'],['words','palabras'],
 
 ['Listen to my text','Escuchar mi texto'],['Clear','Borrar'],['Draft saved ✓','Borrador guardado ✓'],['Clear your text?','¿Borrar tu texto?'],['Excellent writing!','¡Excelente escritura!'],['Good work — a few fixes will make it shine.','Buen trabajo, unos ajustes lo harán brillar.'],['Nice effort — let\'s fix the key points.','Buen esfuerzo, corrijamos lo importante.'],['Good start — every text makes you better.','Buen comienzo, cada texto te mejora.'],['Use this version','Usar esta versión'],['Copy','Copiar'],['Listen','Escuchar'],['Copied','Copiado'],['Could not copy','No se pudo copiar'],['Improved version loaded. Edit it and analyze again!','Versión mejorada cargada. ¡Edítala y analiza de nuevo!'],['Coherence','Coherencia'],
