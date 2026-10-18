@@ -6313,7 +6313,7 @@ def push_test():
         rows = supabase_admin.table("push_subscriptions").select("*").eq("user_id", user.id).eq("enabled", True).execute().data or []
     except Exception as exc:
         return json_error(_err_log("No se pudo enviar la prueba", exc), 500)
-    sent = sum(1 for r in rows if _push_send(r, "¡Funciona! 🐔", "Palanqueta te avisará cuando sea hora de practicar.", "./?pq=cheer", "talvo-test", touch=False))
+    sent = sum(1 for r in rows if _push_send(r, "¡Funciona!", "Palanqueta te avisará cuando sea hora de practicar.", "./?pq=cheer", "talvo-test", touch=False))
     return jsonify({"ok": True, "enviadas": sent, "dispositivos": len(rows)})
 
 
@@ -6329,10 +6329,10 @@ PUSH_SKIP_PRACTICED = env("PUSH_SKIP_PRACTICED", "1") != "0"
 _PUSH_MSGS = {
     "es": {
         "plain": [
-            ("p1", "Palanqueta te extraña 🐔", "Solo 5 minutos hoy y tu inglés sigue creciendo."),
+            ("p1", "Palanqueta te extraña", "Solo 5 minutos hoy y tu inglés sigue creciendo."),
             ("p2", "¿Practicamos un poquito? 🎧", "Una lección corta y listo. ¡Tú puedes!"),
             ("p3", "Hora de tu inglés ✨", "Entra, haz una práctica rápida y cierra el día con una victoria."),
-            ("p4", "¡Cuack! Es tu hora 🐥", "Palanqueta ya está lista. ¿Y tú?"),
+            ("p4", "¡Cuack! Es tu hora", "Palanqueta ya está lista. ¿Y tú?"),
             ("p5", "Un minuto basta 💪", "Repasa unas palabras y mantén el hábito vivo."),
             ("p6", "Tu futuro yo te lo agradece 🚀", "Hoy toca practicar un poco. Abre Talvo."),
         ],
@@ -6344,10 +6344,10 @@ _PUSH_MSGS = {
     },
     "en": {
         "plain": [
-            ("p1", "Palanqueta misses you 🐔", "Just 5 minutes today keeps your English growing."),
+            ("p1", "Palanqueta misses you", "Just 5 minutes today keeps your English growing."),
             ("p2", "Shall we practice a bit? 🎧", "One short lesson and you're done. You've got this!"),
             ("p3", "Your English time ✨", "Hop in, do a quick practice, and end the day with a win."),
-            ("p4", "Cluck! It's your time 🐥", "Palanqueta is ready. Are you?"),
+            ("p4", "Cluck! It's your time", "Palanqueta is ready. Are you?"),
             ("p5", "One minute is enough 💪", "Review a few words and keep the habit alive."),
             ("p6", "Future you says thanks 🚀", "Time for a little practice. Open Talvo."),
         ],
