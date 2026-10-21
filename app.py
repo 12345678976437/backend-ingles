@@ -689,6 +689,16 @@ def authenticated_user(require_subscription=True):
     return user, None
 
 
+REAL_ENGLISH = (
+    "ENGLISH QUALITY STANDARD (applies to every English sentence you write): teach the English people really speak today in the US (casual-neutral), not textbook English. "
+    "Use contractions (I'm, don't, it's), everyday phrasal verbs (pick up, figure out, hang out, run out of), natural chunks and collocations (make a reservation, take a rain check, how much is it?), "
+    "short reactions and fillers (well, you know, no way, for real?, sounds good), and real idioms when they fit the level, making the figurative meaning clear. "
+    "Use 'gonna/wanna/gotta' only in clearly casual lines. Avoid stiff classroom phrases ('How do you do?', 'I am fine, thank you, and you?'), word-for-word Spanish translations and false friends. "
+    "Every English field must be 100% English and every Spanish field 100% Spanish (natural Mexican Spanish): never leave a word of the other language untranslated; only real loanwords and proper names may stay, and then give a short useful note. "
+    "Mark informal, slang or regional phrases as such. Prefer high-frequency language the learner will hear and use within days."
+)
+
+
 def ai_json(system_prompt, user_prompt, temperature=0.7):
     if not ai_client:
         raise RuntimeError("Azure OpenAI no está configurado en el servidor.")
@@ -696,7 +706,7 @@ def ai_json(system_prompt, user_prompt, temperature=0.7):
     response = ai_client.chat.completions.create(
         model=AZURE_OPENAI_DEPLOYMENT,
         messages=[
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": system_prompt + "\n\n" + REAL_ENGLISH},
             {"role": "user", "content": user_prompt},
         ],
         temperature=temperature,
@@ -4118,6 +4128,7 @@ def build_tutor_system_prompt(level, prior_context, modo="", categoria=""):
         "Only explicitly flag a mistake if it is a significant, repeated pattern, and even then do it briefly and kindly, then move on.\n\n"
         "Conversation flow: always end your reply with one genuine follow-up question that keeps the conversation going and invites the student to speak more.\n\n"
         f"{level_line}\n\n"
+        + REAL_ENGLISH + " In conversation, sound like a real friendly native speaker: use natural idioms and everyday expressions, and when you use one the student may not know, add a very short explanation in parentheses in Spanish.\n\n"
         f"{prior_context}"
         f"{call_line}"
         f"{category_line}"
@@ -5479,7 +5490,7 @@ def scenario_turn():
         "tip_es (a short Spanish hint <=110 chars about what the student could do next, or ''), "
         "suggestion_en (one example of a good next reply by the student, <=20 words), "
         "goal_reached (true only if the student has already achieved the goal and the scene can naturally end)."
-    )
+    ) + "\n\n" + REAL_ENGLISH
     try:
         resp = ai_client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT,
@@ -5599,6 +5610,17 @@ def _route_summary(route):
             "creada": route.get("created_at")}
 
 
+_ES_CHARS = re.compile(r"[áéíóúñ¿¡]", re.I)
+
+
+def _route_text_ok(en, es):
+    """Descarta pares mal traducidos: inglés con letras/signos del español o inglés idéntico al español."""
+    en, es = str(en).strip(), str(es).strip()
+    if not en or not es or _ES_CHARS.search(en):
+        return False
+    return en.lower() != es.lower()
+
+
 def _clean_route(raw, n):
     """Valida lo que devolvió la IA y lo deja en el mismo formato que el currículo normal."""
     if not isinstance(raw, dict):
@@ -5610,13 +5632,13 @@ def _clean_route(raw, n):
             continue
         words, phrases, dialogs = [], [], []
         for w in (l.get("words") or [])[:10]:
-            if isinstance(w, dict) and w.get("en") and w.get("es"):
+            if isinstance(w, dict) and w.get("en") and w.get("es") and _route_text_ok(w["en"], w["es"]):
                 en = _short(w["en"], 40)
                 if en.lower() not in seen:
                     seen.add(en.lower())
                     words.append({"en": en, "es": _short(w["es"], 50), "emoji": _short(w.get("emoji"), 4)})
         for p in (l.get("phrases") or [])[:8]:
-            if isinstance(p, dict) and p.get("en") and p.get("es") and len(str(p["en"]).split()) <= 16:
+            if isinstance(p, dict) and p.get("en") and p.get("es") and len(str(p["en"]).split()) <= 16 and _route_text_ok(p["en"], p["es"]):
                 phrases.append({"en": _short(p["en"], 120), "es": _short(p["es"], 140)})
         for d in (l.get("dialogs") or [])[:5]:
             if isinstance(d, dict) and d.get("q") and d.get("a"):
