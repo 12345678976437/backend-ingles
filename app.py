@@ -6588,13 +6588,29 @@ def _email_render(kind, name, email, idle=0, streak=0):
     return subject, html, text
 
 
+def _email_inline(url):
+    """Imagen incrustada: se manda ya en base64 para que Google no tenga que bajarla de Render (que duerme)."""
+    if not url:
+        return None
+    out = {"cid": "pq", "url": url}
+    try:
+        import base64
+        name = url.rsplit("/", 1)[-1]
+        if re.match(r"^pq-[a-z]+\.gif$", name):
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "email", name), "rb") as fh:
+                out["b64"] = base64.b64encode(fh.read()).decode()
+    except Exception:
+        pass
+    return out
+
+
 def _send_email(to, subject, html, text="", inline_url=None):
     """Envía un correo por HTTPS. Devuelve (ok, detalle)."""
     try:
         if EMAIL_WEBHOOK_URL and EMAIL_WEBHOOK_SECRET:
             r = requests.post(EMAIL_WEBHOOK_URL, json={"secret": EMAIL_WEBHOOK_SECRET, "to": to, "subject": subject,
                                                        "html": html, "text": text, "name": "Palanqueta · Talvo English",
-                                                       "inline": ({"cid": "pq", "url": inline_url} if inline_url else None)}, timeout=60)
+                                                       "inline": _email_inline(inline_url)}, timeout=60)
             try:
                 d = r.json()
             except Exception:
