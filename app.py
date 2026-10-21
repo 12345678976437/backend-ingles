@@ -6322,6 +6322,13 @@ def push_test():
 #  RECORDATORIOS AUTOMÁTICOS (paso 2). Lo llama un cron gratis cada 15 min.
 # ---------------------------------------------------------------------------
 CRON_SECRET = env("CRON_SECRET", "")
+CRON_SECRET_2 = env("CRON_SECRET_2", "")  # segundo secreto: lo usa el programador de Supabase (pg_cron), más puntual que GitHub
+
+
+def _cron_ok():
+    import hmac
+    got = request.headers.get("X-Cron-Secret", "")
+    return bool(got) and any(sec and hmac.compare_digest(got, sec) for sec in (CRON_SECRET, CRON_SECRET_2))
 # "1" (por defecto): no avisar a quien ya practicó hoy. Pon "0" en Render para avisar a todos.
 PUSH_SKIP_PRACTICED = env("PUSH_SKIP_PRACTICED", "1") != "0"
 
@@ -6395,7 +6402,7 @@ def _push_pick(lang, streak_at_risk, streak, last_kind):
 def push_cron():
     """Envía el recordatorio a quien tiene activadas las notificaciones, ya es su hora y no ha practicado hoy."""
     import hmac
-    if not CRON_SECRET or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
+    if not _cron_ok():
         return json_error("No autorizado.", 401)
     if not _push_ready():
         return json_error("Las notificaciones aún no están disponibles.", 503)
@@ -6639,7 +6646,7 @@ def email_cron():
     ?dry=1 solo lista a quién se enviaría; ?force=1 ignora la ventana de horas."""
     import hmac
     from zoneinfo import ZoneInfo
-    if not CRON_SECRET or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
+    if not _cron_ok():
         return json_error("No autorizado.", 401)
     dry = request.args.get("dry") == "1"
     force = request.args.get("force") == "1"
