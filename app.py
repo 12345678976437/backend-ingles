@@ -921,646 +921,950 @@ PASS_THRESHOLD = 60  # puntuación mínima para aprobar una lección
 # ---------------------------------------------------------------------------
 CURRICULUM_TEXT = r'''@unit first_steps|1|A1|🚀|First Steps|Your first words and phrases to survive any introduction.|general
 # hello_bye|Hello & goodbye
-n Usa "Hi" con amigos y "Hello" en situaciones más formales.
-w hello|hola|👋
-w goodbye|adiós|👋
+n En la vida real casi todos dicen "Hey" o "Hi"; "Hello" suena más formal o es para el teléfono. Para despedirse: "Bye", "See ya" o "Take care".
+w hi|hola|👋
+w hey|oye / hola (informal)|👋
+w bye|adiós|👋
+w see you later|nos vemos|🙂
+w see you tomorrow|nos vemos mañana|📅
+w take care|cuídate|🤗
 w good morning|buenos días|🌅
 w good night|buenas noches|🌙
-w see you later|hasta luego|🙂
-w friend|amigo|🧑‍🤝‍🧑
-p Hello, nice to meet you.|Hola, mucho gusto.
-p Good morning, how are you?|Buenos días, ¿cómo estás?
-p See you tomorrow.|Nos vemos mañana.
-d Good morning!|Good morning! How are you?|Goodbye, my friend.|It is blue.
-# i_am|I am… / You are…
-n En inglés el sujeto es obligatorio: "I am", no solo "am".
-w I am|yo soy / estoy
-w you are|tú eres / estás
-w he is|él es / está
-w she is|ella es / está
-w we are|nosotros somos
-w they are|ellos son
-p I am from Mexico.|Soy de México.
-p She is my sister.|Ella es mi hermana.
-p We are students.|Somos estudiantes.
-d Where are you from?|I am from Spain.|She is my sister.|We are tired.
+p Hey, what's up?|Oye, ¿qué onda?
+p Nice to meet you.|Mucho gusto.
+p See you later!|¡Nos vemos!
+p Good to see you again.|Qué gusto verte otra vez.
+p Okay, bye! Take care.|Va, bye. Cuídate.
+d Hey, what's up?|Not much. How about you?|Yes, thank you.|It's Tuesday.
+d See you tomorrow!|See you! Have a good night.|Yes, I'm a student.|Good morning!
+# i_am|I'm… / You're…
+n En inglés hablado casi siempre se contrae: "I'm", "you're", "he's". Decir "I am" completo suena lento o muy enfático.
+w I'm|soy / estoy|🙋
+w you're|eres / estás|👉
+w he's|él es / está|👨
+w she's|ella es / está|👩
+w we're|somos / estamos|👥
+w they're|son / están|👥
+w it's|es / está|✨
+w I'm not|no soy / no estoy|🚫
+p I'm from Mexico.|Soy de México.
+p She's my sister.|Ella es mi hermana.
+p We're just friends.|Solo somos amigos.
+p They're late again.|Otra vez van tarde.
+p I'm kind of tired today.|Hoy ando medio cansado.
+d Where are you from?|I'm from Mexico.|She's my sister.|We're tired.
+d How are you feeling?|I'm kind of tired.|They're from Spain.|It's my sister.
 # please_thanks|Please & thank you
-n "Excuse me" para llamar la atención; "Sorry" para disculparte.
-w please|por favor
-w thank you|gracias
-w you are welcome|de nada
-w sorry|perdón
-w excuse me|disculpe
+n Entre amigos se dice "Thanks" o "Thanks a lot". Para responder: "No problem" o "You're welcome". "Sorry" es pedir perdón; "Excuse me" es llamar la atención o pasar.
+w thanks|gracias|🙏
+w thank you so much|muchísimas gracias|🙏
+w no problem|no hay problema / de nada|👍
+w you're welcome|de nada|😊
+w sorry|perdón / lo siento|😔
+w excuse me|disculpa / con permiso|🙋
+w please|por favor|🙏
 w help|ayuda|🆘
-p Thank you very much.|Muchas gracias.
-p Excuse me, can you help me?|Disculpe, ¿me puede ayudar?
-p I am sorry, I do not understand.|Lo siento, no entiendo.
-d Thank you very much!|You are welcome.|Good night.|I am a student.
+p Thanks a lot!|¡Muchas gracias!
+p Excuse me, could you help me?|Disculpe, ¿me podría ayudar?
+p Sorry, I didn't catch that.|Perdón, no te escuché bien.
+p No worries, it's all good.|No te preocupes, todo bien.
+p Thanks for your help.|Gracias por tu ayuda.
+d Thanks a lot!|No problem!|You're sorry.|Good night.
+d Sorry, I'm late.|No worries.|You're welcome.|Please.
 # yes_no|Yes, no, and questions
-w yes|sí
-w no|no
-w maybe|quizás
-w what|qué
-w where|dónde
-w how much|cuánto
+n Entre amigos "yeah" y "nope" son más comunes que "yes" y "no". Para preguntar usa frases cortas: "Where's the bathroom?", "How much is it?".
+w yeah|sí (informal)|👍
+w nope|nel / no (informal)|🙅
+w maybe|tal vez|🤷
+w what|qué|❓
+w where|dónde|📍
+w how much|cuánto cuesta / cuánto|💲
+w why|por qué|🤔
+w I don't know|no sé|🤷
 p Do you speak English?|¿Hablas inglés?
-p What is your name?|¿Cómo te llamas?
-p Can you repeat that, please?|¿Puedes repetirlo, por favor?
-d Do you speak English?|A little, but I am learning.|Yes, it is red.|My name is on the table.
+p Where's the bathroom?|¿Dónde está el baño?
+p How much is it?|¿Cuánto cuesta?
+p Can you say that again?|¿Puedes repetirlo?
+p I don't get it.|No lo entiendo.
+d Do you speak English?|A little. I'm still learning.|Yes, it's red.|My name is on the table.
+d Want some coffee?|Yeah, sure!|It's Tuesday.|I'm from Spain.
 # spell_it|Spell your name
-n Practica decir tu nombre letra por letra: es lo que te piden en hoteles y bancos.
-w name|nombre
-w last name|apellido
-w letter|letra
-w spell|deletrear
-w phone number|número de teléfono|📱
+n Los nombres y correos se dicen letra por letra. "At" es la arroba (@), "dot" es el punto y "underscore" el guion bajo.
+w spell|deletrear|🔤
+w letter|letra|🔠
+w first name|nombre (de pila)|🏷️
+w last name|apellido|🏷️
 w email|correo electrónico|📧
-p How do you spell your name?|¿Cómo se deletrea tu nombre?
-p My name is Ana Lopez.|Me llamo Ana López.
-p Could you spell that, please?|¿Podría deletrearlo, por favor?
-d How do you spell your last name?|L-O-P-E-Z.|It is Monday.|I am fine.
+w at|arroba (@)|📨
+w dot|punto (.)|⚫
+w number|número|🔢
+p How do you spell that?|¿Cómo se deletrea?
+p It's Carlos, C-A-R-L-O-S.|Es Carlos, C-A-R-L-O-S.
+p Can you spell your last name?|¿Puedes deletrear tu apellido?
+p My email is juan at gmail dot com.|Mi correo es juan arroba gmail punto com.
+p What's your phone number?|¿Cuál es tu número de teléfono?
+d How do you spell your name?|It's Ana, A-N-A.|I'm twenty years old.|It's on Monday.
+d What's your last name?|It's Ramirez.|I'm fine, thanks.|At the airport.
 @unit everyday_english|2|A1|🏠|Everyday English|Greetings, routines, and small talk.|general
 # greetings|Greetings & introductions
-n "How are you?" es un saludo; la respuesta corta es "Fine, thanks. And you?".
-w nice to meet you|mucho gusto
-w how are you|cómo estás
-w I am fine|estoy bien
-w my name is|me llamo
-w where are you from|de dónde eres
-w I live in|vivo en
-p Hi, my name is Carlos. Nice to meet you.|Hola, me llamo Carlos. Mucho gusto.
-p I am fine, thanks. And you?|Estoy bien, gracias. ¿Y tú?
-p I live in Monterrey.|Vivo en Monterrey.
-d How are you today?|I am fine, thanks. And you?|I live in a house.|My name is Tuesday.
+n "How are you?" casi nunca es una pregunta de verdad: responde "Good, you?" o "Pretty good". Al conocer a alguien: "Nice to meet you".
+w how's it going|¿cómo va todo?|🙂
+w pretty good|bastante bien|👍
+w not bad|nada mal|😌
+w this is my friend|él/ella es mi amigo(a)|🤝
+w nice to meet you|mucho gusto|🤝
+w what do you do|¿a qué te dedicas?|💼
+w I'm a student|soy estudiante|🎓
+w and you|¿y tú?|👉
+p Hey, how's it going?|Oye, ¿cómo va todo?
+p Pretty good, thanks. You?|Bastante bien, gracias. ¿Y tú?
+p This is my friend Luis.|Él es mi amigo Luis.
+p Nice to meet you, Luis.|Mucho gusto, Luis.
+p What do you do for a living?|¿A qué te dedicas?
+d How's it going?|Pretty good, you?|I'm twenty-five.|By bus.
+d This is my friend Luis.|Nice to meet you, Luis!|Thanks for the bus.|It's very big.
 # routines|Daily routines
-n La rutina usa presente simple: "I wake up", "she works". Con he/she/it se añade -s.
-w wake up|despertarse|⏰
+n Verbos que usarás a diario: "get up", "take a shower", "go to work". "Make breakfast" pero "do homework": make y do no son intercambiables.
+w get up|levantarse|⏰
 w take a shower|bañarse|🚿
-w have breakfast|desayunar|🥣
-w go to work|ir al trabajo|🏢
-w come home|llegar a casa|🏡
+w have breakfast|desayunar|🍳
+w go to work|ir al trabajo|💼
+w get home|llegar a casa|🏠
+w cook dinner|preparar la cena|🍝
 w go to bed|irse a dormir|🛏️
-p I wake up at seven every day.|Me despierto a las siete todos los días.
-p She goes to work by bus.|Ella va al trabajo en autobús.
-p We have dinner at eight.|Cenamos a las ocho.
-d What time do you wake up?|I wake up at six.|I am from Chile.|She is my friend.
+w wake up|despertar|😴
+p I usually get up at six.|Normalmente me levanto a las seis.
+p I take the bus to work.|Me voy al trabajo en camión.
+p What time do you get home?|¿A qué hora llegas a casa?
+p I'm usually asleep by eleven.|Normalmente ya estoy dormido a las once.
+p On weekends I sleep in.|Los fines de semana me quedo dormido hasta tarde.
+d What time do you get up?|Around seven.|At the restaurant.|Two sisters.
+d Do you work on weekends?|Nope, I'm off.|I take the bus.|It's red.
 # family|Family & friends
-w mother|madre|👩
-w father|padre|👨
-w brother|hermano
-w sister|hermana
-w grandmother|abuela|👵
-w cousin|primo / prima
-p I have two brothers and one sister.|Tengo dos hermanos y una hermana.
-p My grandmother lives with us.|Mi abuela vive con nosotros.
-p He is my best friend.|Él es mi mejor amigo.
-d Do you have brothers or sisters?|Yes, I have one sister.|I live in a big house.|It is nine o'clock.
+n "My mom" y "my dad" son lo natural (no "my mother"). "Hang out" es pasar el rato con amigos. "My folks" = mis papás.
+w mom|mamá|👩
+w dad|papá|👨
+w sister|hermana|👧
+w brother|hermano|👦
+w grandma|abuelita|👵
+w cousin|primo / prima|🧑
+w best friend|mejor amigo(a)|🫶
+w hang out|pasar el rato|🛋️
+p I have two brothers and a sister.|Tengo dos hermanos y una hermana.
+p My mom's from Puebla.|Mi mamá es de Puebla.
+p We hang out every weekend.|Nos juntamos cada fin de semana.
+p He's my best friend.|Es mi mejor amigo.
+p My cousins live nearby.|Mis primos viven cerca.
+d Do you have any brothers or sisters?|Yeah, one sister.|Yes, it's Tuesday.|I live in a house.
+d What do you do on weekends?|I hang out with my friends.|I'm from Spain.|She's twenty.
 # smalltalk|Small talk
-n "How is it going?" y "What's up?" son saludos muy comunes y informales.
-w weather|clima|⛅
-w weekend|fin de semana
-w busy|ocupado
-w tired|cansado|😴
-w by the way|por cierto
-w really|de verdad
+n Para romper el hielo habla del clima, del fin de semana o del trabajo. Respuestas cortas y naturales: "Pretty chill", "Busy, but good".
+w how was your weekend|¿cómo estuvo tu fin de semana?|📅
+w pretty chill|muy tranquilo|😎
+w busy|ocupado|📆
+w any plans|¿tienes planes?|🗓️
+w it's kind of cold|hace como frío|🥶
+w I'm so tired|estoy muy cansado|😴
+w guess what|adivina qué|😮
+w really|¿en serio?|😲
 p How was your weekend?|¿Cómo estuvo tu fin de semana?
-p It is a beautiful day, isn't it?|Es un día hermoso, ¿no?
-p I am a little tired today.|Estoy un poco cansado hoy.
-d How was your weekend?|It was great, thanks for asking.|My name is Peter.|I have a red car.
+p Pretty chill. I just stayed home.|Muy tranquilo. Me quedé en casa.
+p Any plans for tonight?|¿Tienes planes para hoy en la noche?
+p It's freezing out there!|¡Está helando afuera!
+p Busy, but good. You?|Ocupado, pero bien. ¿Y tú?
+d How was your weekend?|Pretty chill. You?|It's a table.|I'm twenty.
+d Any plans for tonight?|Not really. Just relaxing.|Yes, I'm a student.|It's very big.
 # numbers_time|Numbers & time
-n Para la hora: "It is half past three" = 3:30.
-w twenty|veinte
-w fifty|cincuenta
-w one hundred|cien
-w o'clock|en punto
-w half past|y media
-w quarter to|menos cuarto
+n La hora se dice "It's three thirty" o "It's half past three". "Around five" significa "como a las cinco".
+w what time is it|¿qué hora es?|🕒
+w o'clock|en punto|🕐
+w half past|y media|🕧
+w a quarter to|cuarto para|🕓
+w around|como a / alrededor de|〰️
+w noon|mediodía|☀️
+w midnight|medianoche|🌙
+w ten minutes late|diez minutos tarde|⏱️
 p What time is it?|¿Qué hora es?
-p It is half past three.|Son las tres y media.
-p The meeting is at ten o'clock.|La reunión es a las diez en punto.
-d What time is it?|It is a quarter to six.|It is my sister.|I am from Peru.
+p It's half past two.|Son las dos y media.
+p The movie starts at seven.|La película empieza a las siete.
+p I'll be there around five.|Llego como a las cinco.
+p Sorry, I'm running ten minutes late.|Perdón, voy a llegar diez minutos tarde.
+d What time is it?|It's about four thirty.|It's four people.|I'm four.
+d What time does the movie start?|At seven.|On the table.|I'm fine.
 @unit home_and_city|3|A1|🏙️|Home & City|Talk about your home, your neighborhood, and getting around.|general
 # rooms_home|Rooms & furniture
-w kitchen|cocina|🍳
-w bedroom|recámara|🛏️
-w bathroom|baño|🚽
+n En EE. UU. se dice "bathroom" (no "toilet"). "My place" es "mi casa" o "mi depa". "Make yourself at home" = siéntete como en tu casa.
 w living room|sala|🛋️
+w bedroom|recámara|🛏️
+w kitchen|cocina|🍳
+w bathroom|baño|🚽
+w my place|mi casa / mi depa|🏠
+w fridge|refri|🧊
+w couch|sillón|🛋️
 w window|ventana|🪟
-w door|puerta|🚪
-p My bedroom is upstairs.|Mi recámara está arriba.
-p There is a table in the kitchen.|Hay una mesa en la cocina.
-p The bathroom is on the left.|El baño está a la izquierda.
-d Where is the bathroom?|It is on the left.|I wake up at six.|He is my uncle.
+p Come on in, make yourself at home.|Pasa, siéntete como en tu casa.
+p The bathroom's down the hall.|El baño está al fondo del pasillo.
+p I live in a small apartment.|Vivo en un departamento pequeño.
+p There's pizza in the fridge.|Hay pizza en el refri.
+p My bedroom's kind of tiny.|Mi recámara está medio chiquita.
+d Where's the bathroom?|Down the hall, on the left.|It's blue.|Two sandwiches.
+d Do you live in a house?|No, in an apartment.|Yes, it's Saturday.|I'm hungry.
 # things_around|Things around you
-n "There is" para uno, "there are" para varios.
-w table|mesa
-w chair|silla|🪑
-w phone|teléfono|📱
-w key|llave|🔑
-w bag|bolsa|👜
-w book|libro|📕
-p There are three chairs in the room.|Hay tres sillas en el cuarto.
-p Where are my keys?|¿Dónde están mis llaves?
-p My phone is in my bag.|Mi teléfono está en mi bolsa.
-d Where are my keys?|They are on the table.|I am very tired.|It is half past two.
+n Para señalar: "this" (cerca) y "that" (lejos). "What's this called?" te salva cuando no sabes la palabra.
+w phone|celular / teléfono|📱
+w keys|llaves|🔑
+w wallet|cartera|👛
+w bag|bolsa / mochila|👜
+w charger|cargador|🔌
+w remote|control remoto|📺
+w cup|taza / vaso|☕
+w stuff|cosas|📦
+p What's that over there?|¿Qué es eso de allá?
+p What's this called in English?|¿Cómo se llama esto en inglés?
+p I can't find my keys.|No encuentro mis llaves.
+p Do you have a charger?|¿Tienes un cargador?
+p That's not mine.|Eso no es mío.
+d Whose bag is this?|It's mine.|It's Tuesday.|At seven.
+d Can you hand me that?|Sure, here you go.|Yes, it's red.|I live here.
 # places_city|Places in the city
+n "Downtown" es el centro de la ciudad; "grocery store" es el súper; "mall" es el centro comercial. "Around here" significa "por aquí".
+w downtown|el centro|🏙️
+w grocery store|súper / tienda de abarrotes|🛒
+w mall|centro comercial|🏬
 w bank|banco|🏦
-w supermarket|supermercado|🛒
+w gas station|gasolinera|⛽
 w park|parque|🌳
-w hospital|hospital|🏥
 w pharmacy|farmacia|💊
-w school|escuela|🏫
-p The bank is next to the supermarket.|El banco está junto al supermercado.
-p Is there a pharmacy near here?|¿Hay una farmacia cerca de aquí?
-p I go to the park on Sundays.|Voy al parque los domingos.
-d Is there a pharmacy near here?|Yes, it is on the corner.|I like pizza.|She is a doctor.
+w around here|por aquí|📍
+p Is there a pharmacy around here?|¿Hay una farmacia por aquí?
+p I'm going downtown.|Voy al centro.
+p The grocery store's right there.|El súper está justo ahí.
+p It's a few blocks away.|Está a unas cuadras.
+p Let's meet at the mall.|Veámonos en el centro comercial.
+d Is there a bank around here?|Yeah, it's two blocks down.|I like pizza.|He's my brother.
+d Where are you going?|Downtown.|I'm twenty.|At five.
 # transport|Getting around
-w bus|autobús|🚌
-w train|tren|🚆
-w taxi|taxi|🚕
+n "Take the bus" o "take the subway" para viajar. "Get on / get off" es subirse y bajarse. "Uber" también se usa como verbo.
+w take the bus|tomar el camión|🚌
 w subway|metro|🚇
-w ticket|boleto|🎫
-w stop|parada
-p How do I get to the train station?|¿Cómo llego a la estación de tren?
-p The bus stops here every ten minutes.|El autobús para aquí cada diez minutos.
-p One ticket, please.|Un boleto, por favor.
-d How much is a ticket?|It is two dollars.|It is sunny today.|My name is Luis.
+w get a ride|que te lleven / pedir aventón|🚗
+w Uber|Uber|📱
+w get on|subirse|⬆️
+w get off|bajarse|⬇️
+w traffic|tráfico|🚦
+w stop|parada|🛑
+p How do I get there?|¿Cómo llego allá?
+p I take the subway to work.|Me voy al trabajo en el metro.
+p Where do I get off?|¿Dónde me bajo?
+p There's a lot of traffic today.|Hay mucho tráfico hoy.
+p Can you give me a ride?|¿Me das un aventón?
+d How do you get to work?|I take the bus.|It's very expensive.|Yes, I do.
+d Where should I get off?|At the next stop.|On Friday.|I'm tired.
 # weather|Weather & seasons
-n "It is hot" (hace calor): en inglés se usa el verbo "to be", no "to do".
-w sunny|soleado|☀️
-w rainy|lluvioso|🌧️
-w cold|frío|🥶
-w hot|caliente / calor|🥵
-w windy|con viento|💨
+n El clima es el tema de conversación número uno. "It's pouring" = llueve muchísimo; "It's boiling" = hace un calor horrible; "It's chilly" = hace fresquito.
+w it's sunny|está soleado|☀️
+w it's pouring|está lloviendo muchísimo|🌧️
+w it's chilly|hace fresquito|🧥
+w it's boiling|hace un calor horrible|🥵
+w windy|con mucho viento|💨
+w cloudy|nublado|☁️
+w forecast|pronóstico|📺
 w umbrella|paraguas|☂️
-p It is going to rain tomorrow.|Va a llover mañana.
-p It is very hot in summer.|Hace mucho calor en verano.
-p Take an umbrella, just in case.|Lleva un paraguas, por si acaso.
-d What is the weather like today?|It is cold and windy.|I live near the park.|He is my friend.
+p What's the weather like today?|¿Cómo está el clima hoy?
+p It's pouring, bring an umbrella.|Está lloviendo muchísimo, lleva paraguas.
+p It's boiling in here!|¡Hace un calor horrible aquí!
+p The forecast says rain tomorrow.|El pronóstico dice que lloverá mañana.
+p I love this weather.|Me encanta este clima.
+d What's the weather like?|It's pretty chilly.|At six.|It's a big city.
+d Should I bring an umbrella?|Yeah, it's pouring.|No, I'm a student.|It's my phone.
 @unit at_the_restaurant|4|A2|🍽️|At the Restaurant|Order food, talk about flavors, and handle the bill.|travel
 # ordering|Ordering food
-n "I'd like…" es más cortés que "I want…".
-w menu|menú|📋
-w waiter|mesero|🧑‍🍳
-w appetizer|entrada
-w main course|plato fuerte
-w dessert|postre|🍰
-w drink|bebida|🥤
-p I would like the chicken, please.|Quisiera el pollo, por favor.
-p Can I see the menu?|¿Puedo ver el menú?
-p Could we have some water?|¿Nos podría traer agua?
-d Are you ready to order?|Yes, I would like the chicken.|It is on the left.|I live near here.
-# menu|Understanding a menu
-w grilled|a la parrilla
-w fried|frito
-w spicy|picante|🌶️
-w vegetarian|vegetariano|🥗
-w sauce|salsa
-w side dish|guarnición
-p Does this dish have nuts?|¿Este platillo lleva nueces?
-p I am allergic to shellfish.|Soy alérgico a los mariscos.
+n "Can I get…?" y "I'll have…" son lo más natural (mucho más que "I would like"). "For here or to go?" = ¿para comer aquí o para llevar?
+w can I get|¿me das / me trae?|🙋
+w I'll have|voy a querer|🍽️
+w for here|para comer aquí|🪑
+w to go|para llevar|🥡
+w a table for two|una mesa para dos|🍽️
+w what do you recommend|¿qué recomiendas?|⭐
+w I'm ready to order|ya voy a pedir|📝
+w still water|agua sin gas|💧
+p Hi, can I get a table for two?|Hola, ¿me da una mesa para dos?
+p I'll have the chicken tacos, please.|Voy a querer los tacos de pollo, por favor.
+p Is that for here or to go?|¿Es para comer aquí o para llevar?
 p What do you recommend?|¿Qué me recomienda?
-d What do you recommend?|The grilled fish is excellent.|I am from Peru.|It is five o'clock.
+p Could we get some more water?|¿Nos puede traer más agua?
+d Hi, are you ready to order?|Yeah, I'll have the burger.|I'm twenty-five.|It's on the table.
+d For here or to go?|To go, please.|At seven.|It's blue.
+# menu|Understanding a menu
+n "Appetizer" es la entrada, "main course" el plato fuerte, "side" la guarnición. Pregunta "Does it come with…?" y "Is it spicy?" antes de pedir.
+w appetizer|entrada|🥗
+w main course|plato fuerte|🍛
+w side dish|guarnición|🍟
+w dessert|postre|🍰
+w spicy|picante|🌶️
+w gluten-free|sin gluten|🌾
+w does it come with|¿viene con…?|❓
+w special|especial del día|⭐
+p What's the special today?|¿Cuál es el especial de hoy?
+p Does it come with rice?|¿Viene con arroz?
+p Is this spicy?|¿Esto pica?
+p I'm allergic to peanuts.|Soy alérgico al cacahuate.
+p I'll start with the soup.|Voy a empezar con la sopa.
+d Is this dish spicy?|A little. I can ask for it mild.|It's on Friday.|I'm twenty.
+d Does it come with fries?|Yes, or you can get a salad.|I live downtown.|Nice to meet you.
 # preferences|Likes & dislikes
-n "I'd rather…" = prefiero. "I can't stand…" = no soporto.
-w I like|me gusta
-w I love|me encanta
-w I don't like|no me gusta
-w I prefer|prefiero
-w delicious|delicioso
-w too salty|demasiado salado
-p I love Italian food.|Me encanta la comida italiana.
-p I do not like spicy food.|No me gusta la comida picante.
-p I prefer tea to coffee.|Prefiero el té al café.
-d Do you like spicy food?|Not really, I prefer mild food.|Yes, it is on the table.|He is my brother.
+n "I'm into…" = me gusta mucho; "I'm not a big fan of…" = no me gusta mucho (más suave que "I hate"); "I'm in the mood for…" = se me antoja.
+w I'm in the mood for|se me antoja|😋
+w I'm into|me late / me gusta mucho|❤️
+w not a big fan of|no soy muy fan de|😕
+w I can't stand|no soporto|🤢
+w my favorite|mi favorito|⭐
+w I'm starving|me muero de hambre|😩
+w I'm full|ya estoy lleno|😌
+w tastes great|sabe riquísimo|😋
+p I'm in the mood for something spicy.|Se me antoja algo picante.
+p I'm not a big fan of seafood.|No soy muy fan del marisco.
+p This tastes amazing!|¡Esto sabe increíble!
+p I'm starving. Let's eat!|Me muero de hambre. ¡A comer!
+p I can't stand cilantro.|No soporto el cilantro.
+d What kind of food are you into?|Mostly Mexican and Italian.|At six o'clock.|It's in the kitchen.
+d Do you want dessert?|I'm good, I'm full.|He's my brother.|Yes, it's pouring.
 # complaints|Complaints & requests
-w cold (food)|frío|🥶
-w overcooked|pasado de cocción
-w mistake|error
-w manager|gerente
-w refund|reembolso
-w replace|reemplazar
-p Excuse me, this is not what I ordered.|Disculpe, esto no es lo que pedí.
-p The soup is cold. Could you heat it up?|La sopa está fría. ¿Podría calentarla?
-p Could I speak to the manager?|¿Podría hablar con el gerente?
-d Is everything okay with your meal?|Actually, my soup is cold.|I wake up at seven.|It is windy today.
+n Para quejarte con educación: "Excuse me, I think there's a mistake" o "This isn't what I ordered". Suena mejor "Could you…?" que "I want…".
+w there's a mistake|hay un error|⚠️
+w this isn't what I ordered|esto no es lo que pedí|😕
+w it's cold|está frío|🥶
+w undercooked|crudo / a medias|🍗
+w could you|¿podría…?|🙏
+w take it back|llevárselo / regresarlo|↩️
+w manager|gerente|👔
+w how long will it take|¿cuánto tardará?|⏳
+p Excuse me, this isn't what I ordered.|Disculpe, esto no es lo que pedí.
+p My food's cold. Could you heat it up?|Mi comida está fría. ¿La puede calentar?
+p We've been waiting for a while.|Llevamos un buen rato esperando.
+p Could I talk to the manager?|¿Podría hablar con el gerente?
+p No worries, thanks for fixing it.|No hay problema, gracias por arreglarlo.
+d I'm so sorry, is everything okay?|Actually, my soup's cold.|I'm twenty-five.|At the airport.
+d How long will it take?|About ten more minutes.|He's my friend.|I'm allergic to nuts.
 # paying|Paying the bill
-n En Estados Unidos la propina (tip) suele ser del 15 al 20 por ciento.
-w bill|cuenta|🧾
-w tip|propina
+n En EE. UU. se pide "the check" (no "the bill"). "Split the bill" = dividir la cuenta. La propina ("tip") normal es 15–20%.
+w check|cuenta|🧾
+w split it|dividirla|✂️
+w tip|propina|💵
 w cash|efectivo|💵
-w credit card|tarjeta de crédito|💳
-w change|cambio
-w receipt|recibo
-p Can we have the bill, please?|¿Nos trae la cuenta, por favor?
-p Can I pay by card?|¿Puedo pagar con tarjeta?
+w card|tarjeta|💳
+w keep the change|quédese con el cambio|🪙
+w it's on me|yo invito|🤝
+w my treat|yo invito|🎁
+p Could we get the check, please?|¿Nos trae la cuenta, por favor?
+p Can we split it?|¿Podemos dividirla?
+p Do you take cards?|¿Aceptan tarjeta?
+p It's on me tonight.|Hoy yo invito.
 p Keep the change.|Quédese con el cambio.
-d How would you like to pay?|By card, please.|I like pizza.|It is on the left.
+d Cash or card?|Card, please.|It's delicious.|In the kitchen.
+d Should we split the bill?|Yeah, that works.|At six.|He's my cousin.
 @unit shopping_and_money|5|A2|🛍️|Shopping & Money|Buy clothes, ask for prices, and handle returns.|general
 # clothes|Clothes
-w shirt|camisa|👕
-w pants|pantalones|👖
-w dress|vestido|👗
-w shoes|zapatos|👟
+n En EE. UU.: "pants" (pantalón), "sneakers" (tenis), "hoodie" (sudadera con gorro). Para halagar: "It looks good on you".
+w pants|pantalón|👖
+w sneakers|tenis|👟
+w hoodie|sudadera con gorro|🧥
 w jacket|chamarra|🧥
-w socks|calcetines|🧦
-p I am looking for a black jacket.|Busco una chamarra negra.
-p Do you have this shirt in blue?|¿Tiene esta camisa en azul?
-p These shoes are very comfortable.|Estos zapatos son muy cómodos.
-d Can I help you?|Yes, I am looking for a jacket.|I am at home.|She is my cousin.
+w dress|vestido|👗
+w outfit|atuendo / outfit|👚
+w it looks good on you|te queda muy bien|😍
+w casual|casual|👕
+p I'm looking for a jacket.|Ando buscando una chamarra.
+p Those sneakers look great on you.|Esos tenis te quedan muy bien.
+p I like your outfit.|Me gusta tu outfit.
+p It's kind of too formal.|Está medio formal.
+p I need something casual for tonight.|Necesito algo casual para esta noche.
+d Can I help you find anything?|I'm just looking, thanks.|It's raining.|My name is Ana.
+d How do I look?|It looks great on you!|It's two o'clock.|I'm a student.
 # sizes_try|Sizes & fitting
-w size|talla
-w small|chico
-w large|grande
-w fitting room|probador
-w too tight|muy apretado
-w too big|muy grande
+n "Can I try this on?" = ¿me lo puedo probar? "Fitting room" es el probador. Di "too tight" (muy apretado) o "too loose" (muy flojo).
+w try on|probarse|👗
+w fitting room|probador|🚪
+w too tight|muy apretado|😬
+w too loose|muy flojo|👕
+w medium|talla mediana|📏
+w a size up|una talla más grande|⬆️
+w do you have this in|¿lo tienen en…?|❓
+w it fits|me queda bien|✅
 p Can I try this on?|¿Me lo puedo probar?
-p Do you have a larger size?|¿Tiene una talla más grande?
-p It fits me perfectly.|Me queda perfecto.
-d How does it fit?|It is a little tight. Do you have a larger size?|It is half past six.|My name is Eva.
+p Where's the fitting room?|¿Dónde está el probador?
+p It's a little tight. Do you have a size up?|Me queda un poco apretado. ¿Tiene una talla más grande?
+p Do you have this in blue?|¿Lo tienen en azul?
+p It fits perfectly.|Me queda perfecto.
+d How does it fit?|It's a bit tight.|At the mall.|Two shirts.
+d Can I help you with a size?|Do you have this in a medium?|Thanks for dinner.|I'm from Mexico.
 # prices_pay|Prices & discounts
-n "How much is it?" para un precio; "How much are they?" para varios.
-w price|precio
-w cheap|barato
-w expensive|caro
-w discount|descuento
-w on sale|en oferta
-w total|total
+n "On sale" = en oferta; "a good deal" = buen precio; "pricey" = caro. Al decidir comprar: "I'll take it". "Bucks" es como se dice "dólares" informalmente.
+w how much is this|¿cuánto cuesta esto?|💲
+w on sale|en oferta|🏷️
+w discount|descuento|🔖
+w a good deal|buen precio|🤑
+w pricey|caro|💸
+w cheap|barato|🪙
+w it's a steal|está regalado|🛍️
+w I'll take it|me lo llevo|✅
 p How much is this?|¿Cuánto cuesta esto?
-p It is too expensive for me.|Es demasiado caro para mí.
-p Is there a discount?|¿Hay algún descuento?
-d How much is this bag?|It is forty dollars.|It is very sunny.|I am from Chile.
+p It's on sale for twenty bucks.|Está en oferta por veinte dólares.
+p That's kind of pricey.|Está medio caro.
+p Is there any discount?|¿Hay algún descuento?
+p It's a good deal. I'll take it.|Es buen precio. Me lo llevo.
+d How much is this shirt?|It's twenty dollars.|At the mall.|I'm a teacher.
+d Do you have anything cheaper?|Let me check what's on sale.|Yes, I have two sisters.|It's raining.
 # returns_refunds|Returns & refunds
-w return|devolver
-w exchange|cambiar
-w receipt|ticket de compra
-w broken|roto
-w warranty|garantía
-w store credit|saldo a favor
-p I would like to return this item.|Quisiera devolver este artículo.
-p It does not work. Can I exchange it?|No funciona. ¿Puedo cambiarlo?
-p Do you have the receipt?|¿Tiene el ticket de compra?
-d What seems to be the problem?|It is broken. I would like a refund.|I live in Madrid.|It is a quarter to five.
+n "Return" = devolver; "refund" = reembolso; "store credit" = crédito en tienda; "receipt" = ticket. "It doesn't work" = no funciona.
+w return|devolver|↩️
+w refund|reembolso|💵
+w receipt|ticket / recibo|🧾
+w store credit|crédito en tienda|🎟️
+w exchange|cambiar (por otro)|🔄
+w it doesn't work|no funciona|❌
+w defective|defectuoso|⚠️
+w within thirty days|dentro de treinta días|📅
+p I'd like to return this, please.|Quisiera devolver esto, por favor.
+p Do you have the receipt?|¿Tiene el ticket?
+p It doesn't work. Can I get a refund?|No funciona. ¿Me pueden reembolsar?
+p Can I exchange it for a bigger size?|¿Puedo cambiarlo por una talla más grande?
+p You can return it within thirty days.|Puede devolverlo dentro de treinta días.
+d Do you have your receipt?|Yeah, here you go.|I'm twenty.|At seven.
+d What seems to be the problem?|It doesn't work.|I'm from Mexico.|It's a nice day.
 # online_shop|Shopping online
-w cart|carrito|🛒
-w order|pedido|📦
-w shipping|envío
-w delivery|entrega
-w track|rastrear
-w out of stock|agotado
-p When will my order arrive?|¿Cuándo llegará mi pedido?
-p This item is out of stock.|Este artículo está agotado.
-p Is shipping free?|¿El envío es gratis?
-d When will my order arrive?|It should arrive in three days.|I am a student.|It is my sister.
+n Vocabulario típico de compras en línea: "add to cart", "check out", "free shipping", "tracking number". "Out of stock" = agotado.
+w add to cart|agregar al carrito|🛒
+w check out|pagar / finalizar compra|💳
+w free shipping|envío gratis|📦
+w tracking number|número de rastreo|🔎
+w out of stock|agotado|🚫
+w delivery|entrega|🚚
+w it arrived|ya llegó|📬
+w reviews|reseñas|⭐
+p I added it to my cart.|Lo agregué a mi carrito.
+p Does it have free shipping?|¿Tiene envío gratis?
+p My order hasn't arrived yet.|Mi pedido todavía no llega.
+p It's out of stock right now.|Está agotado por ahora.
+p Check the reviews before you buy.|Checa las reseñas antes de comprar.
+d Has your package arrived?|Not yet. It says tomorrow.|I love pizza.|I'm fine.
+d Why didn't you buy it?|It was out of stock.|I'm a doctor.|At the gate.
 @unit travel_and_tourism|6|A2|✈️|Travel & Tourism|Airports, hotels, directions, and sightseeing.|travel
 # airport|At the airport
-n "Boarding pass" = pase de abordar; "gate" = puerta de embarque.
-w passport|pasaporte|🛂
-w boarding pass|pase de abordar
-w gate|puerta de embarque
-w luggage|equipaje|🧳
-w flight|vuelo|✈️
-w delayed|retrasado
-p Where is the check-in counter?|¿Dónde está el mostrador de registro?
-p My flight is delayed.|Mi vuelo está retrasado.
-p Do you have anything to declare?|¿Tiene algo que declarar?
-d What is the purpose of your visit?|I am here on vacation.|I like tea.|It is cold today.
+n "Boarding pass", "gate", "carry-on" y "layover" (escala) son palabras que oirás mil veces. "Delayed" = retrasado; "on time" = a tiempo.
+w boarding pass|pase de abordar|🎫
+w gate|puerta de embarque|🚪
+w carry-on|equipaje de mano|🧳
+w checked bag|maleta documentada|🧳
+w delayed|retrasado|⏳
+w on time|a tiempo|✅
+w security|seguridad|🛂
+w layover|escala|✈️
+p Where do I check in?|¿Dónde hago el check-in?
+p I only have a carry-on.|Solo llevo equipaje de mano.
+p My flight's been delayed.|Mi vuelo se retrasó.
+p What gate is it?|¿Cuál es la puerta?
+p I have a two-hour layover in Dallas.|Tengo una escala de dos horas en Dallas.
+d Are you checking any bags?|Just this carry-on.|At six.|It's very big.
+d Is the flight on time?|No, it's delayed an hour.|I live downtown.|He's my brother.
 # hotel|Checking into a hotel
-w reservation|reservación
-w check in|registrarse
-w check out|salir del hotel
-w single room|habitación sencilla
-w key card|tarjeta llave
-w breakfast included|desayuno incluido
-p I have a reservation under Lopez.|Tengo una reservación a nombre de López.
-p What time is check-out?|¿A qué hora es la salida?
+n "I have a reservation under…" = tengo una reservación a nombre de… "Front desk" es recepción. Pregunta siempre por la hora de "check-out".
+w reservation|reservación|📒
+w under the name|a nombre de|🏷️
+w front desk|recepción|🛎️
+w check-out time|hora de salida|🕚
+w Wi-Fi password|contraseña del Wi-Fi|📶
+w room key|llave de la habitación|🗝️
+w extra towels|toallas extra|🧺
+w breakfast included|desayuno incluido|🥐
+p I have a reservation under Garcia.|Tengo una reservación a nombre de García.
+p What's the Wi-Fi password?|¿Cuál es la contraseña del Wi-Fi?
+p What time's check-out?|¿A qué hora es la salida?
+p Could we get some extra towels?|¿Nos puede dar toallas extra?
 p Is breakfast included?|¿Incluye desayuno?
-d Good evening. Do you have a reservation?|Yes, under the name Lopez.|I am a doctor.|It is on the table.
+d Welcome! Do you have a reservation?|Yes, under Garcia.|It's seven o'clock.|I'm a student.
+d Is breakfast included?|Yes, from seven to ten.|It's very cold.|He's my brother.
 # directions|Asking for directions
-n "Go straight" = sigue derecho. "Turn left/right" = da vuelta a la izquierda/derecha.
-w turn left|gira a la izquierda|⬅️
-w turn right|gira a la derecha|➡️
+n "Go straight", "turn left/right", "it's on your left". "Across from" = enfrente de; "next to" = junto a. "Am I going the right way?" = ¿voy bien?
 w go straight|sigue derecho|⬆️
-w corner|esquina
-w block|cuadra
-w far|lejos
-p Excuse me, how do I get to the museum?|Disculpe, ¿cómo llego al museo?
-p Go straight and turn left at the corner.|Siga derecho y gire a la izquierda en la esquina.
+w turn left|da vuelta a la izquierda|⬅️
+w turn right|da vuelta a la derecha|➡️
+w across from|enfrente de|↔️
+w next to|junto a|🔀
+w at the corner|en la esquina|📐
+w block|cuadra|🧱
+w am I going the right way|¿voy bien?|🧭
+p Excuse me, how do I get to the station?|Disculpe, ¿cómo llego a la estación?
+p Go straight and turn left at the corner.|Siga derecho y dé vuelta a la izquierda en la esquina.
+p It's across from the bank.|Está enfrente del banco.
 p Is it far from here?|¿Está lejos de aquí?
-d How do I get to the museum?|Go straight, then turn left.|I have two brothers.|It costs ten dollars.
+p I think I'm lost.|Creo que me perdí.
+d How do I get to the museum?|Go straight, then turn right.|It's twenty dollars.|Yes, I like it.
+d Is it far from here?|Nope, just five minutes on foot.|I'm a teacher.|It's raining.
 # sightseeing|Sightseeing
-w museum|museo|🏛️
-w tour|recorrido
-w guide|guía
-w souvenir|recuerdo
-w view|vista|🏞️
-w entrance fee|costo de entrada
-p What time does the tour start?|¿A qué hora empieza el recorrido?
-p Can you take a photo of us?|¿Nos puede tomar una foto?
-p The view from here is amazing.|La vista desde aquí es increíble.
-d Can you take a photo of us?|Sure, smile!|I am from Cuba.|It is a red car.
+n "Must-see" = imperdible; "tourist trap" = lugar turístico que no vale la pena; "off the beaten path" = lugares poco turísticos. Pide fotos con "Could you take a picture of us?".
+w must-see|imperdible|⭐
+w tourist trap|trampa para turistas|🪤
+w off the beaten path|poco turístico / fuera de lo común|🧭
+w guided tour|visita guiada|🧑‍🏫
+w ticket|boleto|🎟️
+w line|fila|🧍
+w take a picture|tomar una foto|📸
+w view|vista|🌄
+p What's a must-see around here?|¿Qué es imperdible por aquí?
+p Could you take a picture of us?|¿Nos podría tomar una foto?
+p How much are the tickets?|¿Cuánto cuestan los boletos?
+p The line's really long.|La fila está larguísima.
+p The view's incredible!|¡La vista es increíble!
+d Could you take a picture of us?|Sure! Say cheese!|I'm twenty-five.|It's a big city.
+d What do you recommend seeing?|The old town's a must-see.|At six.|It's very cold.
 # emergencies|Travel emergencies
-n En Estados Unidos y México el número de emergencias es 911.
-w emergency|emergencia|🚨
+n En EE. UU. el número de emergencias es el 911. Usa frases cortas y claras: "I need help", "My wallet got stolen" (me robaron la cartera).
+w I need help|necesito ayuda|🆘
+w lost|perdido / perdí|😟
+w stolen|robado|🚨
+w passport|pasaporte|🛂
+w call 911|llama al 911|📞
+w hospital|hospital|🏥
 w police|policía|👮
-w lost|perdido
-w stolen|robado
-w ambulance|ambulancia|🚑
-w embassy|embajada
-p Help! I lost my passport.|¡Ayuda! Perdí mi pasaporte.
-p My wallet was stolen.|Me robaron la cartera.
-p Please call an ambulance.|Por favor llame a una ambulancia.
-d What happened?|I lost my wallet on the bus.|I like soup.|It is half past nine.
+w it's an emergency|es una emergencia|🚑
+p I need help. It's an emergency!|Necesito ayuda. ¡Es una emergencia!
+p I lost my passport.|Perdí mi pasaporte.
+p My wallet got stolen.|Me robaron la cartera.
+p Please call an ambulance.|Por favor, llame a una ambulancia.
+p Where's the nearest hospital?|¿Dónde está el hospital más cercano?
+d What happened?|My bag got stolen.|It's nice weather.|I'm from Peru.
+d Do you need help?|Yes, please call the police.|No, thanks, I'm full.|It's on sale.
 @unit health_and_body|7|A2|🩺|Health & Body|Describe symptoms, visit the doctor, and stay healthy.|personal
 # body_parts|Body parts
-w head|cabeza
-w stomach|estómago
-w throat|garganta
-w back|espalda
-w arm|brazo
-w knee|rodilla
-p My head hurts.|Me duele la cabeza.
-p I have a pain in my back.|Tengo dolor de espalda.
-p She hurt her knee.|Ella se lastimó la rodilla.
-d What is wrong?|My stomach hurts.|I am from Texas.|It is sunny.
+n Con partes del cuerpo se usa "my": "my back hurts". "I have a headache / a sore throat" también es lo normal. "Sore" = adolorido.
+w head|cabeza|🧠
+w stomach|estómago|🤢
+w back|espalda|🧍
+w throat|garganta|🗣️
+w knee|rodilla|🦵
+w shoulder|hombro|💪
+w sore|adolorido|😖
+w hurts|duele|🤕
+p My back hurts.|Me duele la espalda.
+p I have a sore throat.|Me duele la garganta.
+p I hurt my knee playing soccer.|Me lastimé la rodilla jugando fútbol.
+p My shoulders are really tight.|Tengo los hombros muy tensos.
+p It hurts when I walk.|Me duele cuando camino.
+d What's wrong?|My stomach hurts.|I'm a student.|It's very blue.
+d Where does it hurt?|Right here, in my back.|At eight.|Yes, I do.
 # symptoms|Symptoms
-n "I have a headache" (no "I have pain of head").
-w fever|fiebre|🤒
-w cough|tos
-w headache|dolor de cabeza
-w sore throat|dolor de garganta
-w dizzy|mareado
-w sick|enfermo
-p I have had a fever since yesterday.|Tengo fiebre desde ayer.
-p I feel dizzy and tired.|Me siento mareado y cansado.
-p I have a sore throat and a cough.|Tengo dolor de garganta y tos.
-d How are you feeling?|I have a fever and a cough.|I am on the bus.|It is my phone.
+n "I'm not feeling well", "I've got a fever / a cough / a cold". Para decir desde cuándo: "since yesterday" (desde ayer), "for three days" (por tres días).
+w fever|fiebre|🌡️
+w cough|tos|😷
+w runny nose|nariz que escurre|🤧
+w dizzy|mareado|😵
+w nauseous|con náuseas|🤢
+w I'm not feeling well|no me siento bien|🤒
+w I caught a cold|me dio gripa|🥶
+w since yesterday|desde ayer|📅
+p I'm not feeling well today.|Hoy no me siento bien.
+p I've had a cough since Monday.|Tengo tos desde el lunes.
+p I think I caught a cold.|Creo que me dio gripa.
+p I feel dizzy and kind of nauseous.|Me siento mareado y con náuseas.
+p I've got a fever.|Tengo fiebre.
+d You don't look so good. Are you okay?|Not really. I've got a fever.|Yes, it's a nice day.|I'm from Chile.
+d How long have you felt like this?|Since yesterday.|At the pharmacy.|I'm twenty.
 # pharmacy|At the pharmacy
-w medicine|medicina|💊
-w prescription|receta médica
-w pills|pastillas
-w painkiller|analgésico
-w allergy|alergia
-w side effects|efectos secundarios
-p Do I need a prescription for this?|¿Necesito receta para esto?
-p Take one pill twice a day.|Tome una pastilla dos veces al día.
-p Are there any side effects?|¿Tiene efectos secundarios?
-d How often should I take this?|Twice a day after meals.|It is next to the bank.|I like blue.
+n "Over the counter" = se vende sin receta; "prescription" = receta médica. Instrucciones típicas: "twice a day with food" (dos veces al día con comida).
+w prescription|receta médica|📝
+w over the counter|sin receta|💊
+w painkiller|analgésico|💊
+w cough syrup|jarabe para la tos|🧴
+w twice a day|dos veces al día|2️⃣
+w with food|con comida|🍽️
+w side effects|efectos secundarios|⚠️
+w allergic|alérgico|🚫
+p Do you have something for a headache?|¿Tiene algo para el dolor de cabeza?
+p Is this over the counter?|¿Esto se vende sin receta?
+p How often should I take it?|¿Cada cuánto debo tomarlo?
+p Take one pill twice a day with food.|Tome una pastilla dos veces al día con comida.
+p I'm allergic to penicillin.|Soy alérgico a la penicilina.
+d How often should I take this?|Twice a day, with food.|It's on sale.|Tomorrow at six.
+d Do you have anything for a cough?|Sure, this syrup works well.|He's a doctor.|It's very big.
 # doctor_visit|At the doctor
-w appointment|cita
-w doctor|doctor|🧑‍⚕️
-w check-up|revisión médica
-w blood test|análisis de sangre
-w treatment|tratamiento
-w rest|descansar
-p I would like to make an appointment.|Quisiera hacer una cita.
-p How long have you had these symptoms?|¿Desde cuándo tiene estos síntomas?
-p You need to rest and drink water.|Necesita descansar y tomar agua.
-d How long have you felt this way?|About three days.|Two brothers.|It is in the kitchen.
+n "What brings you in today?" = ¿qué lo trae por aquí? El consejo típico es "Get some rest and drink plenty of fluids". "Check-up" = revisión general.
+w appointment|cita|📅
+w what brings you in|¿qué lo trae por aquí?|🩺
+w check-up|revisión|🩺
+w blood test|análisis de sangre|🩸
+w rest|descansar|🛌
+w plenty of fluids|muchos líquidos|🥤
+w follow up|seguimiento|🔁
+w insurance|seguro médico|📄
+p I have an appointment at three.|Tengo una cita a las tres.
+p I've been feeling run down lately.|Últimamente me he sentido agotado.
+p Do I need a blood test?|¿Necesito un análisis de sangre?
+p Get some rest and drink plenty of fluids.|Descanse y tome muchos líquidos.
+p Do you take my insurance?|¿Aceptan mi seguro?
+d What brings you in today?|I've had a bad cough for a week.|I live downtown.|It's on Friday.
+d What should I do?|Get some rest and drink lots of water.|It's twenty dollars.|At the airport.
 # healthy_habits|Healthy habits
-w exercise|ejercicio|🏃
-w sleep|dormir
-w diet|dieta|🥗
-w stress|estrés
-w water|agua|💧
-w healthy|saludable
-p I try to exercise three times a week.|Intento hacer ejercicio tres veces por semana.
-p You should sleep at least seven hours.|Deberías dormir al menos siete horas.
-p Drinking water is good for you.|Tomar agua es bueno para ti.
-d How do you stay healthy?|I exercise and sleep well.|I am at the bank.|It is a taxi.
+n "Work out" = hacer ejercicio; "cut back on sugar" = reducir el azúcar; "get enough sleep" = dormir lo suficiente. "I'm trying to…" = estoy tratando de…
+w work out|hacer ejercicio|🏋️
+w go for a walk|salir a caminar|🚶
+w cut back on|reducir|✂️
+w get enough sleep|dormir lo suficiente|😴
+w drink water|tomar agua|💧
+w stay in shape|mantenerse en forma|💪
+w junk food|comida chatarra|🍔
+w stressed out|estresado|😰
+p I'm trying to work out three times a week.|Estoy tratando de hacer ejercicio tres veces por semana.
+p I need to cut back on sugar.|Necesito reducir el azúcar.
+p I don't get enough sleep lately.|Últimamente no duermo lo suficiente.
+p Going for a walk helps me relax.|Salir a caminar me ayuda a relajarme.
+p I'm so stressed out this week.|Estoy muy estresado esta semana.
+d How do you stay in shape?|I work out a few times a week.|I'm from Peru.|It's raining.
+d Do you eat a lot of junk food?|Not anymore. I'm cutting back.|It's in the kitchen.|At six.
 @unit work_and_business|8|B1|💼|Work & Business|Meetings, emails, interviews, and office talk.|work
 # interview|Job interviews
-n "Tell me about yourself" casi siempre es la primera pregunta: prepara 3 frases.
-w experience|experiencia
-w strength|fortaleza
-w weakness|debilidad
-w skills|habilidades
-w resume|currículum
-w salary|salario|💰
-p I have five years of experience in marketing.|Tengo cinco años de experiencia en mercadotecnia.
-p My greatest strength is teamwork.|Mi mayor fortaleza es el trabajo en equipo.
-p Why do you want to work here?|¿Por qué quiere trabajar aquí?
-d Tell me about yourself.|I am a marketing specialist with five years of experience.|I live near the park.|It is half past two.
+n La primera pregunta casi siempre es "Tell me about yourself". Usa "I've worked as… for X years". Frases útiles: "I'm a quick learner", "I'm a team player".
+w tell me about yourself|cuéntame sobre ti|🎤
+w strengths|fortalezas|💪
+w weaknesses|debilidades|⚠️
+w experience|experiencia|📄
+w a quick learner|aprendo rápido|🧠
+w team player|buen compañero de equipo|🤝
+w salary expectations|expectativas de salario|💰
+w I'm available|tengo disponibilidad|✅
+p I've worked in sales for five years.|He trabajado en ventas por cinco años.
+p I'm a quick learner and a team player.|Aprendo rápido y trabajo bien en equipo.
+p One of my strengths is staying calm under pressure.|Una de mis fortalezas es mantener la calma bajo presión.
+p Why are you interested in this position?|¿Por qué te interesa este puesto?
+p When could you start?|¿Cuándo podrías empezar?
+d Tell me about yourself.|Sure. I've worked in marketing for four years.|I'm fine, thanks.|It's on Monday.
+d What's your biggest weakness?|I sometimes take on too much work.|At six.|I like pizza.
 # meetings|Meetings
-w agenda|agenda
-w deadline|fecha límite
-w schedule|programar
-w attend|asistir
-w minutes|minuta
-w follow up|dar seguimiento
-p Let's start with the agenda.|Empecemos con la agenda.
-p Could you share your screen, please?|¿Podrías compartir tu pantalla, por favor?
-p We need to finish this by Friday.|Necesitamos terminar esto para el viernes.
-d Can everyone hear me?|Yes, we can hear you clearly.|I am from Chile.|It is my birthday.
+n Frases típicas: "Let's get started", "Can everyone hear me?", "I'll follow up on that". "Circle back" = retomar un tema después. "On the same page" = estar alineados.
+w agenda|agenda / orden del día|📋
+w let's get started|empecemos|▶️
+w circle back|retomarlo después|🔄
+w follow up|dar seguimiento|📨
+w deadline|fecha límite|⏰
+w on the same page|alineados / de acuerdo|📄
+w action items|pendientes|✅
+w I'll take care of it|yo me encargo|🙋
+p Let's get started.|Empecemos.
+p Can everyone hear me okay?|¿Todos me escuchan bien?
+p Let's circle back to that later.|Retomemos eso después.
+p I'll follow up with you by Friday.|Te doy seguimiento para el viernes.
+p Just to make sure we're on the same page...|Solo para asegurarnos de que estamos alineados...
+d Who can take care of this?|I'll take care of it.|It's very big.|On the second floor.
+d When's the deadline?|Next Friday.|In the kitchen.|I'm twenty-five.
 # emails|Writing emails
-n "I am writing to…" abre un correo formal. "Best regards" lo cierra.
-w attachment|archivo adjunto|📎
-w regards|saludos
-w reply|responder
-w forward|reenviar
-w subject|asunto
-w urgent|urgente
-p I am writing to ask about the project.|Le escribo para preguntar sobre el proyecto.
-p Please find the report attached.|Adjunto encontrará el reporte.
-p I look forward to hearing from you.|Quedo atento a su respuesta.
-d Did you get my email?|Yes, I will reply this afternoon.|It is very cold.|I like Italian food.
+n Empieza con "Hi Sam," (no "Dear" salvo muy formal). Frases útiles: "I'm writing to…", "Let me know", "Thanks in advance". Para cerrar: "Best," o "Best regards,".
+w I'm writing to|te escribo para|✉️
+w attached|adjunto|📎
+w let me know|avísame|💬
+w thanks in advance|gracias de antemano|🙏
+w as soon as possible|lo antes posible|⏱️
+w looking forward to|espero con gusto|😊
+w sorry for the delay|disculpa la demora|🙇
+w best regards|saludos cordiales|🤝
+p Hi Sam, I'm writing to follow up on our meeting.|Hola Sam, te escribo para dar seguimiento a nuestra reunión.
+p I've attached the report for you.|Te adjunté el reporte.
+p Let me know if you have any questions.|Avísame si tienes alguna duda.
+p Sorry for the late reply.|Perdón por responder tarde.
+p Looking forward to hearing from you.|Espero tu respuesta.
+d What did you write in the email?|I asked for the report by Friday.|It's on the table.|I'm a student.
+d How do you usually end an email?|Best regards, and my name.|Good morning!|Excuse me.
 # smalltalk_office|Office small talk
-w coworker|compañero de trabajo
-w coffee break|pausa para el café|☕
-w lunch break|hora de comer
-w busy week|semana ocupada
-w promotion|ascenso
-w deadline pressure|presión por entregas
-p How was your weekend?|¿Cómo estuvo tu fin de semana?
-p Do you want to grab a coffee?|¿Quieres ir por un café?
-p It has been a really busy week.|Ha sido una semana muy ocupada.
-d Do you want to grab a coffee?|Sure, I need a break.|I am a doctor.|It is on the corner.
+n Charla de oficina: "How's your day going?", "I'm swamped" (estoy hasta el cuello de trabajo), "Want to grab a coffee?". "Heads up" = un aviso rápido.
+w swamped|saturado de trabajo|🌊
+w grab a coffee|ir por un café|☕
+w coworker|compañero de trabajo|🧑‍💼
+w day off|día libre|🏖️
+w it's been a long day|ha sido un día largo|😮‍💨
+w heads up|aviso / ojo|☝️
+w catch up|ponerse al día|🗣️
+w wrap up|terminar / cerrar|🎁
+p How's your day going?|¿Cómo va tu día?
+p I'm swamped this week.|Estoy saturado esta semana.
+p Want to grab a coffee?|¿Quieres ir por un café?
+p Let's catch up after lunch.|Pongámonos al día después de comer.
+p It's been a long day. I'm heading out.|Ha sido un día largo. Ya me voy.
+d How's your week going?|Pretty busy. I'm swamped.|It's twenty dollars.|Yes, I'm from Spain.
+d Want to grab a coffee?|Sure, I could use one.|I'm a doctor.|At the bank.
 # presentations|Presentations
-w slide|diapositiva
-w audience|audiencia
-w topic|tema
-w goal|objetivo
-w conclusion|conclusión
-w questions|preguntas
-p Today I will talk about our sales results.|Hoy hablaré sobre nuestros resultados de ventas.
-p Let me move on to the next slide.|Paso a la siguiente diapositiva.
-p Thank you for listening. Any questions?|Gracias por escuchar. ¿Alguna pregunta?
-d Does anyone have questions?|Yes, could you explain the last slide?|I am from Peru.|It is five dollars.
+n Estructura típica: "Today I'm going to talk about…", "Let me walk you through…", "To sum up…" y "Any questions?". Habla despacio: las pausas ayudan.
+w walk you through|explicarte paso a paso|🚶
+w to sum up|para resumir|📌
+w slide|diapositiva|🖼️
+w as you can see|como pueden ver|👀
+w key points|puntos clave|🔑
+w any questions|¿alguna pregunta?|🙋
+w moving on|pasando al siguiente tema|➡️
+w thanks for listening|gracias por escuchar|👏
+p Today I'm going to talk about our results.|Hoy voy a hablar de nuestros resultados.
+p Let me walk you through the plan.|Déjenme explicarles el plan paso a paso.
+p As you can see, sales went up ten percent.|Como pueden ver, las ventas subieron diez por ciento.
+p To sum up, we're on track.|Para resumir, vamos bien.
+p Thanks for listening. Any questions?|Gracias por escuchar. ¿Alguna pregunta?
+d How do you start a presentation?|Today I'm going to talk about our results.|Excuse me, where's the bathroom?|I'm twenty-five.
+d How do you finish one?|To sum up, we're on track. Any questions?|See you tomorrow, my friend.|It's too expensive.
 @unit social_life|9|B1|🎉|Social Life|Invite people, share opinions, and tell stories.|personal
 # invitations|Invitations
-w invite|invitar
-w party|fiesta|🎉
-w come over|venir a casa
-w available|disponible
-w busy|ocupado
-w RSVP|confirmar asistencia
-p Would you like to come to my party?|¿Te gustaría venir a mi fiesta?
-p I would love to, but I am busy that day.|Me encantaría, pero ese día estoy ocupado.
-p What time should I be there?|¿A qué hora debo llegar?
-d Are you free on Saturday?|Yes, I would love to come.|It is a red bag.|I wake up at six.
+n "Are you free on Saturday?" para invitar. Para rechazar con educación: "I'd love to, but I can't make it". "Rain check" = lo dejamos para otro día. "Count me in" = cuenta conmigo.
+w are you free|¿estás libre?|📅
+w I'd love to|me encantaría|😍
+w count me in|cuenta conmigo|🙋
+w I can't make it|no puedo ir|🚫
+w rain check|lo dejamos para otro día|🌧️
+w bring a friend|trae a un amigo|👯
+w what time works|¿a qué hora te late?|🕒
+w sounds good|suena bien|👍
+p Are you free on Saturday?|¿Estás libre el sábado?
+p I'm having a party. Want to come?|Voy a hacer una fiesta. ¿Quieres venir?
+p I'd love to, but I can't make it.|Me encantaría, pero no puedo ir.
+p Can I take a rain check?|¿Lo dejamos para otro día?
+p Count me in!|¡Cuenta conmigo!
+d Do you want to come to my party?|I'd love to! What time?|I'm a student.|It's twenty dollars.
+d Can you come on Friday?|I wish I could, but I'm busy. Rain check?|Yes, it's blue.|At the bank.
 # hobbies|Hobbies & free time
-w hobby|pasatiempo
-w hiking|senderismo|🥾
-w painting|pintura|🎨
-w gym|gimnasio|🏋️
-w movie|película|🎬
-w in my free time|en mi tiempo libre
-p In my free time, I like to read.|En mi tiempo libre me gusta leer.
-p I have been playing guitar for two years.|Llevo dos años tocando guitarra.
-p What do you do for fun?|¿Qué haces para divertirte?
-d What do you do for fun?|I play soccer on weekends.|I live in Mexico.|It is raining.
+n "What do you do for fun?" es la forma natural de preguntar por pasatiempos. "I'm into…" y "I'm obsessed with…" muestran entusiasmo. "Binge-watch" = ver una serie de corrido.
+w for fun|por diversión|🎉
+w free time|tiempo libre|🕒
+w binge-watch|maratonear series|📺
+w I'm obsessed with|estoy obsesionado con|🤩
+w play guitar|tocar guitarra|🎸
+w go hiking|ir de excursión|🥾
+w hang out|pasar el rato|🛋️
+w get into|empezar a gustarme|🌱
+p What do you do for fun?|¿Qué haces por diversión?
+p I'm kind of obsessed with video games.|Estoy medio obsesionado con los videojuegos.
+p I binge-watched the whole series.|Me maratoneé toda la serie.
+p Lately I've gotten into running.|Últimamente me he metido a correr.
+p On weekends we go hiking.|Los fines de semana vamos de excursión.
+d What do you do in your free time?|I play guitar and go hiking.|It's on Monday.|I'm from Spain.
+d Got any hobbies?|Yeah, I'm really into photography.|He's my brother.|No, it's cold.
 # opinions|Giving opinions
-n "I think that…" y "In my opinion…" son tus mejores amigos para opinar.
-w I think|yo pienso
-w in my opinion|en mi opinión
-w I agree|estoy de acuerdo
-w I disagree|no estoy de acuerdo
-w maybe|tal vez
-w to be honest|para ser honesto
-p In my opinion, this movie is great.|En mi opinión, esta película es genial.
-p I agree with you completely.|Estoy completamente de acuerdo contigo.
-p To be honest, I do not like it.|Para ser honesto, no me gusta.
-d What do you think about this idea?|I think it is a good plan.|It is next to the bank.|He is my uncle.
+n "I think…", "In my opinion…", "To be honest…". Para discrepar suave: "I see what you mean, but…". "It depends" es una respuesta muy usada. "Overrated" = sobrevalorado.
+w I think|creo que|💭
+w in my opinion|en mi opinión|🗣️
+w to be honest|para ser honesto|🫱
+w I agree|estoy de acuerdo|✅
+w I'm not sure about that|no estoy tan seguro|🤔
+w I see what you mean|entiendo lo que dices|👂
+w it depends|depende|⚖️
+w overrated|sobrevalorado|📉
+p To be honest, I think it's overrated.|Para ser honesto, creo que está sobrevalorado.
+p I see what you mean, but I disagree.|Entiendo lo que dices, pero no estoy de acuerdo.
+p In my opinion, it's worth the money.|En mi opinión, vale la pena.
+p I'm not sure about that.|No estoy tan seguro de eso.
+p It depends on the situation.|Depende de la situación.
+d What did you think of the movie?|Honestly, it was kind of boring.|At seven.|It's twenty dollars.
+d Do you agree?|Kind of, but it depends.|I live downtown.|Yes, it's raining.
 # plans_future|Making plans
-n "I am going to" = plan decidido. "I will" = decisión en el momento.
-w I am going to|voy a
-w next week|la próxima semana
-w tomorrow|mañana
-w plan|plan
-w decide|decidir
-w probably|probablemente
-p I am going to travel next month.|Voy a viajar el próximo mes.
-p We will probably stay home tonight.|Probablemente nos quedemos en casa esta noche.
+n "I'm going to…" para planes; "I'm gonna…" en casual. "I'm thinking about…" = estoy pensando en. "We might…" = tal vez. "Let's play it by ear" = vemos sobre la marcha.
+w I'm going to|voy a|➡️
+w I'm gonna|voy a (casual)|😎
+w I'm thinking about|estoy pensando en|💭
+w we might|tal vez / podríamos|🤷
+w play it by ear|ver sobre la marcha|👂
+w next week|la próxima semana|📆
+w plans|planes|🗓️
+w maybe later|tal vez más tarde|🕒
 p What are you doing this weekend?|¿Qué vas a hacer este fin de semana?
-d What are your plans for the weekend?|I am going to visit my family.|I was at work yesterday.|It is a blue shirt.
+p I'm gonna visit my grandma.|Voy a visitar a mi abuelita.
+p We might go to the beach.|Tal vez vayamos a la playa.
+p I'm thinking about changing jobs.|Estoy pensando en cambiar de trabajo.
+p Let's play it by ear.|Veamos sobre la marcha.
+d What are you up to this weekend?|Not sure yet. Maybe the beach.|I'm twenty-five.|It's a big house.
+d Do you have any plans for next year?|I'm thinking about moving abroad.|It's too expensive.|At the gate.
 # past_stories|Telling stories
-n Pasado simple: "I went", "I saw", "I ate". Muchos verbos son irregulares.
-w yesterday|ayer
-w last year|el año pasado
-w went|fui / fue
-w saw|vi / vio
-w happened|sucedió
-w suddenly|de repente
-p Last year I went to Canada.|El año pasado fui a Canadá.
-p Suddenly, the lights went out.|De repente, se apagaron las luces.
-p I could not believe what happened.|No podía creer lo que sucedió.
-d What did you do last weekend?|I went to the beach with my friends.|I am going to sleep.|It is my phone.
+n Para contar historias: "So…", "Then…", "Anyway…". "You won't believe what happened!" capta la atención. "Long story short" = en pocas palabras. Pasado: went, saw, got.
+w you won't believe|no vas a creer|😲
+w so|entonces / así que|➡️
+w then|luego|⏭️
+w anyway|en fin|🤷
+w long story short|en pocas palabras|✂️
+w it turned out|resultó que|🔄
+w I ran into|me encontré con|👋
+w the other day|el otro día|📅
+p You won't believe what happened yesterday!|¡No vas a creer lo que pasó ayer!
+p So I got to the airport and my flight was canceled.|Así que llegué al aeropuerto y cancelaron mi vuelo.
+p I ran into my old teacher at the store.|Me encontré con mi antiguo maestro en la tienda.
+p Long story short, we missed the bus.|En pocas palabras, perdimos el camión.
+p It turned out to be a great day.|Resultó ser un gran día.
+d What happened?|Long story short, I missed my flight.|It's in the kitchen.|I'm a student.
+d What did you do last weekend?|I went to my cousin's wedding.|It's cold today.|I like tacos.
 @unit fluent_moves|10|B2|🗣️|Fluent Moves|Phone calls, negotiating, and polite disagreement.|work
 # phone_calls|Phone calls
-n "Hold on" y "Hang on" significan espera un momento.
-w hold on|espera un momento
-w speak up|hablar más fuerte
-w voicemail|buzón de voz
-w call back|devolver la llamada
-w bad connection|mala conexión
-w extension|extensión
-p Could you speak a little louder, please?|¿Podría hablar un poco más fuerte, por favor?
-p I will call you back in ten minutes.|Te devuelvo la llamada en diez minutos.
-p The line is breaking up.|Se está cortando la llamada.
-d Hello, may I speak to Mr. Smith?|One moment, please. I will transfer you.|I am from Peru.|It is on the table.
+n Frases de teléfono: "Speaking" (soy yo), "Hold on a sec" (espera un momento), "Can I take a message?", "I'll call you back". "You're breaking up" = se te corta la señal.
+w hold on|espera un momento|✋
+w who's calling|¿quién llama?|📞
+w speaking|soy yo / habla|🗣️
+w leave a message|dejar un recado|📝
+w call you back|te devuelvo la llamada|↩️
+w you're breaking up|se te corta|📶
+w bad connection|mala señal|📵
+w hang up|colgar|☎️
+p Hi, can I speak to Mr. Lopez, please?|Hola, ¿puedo hablar con el señor López?
+p Hold on a sec, let me check.|Espera un momento, déjame ver.
+p Sorry, you're breaking up. Can you repeat that?|Perdón, se te corta. ¿Puedes repetirlo?
+p Can I take a message?|¿Puedo dejarle un recado?
+p I'll call you back in ten minutes.|Te devuelvo la llamada en diez minutos.
+d Hello, may I speak to Anna?|Speaking. Who's calling?|She's a student.|It's on the table.
+d Can I take a message?|Sure, please tell him I called.|At six.|I'm fine.
 # negotiating|Negotiating
-w offer|oferta
-w deal|trato
-w compromise|llegar a un acuerdo
-w budget|presupuesto
-w terms|condiciones
-w counteroffer|contraoferta
-p That is a little higher than our budget.|Eso es un poco más de nuestro presupuesto.
-p Could we meet in the middle?|¿Podríamos llegar a un punto medio?
-p We have a deal.|Tenemos un trato.
-d Can you lower the price?|I can offer a ten percent discount.|I am at the bank.|It is quarter to six.
+n Para negociar: "What's the best price you can do?", "Could we meet halfway?", "That's out of my budget". "Deal!" cierra el trato. "Split the difference" = partir la diferencia.
+w best price|mejor precio|💰
+w meet halfway|llegar a un punto medio|🤝
+w out of my budget|fuera de mi presupuesto|🚫
+w split the difference|partir la diferencia|✂️
+w deal|trato hecho|🤝
+w counteroffer|contraoferta|🔁
+w take it or leave it|lo tomas o lo dejas|⚖️
+w in exchange for|a cambio de|🔄
+p What's the best price you can do?|¿Cuál es el mejor precio que me puede dar?
+p That's a little out of my budget.|Eso queda un poco fuera de mi presupuesto.
+p Could we meet halfway?|¿Podríamos llegar a un punto medio?
+p If you lower the price, I'll buy two.|Si baja el precio, compro dos.
+p Okay, deal. Let's do it.|Está bien, trato hecho.
+d That's my final price.|Could we meet halfway?|I'm twenty-five.|It's very good.
+d Can you do any better on the price?|Let me talk to my manager.|It's on Monday.|At the bank.
 # disagree_politely|Disagreeing politely
-n Suaviza el desacuerdo: "I see your point, but…" suena mucho mejor que "You are wrong".
-w I see your point|entiendo tu punto
-w however|sin embargo
-w on the other hand|por otro lado
-w I am not sure|no estoy seguro
-w that said|dicho eso
-w fair enough|es justo
-p I see your point, but I have a different view.|Entiendo tu punto, pero tengo otra opinión.
-p On the other hand, it could be expensive.|Por otro lado, podría ser costoso.
-p I am not sure that is the best option.|No estoy seguro de que esa sea la mejor opción.
-d I think we should cancel the project.|I see your point, but let's give it another week.|I like soup.|It is a taxi.
+n Suaviza el desacuerdo: "I see your point, but…", "I'm afraid I disagree", "That's one way to look at it". "Fair enough" = es justo. Evita un "No, you're wrong" directo.
+w I see your point|entiendo tu punto|👀
+w I'm afraid|me temo que|😬
+w with all due respect|con todo respeto|🙇
+w one way to look at it|una forma de verlo|🔭
+w I'm not so sure|no estoy tan seguro|🤔
+w fair enough|es justo|⚖️
+w I'd say|yo diría que|🗣️
+w that said|dicho esto|➡️
+p I see your point, but I'm not so sure.|Entiendo tu punto, pero no estoy tan seguro.
+p I'm afraid I disagree.|Me temo que no estoy de acuerdo.
+p That's one way to look at it.|Esa es una forma de verlo.
+p Fair enough, but I'd say it's too risky.|Es justo, pero yo diría que es muy arriesgado.
+p With all due respect, I think we're missing something.|Con todo respeto, creo que se nos escapa algo.
+d We should cancel the project.|I see your point, but I'm not so sure.|You're right, it's Tuesday.|Yes, I'm from Spain.
+d Don't you think it's too expensive?|Fair enough, but it's worth it.|I live downtown.|At seven.
 # describing_problems|Describing problems
-w issue|problema
-w fix|arreglar
-w not working|no funciona
-w keeps happening|sigue pasando
-w as soon as possible|lo antes posible
-w workaround|solución alternativa
-p The app keeps crashing every time I open it.|La app se cierra cada vez que la abro.
-p Could you look into this as soon as possible?|¿Podría revisarlo lo antes posible?
-p We found a temporary workaround.|Encontramos una solución temporal.
-d What seems to be the issue?|The system keeps freezing.|I am from Brazil.|It is my sister.
+n Para explicar fallas: "It keeps crashing" (se sigue trabando), "It stopped working", "I'm having trouble with…". "I can't figure out why…" = no logro entender por qué.
+w it keeps crashing|se sigue trabando|💥
+w it stopped working|dejó de funcionar|🛑
+w I'm having trouble with|tengo problemas con|😣
+w figure out|averiguar / entender|🧩
+w the thing is|lo que pasa es que|☝️
+w as far as I can tell|hasta donde veo|🔍
+w glitch|falla|🐛
+w fix|arreglar|🔧
+p I'm having trouble logging in.|Tengo problemas para iniciar sesión.
+p The app keeps crashing.|La app se sigue trabando.
+p I can't figure out what's wrong.|No logro entender qué pasa.
+p The thing is, it worked fine yesterday.|Lo que pasa es que ayer funcionaba bien.
+p Could you help me fix it?|¿Me podrías ayudar a arreglarlo?
+d What seems to be the problem?|The app keeps crashing.|I'm a teacher.|At five.
+d Did you try restarting it?|Yeah, but it didn't help.|It's very cold.|I'm twenty.
 # idioms|Everyday idioms
-n Los modismos no se traducen literalmente: "break the ice" = romper el hielo.
+n Los modismos no se traducen literal: "piece of cake" = facilísimo; "break the ice" = romper el hielo; "under the weather" = malito. Úsalos con moderación: uno o dos por conversación bastan.
+w piece of cake|muy fácil|🍰
 w break the ice|romper el hielo|🧊
-w piece of cake|pan comido|🍰
-w under the weather|enfermo, indispuesto
-w hit the books|ponerse a estudiar
-w call it a day|dar por terminado el día
-w once in a blue moon|muy rara vez
-p That exam was a piece of cake.|Ese examen fue pan comido.
-p I am feeling a bit under the weather.|Me siento un poco mal.
-p Let's call it a day.|Terminemos por hoy.
-d How was the test?|It was a piece of cake.|It is on the left.|I live in Cuba.
+w hit the road|ponerse en camino|🛣️
+w under the weather|malito|🤒
+w call it a day|dar por terminado el día|🌇
+w spill the beans|soltar la sopa|🫘
+w once in a blue moon|muy de vez en cuando|🌙
+w cost an arm and a leg|costar un ojo de la cara|💸
+p The test was a piece of cake.|El examen estuvo facilísimo.
+p I'm feeling a bit under the weather.|Me siento un poco malito.
+p It's late. Let's call it a day.|Ya es tarde. Terminemos por hoy.
+p That car costs an arm and a leg.|Ese carro cuesta un ojo de la cara.
+p We only see each other once in a blue moon.|Nos vemos muy de vez en cuando.
+d How was the exam?|Piece of cake!|It's in the kitchen.|I'm twenty-five.
+d Why didn't you come?|I was feeling under the weather.|It's on Monday.|At the mall.
 @unit big_ideas|11|B2|💡|Big Ideas|Discuss technology, the environment, news, and culture.|study
 # technology|Technology
-w device|dispositivo
-w software|programa
-w update|actualización
+n "Tech-savvy" = bueno con la tecnología; "game changer" = algo que lo cambia todo; "screen time" = tiempo de pantalla. "Make sure it's up to date" = asegúrate de que esté actualizado.
+w tech-savvy|bueno con la tecnología|💻
+w game changer|algo que lo cambia todo|🎮
+w up to date|actualizado|🔄
+w privacy|privacidad|🔒
+w screen time|tiempo de pantalla|📱
 w artificial intelligence|inteligencia artificial|🤖
-w privacy|privacidad
-w download|descargar
-p Technology has changed the way we work.|La tecnología ha cambiado la forma en que trabajamos.
-p I always update my apps.|Siempre actualizo mis aplicaciones.
-p Privacy online is very important.|La privacidad en línea es muy importante.
-d How has technology changed your life?|It helps me learn faster.|It is on the corner.|I am a doctor.
+w update|actualización|⬆️
+w addicted to|adicto a|📲
+p I'm not very tech-savvy.|No soy muy bueno con la tecnología.
+p AI is a total game changer.|La IA lo cambia todo.
+p I spend way too much time on my phone.|Paso muchísimo tiempo en mi celular.
+p Privacy online is a big concern.|La privacidad en línea es una gran preocupación.
+p Make sure your apps are up to date.|Asegúrate de que tus apps estén actualizadas.
+d Do you use AI at work?|Yeah, it's a game changer.|It's on the table.|I'm from Spain.
+d How much time do you spend on your phone?|Way too much, honestly.|At seven.|He's a doctor.
 # environment|Environment
+n "Climate change", "carbon footprint" (huella de carbono), "single-use plastic", "recycle". "Cut down on…" = reducir el consumo de…
 w climate change|cambio climático|🌍
+w carbon footprint|huella de carbono|👣
 w recycle|reciclar|♻️
-w pollution|contaminación
-w renewable energy|energía renovable
-w waste|desperdicio
-w sustainable|sustentable
-p We should reduce plastic waste.|Deberíamos reducir los desechos de plástico.
-p Solar energy is renewable.|La energía solar es renovable.
-p Small actions can make a big difference.|Las pequeñas acciones pueden hacer una gran diferencia.
-d What can we do to protect the planet?|We can recycle and use less plastic.|I am from Spain.|It is a red car.
+w single-use plastic|plástico de un solo uso|🥤
+w sustainable|sostenible|🌱
+w renewable energy|energía renovable|☀️
+w cut down on|reducir el consumo de|✂️
+w pollution|contaminación|🏭
+p We need to cut down on single-use plastic.|Necesitamos reducir el plástico de un solo uso.
+p I try to recycle as much as I can.|Trato de reciclar todo lo que puedo.
+p Climate change affects everyone.|El cambio climático afecta a todos.
+p Solar power is getting cheaper.|La energía solar es cada vez más barata.
+p Small changes can make a big difference.|Los cambios pequeños pueden hacer una gran diferencia.
+d What can we do to help the planet?|Recycle and use less plastic.|It's very hot.|At the airport.
+d Do you recycle at home?|Yeah, we separate everything.|I'm a student.|It's on Friday.
 # news_media|News & media
-w headline|titular
-w journalist|periodista
-w source|fuente
-w fake news|noticias falsas
-w broadcast|transmisión
-w trend|tendencia
-p Did you see the news this morning?|¿Viste las noticias esta mañana?
-p You should always check your sources.|Siempre debes verificar tus fuentes.
-p That story is trending on social media.|Esa historia es tendencia en redes sociales.
-d Did you read the news today?|Yes, the headline was surprising.|I like tea.|It is half past nine.
+n "Breaking news", "headline", "fake news", "go viral". "According to…" = según… "I read somewhere that…" = leí por ahí que… Revisa siempre la fuente ("source").
+w headline|titular|📰
+w breaking news|noticia de última hora|🚨
+w fake news|noticias falsas|🚫
+w go viral|hacerse viral|📈
+w source|fuente|🔗
+w according to|según|📖
+w I read somewhere|leí por ahí|👀
+w follow the news|estar al tanto de las noticias|📺
+p Did you see the news this morning?|¿Viste las noticias de esta mañana?
+p That video went viral overnight.|Ese video se hizo viral de la noche a la mañana.
+p According to the report, prices will go up.|Según el reporte, los precios subirán.
+p I don't trust everything I read online.|No confío en todo lo que leo en línea.
+p Always check the source first.|Siempre revisa la fuente primero.
+d Did you hear about the new law?|Yeah, it was all over the news.|It's on the table.|I'm twenty-five.
+d Do you believe that story?|Not really. It sounds like fake news.|At six.|He's my cousin.
 # culture|Culture & traditions
-w tradition|tradición
-w festival|festival
-w customs|costumbres
-w celebrate|celebrar|🎊
-w heritage|patrimonio
-w local|local
-p In my country, we celebrate the Day of the Dead.|En mi país celebramos el Día de Muertos.
-p Every culture has its own traditions.|Cada cultura tiene sus propias tradiciones.
-p I would love to learn more about your customs.|Me encantaría aprender más sobre tus costumbres.
-d What is a tradition in your country?|We celebrate with music and food.|It is a quarter to six.|I am at home.
+n Para hablar de tu cultura: "In Mexico, we usually…", "It's a big deal in my family", "I grew up…". "Get together" = reunirse.
+w tradition|tradición|🎎
+w celebrate|celebrar|🎉
+w customs|costumbres|🪔
+w it's a big deal|es algo muy importante|🌟
+w I grew up|crecí|🌱
+w in my culture|en mi cultura|🌎
+w get together|reunirse|👨‍👩‍👧
+w handed down|transmitido|📜
+p In Mexico, we celebrate the Day of the Dead.|En México celebramos el Día de Muertos.
+p It's a big deal in my family.|Es algo muy importante en mi familia.
+p I grew up eating tamales at Christmas.|Crecí comiendo tamales en Navidad.
+p These traditions are handed down from generation to generation.|Estas tradiciones se transmiten de generación en generación.
+p Everyone gets together on Sundays.|Todos se reúnen los domingos.
+d What's a typical tradition in your country?|We celebrate the Day of the Dead.|It's very expensive.|I'm twenty-five.
+d Do you celebrate it every year?|Yeah, it's a big deal for us.|It's in the kitchen.|At the bank.
 # future_goals|Goals & the future
-w goal|meta
-w achieve|lograr
-w improve|mejorar
-w career|carrera
-w dream|sueño
-w in the long run|a largo plazo
-p My goal is to be fluent in English next year.|Mi meta es hablar inglés con fluidez el próximo año.
-p I hope to achieve my dreams.|Espero lograr mis sueños.
-p In the long run, practice makes perfect.|A largo plazo, la práctica hace al maestro.
-d Where do you see yourself in five years?|I see myself leading a team.|It is raining.|He is my brother.
+n "My goal is to…", "I'm planning to…", "down the road" = a futuro, "if all goes well" = si todo sale bien, "in five years I see myself…" = en cinco años me veo…
+w my goal is|mi meta es|🎯
+w I'm planning to|planeo|📋
+w down the road|a futuro|🛣️
+w if all goes well|si todo sale bien|🍀
+w in the long run|a largo plazo|📈
+w I see myself|me veo|🔮
+w achieve|lograr|🏆
+w step by step|paso a paso|🪜
+p My goal is to speak English fluently.|Mi meta es hablar inglés con fluidez.
+p In five years I see myself running my own business.|En cinco años me veo manejando mi propio negocio.
+p I'm planning to travel abroad next year.|Planeo viajar al extranjero el próximo año.
+p If all goes well, I'll get promoted.|Si todo sale bien, me van a ascender.
+p Step by step, I'll get there.|Paso a paso, voy a lograrlo.
+d Where do you see yourself in five years?|Running my own business, hopefully.|It's raining.|At the airport.
+d What's your biggest goal right now?|To speak English fluently.|I'm twenty-five.|It's on the table.
 '''
 
 LEVEL_TO_RANK = {"A1": 0, "A2": 1, "B1": 2, "B2": 3}
