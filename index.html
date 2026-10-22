@@ -622,6 +622,32 @@ textarea{min-height:150px;resize:vertical;line-height:1.7}
 .lp2-node.boss .lp2-hex{width:68px;height:76px}
 @keyframes lp2pulse{0%,100%{filter:drop-shadow(0 0 0 rgba(var(--c1-rgb),0))}50%{filter:drop-shadow(0 0 10px rgba(var(--c1-rgb),.7))}}
 .lp2-nl{display:flex;flex-direction:column;gap:2px;min-width:0}.lp2-nl b{font-size:13px}
+
+/* learning path v3: dos columnas, mapa compacto */
+#sec-learning-path .lp3{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:22px;align-items:start;max-width:1200px;margin-top:6px}
+#sec-learning-path .lp3-side{order:2;position:sticky;top:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+#sec-learning-path .lp3-main{order:1;min-width:0}
+.lp3-side .lp2-stats{grid-template-columns:1fr 1fr;margin:0}.lp3-side .lp2-stat.goal{grid-column:1/-1}
+.lp3-side .lp2-goal,.lp3-side .lp2-quick,.lp3-side .lp2-plan,.lp3-side .lp2-hero{margin:0}
+.lp3-side .lp2-start{margin:0;font-size:12.5px}
+.lp3-next{position:relative;overflow:hidden;flex-wrap:wrap;padding:18px 108px 18px 16px;border-radius:14px;border:1px solid rgba(var(--c1-rgb),.55)}
+.lp3-next .lp2-hero-txt{flex:1 1 140px}.lp3-next .btn{margin-top:2px}
+.lp3-pq{position:absolute;right:8px;bottom:0;width:92px;pointer-events:none;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))}.lp3-pq img{display:block;width:100%;height:auto}
+.lp3-main .lp2-sec{margin-bottom:26px}
+.lp3-bar{height:5px!important;margin:-4px 0 12px}
+.lp3-units{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}
+.lp3-units .lp2-unit{margin:0;border-radius:14px;padding:14px 14px 8px;background:linear-gradient(165deg,rgba(18,26,48,.7),rgba(8,12,24,.65))}
+.lp3-units .lp2-nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px 8px;padding:12px 0 8px;align-items:start;justify-items:center}
+.lp3-units .lp2-node{flex-direction:column;gap:6px;min-width:0;transform:none;padding:4px 2px;text-align:center}
+.lp3-units .lp2-node:nth-child(even){margin-top:20px}
+.lp3-units .lp2-nl{align-items:center}.lp3-units .lp2-nl b{font-size:12px;line-height:1.25}
+.lp3-units .lp2-hex{width:56px;height:64px}
+.lp2-placed{border-radius:12px}
+@media(max-width:960px){
+  #sec-learning-path .lp3{grid-template-columns:minmax(0,1fr)}
+  #sec-learning-path .lp3-side{order:1;position:static}#sec-learning-path .lp3-main{order:2}
+}
+@media(max-width:520px){.lp3-units{grid-template-columns:minmax(0,1fr)}.lp3-next{padding-right:96px}}
 .lp2-nl .st{font-style:normal;font-size:13px;letter-spacing:2px;color:var(--dim)}.lp2-nl .st.s3{color:#ffd24a}.lp2-nl .st.s2{color:#ffd24a}.lp2-nl .st.s1{color:#ffb04a}
 
 /* ---- reproductor ---- */
@@ -3236,7 +3262,7 @@ function planHTML(p){
 function renderHome(d,plan){
   const t=d.today||{lessons:0,target:2},tot=d.totals||{};
   const pct=t.target?t.lessons/t.target:0;
-  let h='<div class="lp2-stats">'
+  let h='<div class="lp3-side"><div class="lp2-stats">'
    +'<div class="lp2-stat"><b>⭐ '+d.xp+'</b><small>XP</small></div>'
    +'<div class="lp2-stat"><b>🏆 '+(tot.stars||0)+'<em>/'+(tot.max_stars||0)+'</em></b><small>Stars</small></div>'
    +'<div class="lp2-stat goal">'+ring(pct)+'<span><b>'+t.lessons+'/'+t.target+'</b><small>Today</small></span></div></div>';
@@ -3244,21 +3270,22 @@ function renderHome(d,plan){
   const planH=planHTML(plan);
   if(planH)h+=planH;
   else if(d.next){const n=d.next;
-    h+='<div class="lp2-hero"><div class="lp2-hero-ico">'+(n.challenge?'🏆':esc(n.icon))+'</div><div class="lp2-hero-txt"><small>Up next · '+esc(n.reason)+'</small><b data-i18n-skip>'+esc(n.unit_title)+' — '+esc(n.lesson_title)+'</b></div><button type="button" class="btn primary" onclick="lpStart(\''+n.unit_code+'\',\''+n.lesson_id+'\')">Start</button></div>';
+    h+='<div class="lp2-hero lp3-next"><span class="lp3-pq"><img src="palanqueta-mascota.webp" alt="" draggable="false"></span><div class="lp2-hero-ico">'+(n.challenge?'🏆':esc(n.icon))+'</div><div class="lp2-hero-txt"><small>Up next · '+esc(n.reason)+'</small><b data-i18n-skip>'+esc(n.unit_title)+' — '+esc(n.lesson_title)+'</b></div><button type="button" class="btn primary" onclick="lpStart(\''+n.unit_code+'\',\''+n.lesson_id+'\')">▶ Start</button></div>';
   }
   h+='<div class="lp2-quick">'
    +'<button type="button" class="lp2-q" onclick="lpReview()"'+(d.review&&d.review.available?'':' disabled')+'><span>🔁</span><b>Review</b><small>'+(d.review&&d.review.mistakes?d.review.mistakes+' tricky items':'Refresh what you learned')+'</small></button>'
    +'<button type="button" class="lp2-q" onclick="lpOpenSounds()"><span>🎙️</span><b>Sound Lab</b><small data-i18n-skip>'+((d.sounds&&d.sounds.focus)||[]).map(s=>esc(s.ipa)).join(' · ')+'</small></button></div>';
   if(d.profile&&d.profile.level_label)h+='<div class="lp2-start">🧭 Your path starts at <b data-i18n-skip>'+esc(d.profile.level_label)+'</b>. Earlier sections are marked as already known, and your level moves up or down automatically as you practice.</div>';
+  h+='</div><div class="lp3-main">';
   (d.sections||[]).forEach((s,si)=>{
     const pc=s.total?Math.round(s.done/s.total*100):0;
     if(s.placed&&!LP.openPlaced[s.code]){h+='<div class="lp2-placed"><div><small>Section '+(si+1)+' · '+esc(s.level)+'</small><b>'+esc(s.title)+'</b><small>You tested above this level</small></div><span><span class="tag">✓ Already known</span> <button type="button" class="btn" onclick="lpTogglePlaced(\''+s.code+'\')">Review anyway</button></span></div>';return}
-    h+='<div class="lp2-sec'+(s.open?'':' closed')+'"><div class="lp2-sec-h"><div><small>Section '+(si+1)+' · '+esc(s.level)+'</small><b>'+esc(s.title)+'</b></div><span class="lp2-pct">'+pc+'%</span></div>';
+    h+='<div class="lp2-sec'+(s.open?'':' closed')+'"><div class="lp2-sec-h"><div><small>Section '+(si+1)+' · '+esc(s.level)+'</small><b>'+esc(s.title)+'</b></div><span class="lp2-pct">'+pc+'%</span></div><div class="bar lp3-bar"><div class="fill" style="width:'+pc+'%"></div></div>';
     if(!s.open)h+='<p class="lp2-lock-note">🔒 Unlocks when you finish 60% of the previous section.</p>';
-    s.units.forEach(u=>{h+=unitHTML(u)});
+    h+='<div class="lp3-units">';s.units.forEach(u=>{h+=unitHTML(u)});h+='</div>';
     h+='</div>';
   });
-  $('lp-home').innerHTML=h;
+  $('lp-home').innerHTML='<div class="lp3">'+h+'</div></div>';
 }
 function unitHTML(u){
   const pc=u.total_topics?Math.round(u.completed_topics/u.total_topics*100):0;
