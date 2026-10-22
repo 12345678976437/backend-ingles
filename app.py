@@ -194,6 +194,8 @@ RATE_RULES = {
     "/api/vocabulario/diario": (20, 3600),
     "/api/traducir": (150, 3600),
     "/api/rutas/crear": (8, 3600),
+    "/api/reto21/crear": (4, 3600),
+    "/api/reto21/dia": (30, 3600),
     "/api/escenario/nuevo": (10, 3600),
     "/api/escenario/turno": (90, 3600),
     "/api/escenario/feedback": (12, 3600),
@@ -254,7 +256,7 @@ CREDIT_COST = {
     "/nuevo-texto-lectura": 1, "/nuevo-dictado": 1, "/api/writing/challenge": 1,
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
-    "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/escenario/nuevo": 1,
+    "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
     "/api/escenario/turno": 1, "/api/escenario/feedback": 3,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
@@ -3525,13 +3527,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/rutas/crear": "ruta_nueva",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -5889,7 +5891,45 @@ def _route_unit(route):
             "icon": route.get("emoji") or "🎯", "lessons": lessons}
 
 
+def _is_reto(route):
+    return (route.get("meta") or {}).get("tipo") == "reto21"
+
+
+def _reto_today(meta):
+    """Número de día del reto (1..21) según el calendario local de la persona."""
+    try:
+        tz = ZoneInfo(meta.get("tz") or "America/Mexico_City") if ZoneInfo else LOCAL_TZ
+    except Exception:
+        tz = LOCAL_TZ
+    try:
+        start = datetime.strptime(meta.get("start") or "", "%Y-%m-%d").date()
+    except ValueError:
+        return 1
+    return max(1, (datetime.now(tz).date() - start).days + 1)
+
+
+def _reto_states(route):
+    meta = route.get("meta") or {}
+    plan = meta.get("plan") or []
+    prog = route.get("progreso") or {}
+    today = _reto_today(meta)
+    out, prev_ok = [], True
+    for i, p in enumerate(plan):
+        did = f"d{i + 1}"
+        row = prog.get(did) or {}
+        done = bool(row.get("passed"))
+        wait = (not done) and prev_ok and (i + 1) > today
+        state = "done" if done else ("available" if (prev_ok and not wait) else "locked")
+        out.append({"id": did, "title": p.get("title") or f"Day {i + 1}", "n": i + 1, "challenge": (i + 1) % 7 == 0, "state": state,
+                    "score": row.get("score"), "stars": row.get("stars", 0), "focus": p.get("focus") or "", "wait": wait,
+                    "today": (i + 1) == today, "ready": any(l.get("id") == did for l in (route.get("lecciones") or []))})
+        prev_ok = prev_ok and done
+    return out
+
+
 def _route_states(route):
+    if _is_reto(route):
+        return _reto_states(route)
     lessons = route.get("lecciones") or []
     prog = route.get("progreso") or {}
     out, prev_ok = [], True
@@ -5911,7 +5951,8 @@ def _route_summary(route):
     return {"id": route["id"], "titulo": route.get("titulo"), "emoji": route.get("emoji") or "🎯", "nivel": route.get("nivel"),
             "pedido": route.get("pedido"), "resumen": route.get("resumen") or "", "lecciones": len(st), "completadas": sum(1 for s in st if s["state"] == "done"),
             "estrellas": sum(int(s.get("stars") or 0) for s in st), "roleplay": bool((route.get("roleplay") or {}).get("setup")),
-            "creada": route.get("created_at")}
+            "creada": route.get("created_at"), "tipo": (route.get("meta") or {}).get("tipo") or "ruta",
+            "dia_hoy": (min(21, _reto_today(route.get("meta") or {})) if _is_reto(route) else None)}
 
 
 _ES_CHARS = re.compile(r"[áéíóúñ¿¡]", re.I)
@@ -5925,7 +5966,7 @@ def _route_text_ok(en, es):
     return en.lower() != es.lower()
 
 
-def _clean_route(raw, n):
+def _clean_route(raw, n, minimum=2):
     """Valida lo que devolvió la IA y lo deja en el mismo formato que el currículo normal."""
     if not isinstance(raw, dict):
         return None
@@ -5952,7 +5993,7 @@ def _clean_route(raw, n):
         if len(words) >= 5 and len(phrases) >= 3 and len(dialogs) >= 1:
             lessons.append({"id": f"l{len(lessons) + 1}", "title": _short(l.get("title"), 40) or f"Lesson {len(lessons) + 1}",
                             "note": _short(l.get("note_es") or l.get("note"), 220), "words": words, "phrases": phrases, "dialogs": dialogs})
-    if len(lessons) < 2:
+    if len(lessons) < minimum:
         return None
     lvl = str(raw.get("level") or "A1").upper()
     rp = raw.get("roleplay") if isinstance(raw.get("roleplay"), dict) else {}
@@ -5977,7 +6018,10 @@ def routes_list():
     except Exception as exc:
         print(f"[ROUTES LIST] {exc}")
         return json_error("Falta crear la tabla de rutas: ejecuta nuevas_funciones.sql en Supabase.", 500)
-    return jsonify({"ok": True, "rutas": [_route_summary(r) for r in rows], "maximo": feat["rutas"], "puede_crear": len(rows) < feat["rutas"],
+    reto = next((r for r in rows if _is_reto(r)), None)
+    rows = [r for r in rows if not _is_reto(r)]
+    return jsonify({"ok": True, "reto": _route_summary(reto) if reto else None,
+                    "rutas": [_route_summary(r) for r in rows], "maximo": feat["rutas"], "puede_crear": len(rows) < feat["rutas"],
                     "max_lecciones": feat["lecciones_ruta"], "plan": plan, "plan_nombre": PLANS[plan]["nombre"], "ejemplos": ROUTE_EXAMPLES})
 
 
@@ -5998,7 +6042,12 @@ def route_create():
     except Exception as exc:
         print(f"[ROUTE CREATE CHECK] {exc}")
         return json_error("Falta crear la tabla de rutas: ejecuta nuevas_funciones.sql en Supabase.", 500)
-    if len(existing) >= feat["rutas"]:
+    existing = [r for r in existing if r]
+    try:
+        n_reto = len((client.table("rutas_personalizadas").select("id").eq("user_id", user.id).eq("meta->>tipo", "reto21").limit(5).execute()).data or [])
+    except Exception:
+        n_reto = 0
+    if len(existing) - n_reto >= feat["rutas"]:
         return _gate(user, f"Tu plan {PLANS[plan]['nombre']} permite {feat['rutas']} ruta(s) guardada(s). Elimina una o sube de plan para crear más.")
     if not ai_client:
         return json_error("La creación de rutas no está disponible ahora mismo.", 503)
@@ -6079,7 +6128,10 @@ def route_detail(route_id):
     route = _route_get(user.id, route_id)
     if not route:
         return json_error("Ruta no encontrada.", 404)
+    meta = route.get("meta") or {}
     return jsonify({"ok": True, "ruta": _route_summary(route), "lecciones": _route_states(route), "roleplay": route.get("roleplay") or {},
+                    "reto": ({"pedido": route.get("pedido"), "minutos": meta.get("minutes"), "nivel": meta.get("level"), "inicio": meta.get("start"),
+                              "ajustes": (meta.get("log") or [])[-4:], "racha": _reto_streak(route)} if _is_reto(route) else None),
                     "palabras": [{"en": w["en"], "es": w["es"]} for l in route["lecciones"] for w in l["words"]][:40]})
 
 
@@ -6096,8 +6148,16 @@ def route_lesson(route_id, lesson_id):
         return json_error("Lección no encontrada.", 404)
     if st["state"] == "locked":
         return json_error("Completa la lección anterior primero.", 403)
+    if st.get("wait"):
+        return json_error("Este día se abre mañana. Un día a la vez: así se forma el hábito.", 403)
     unit = _route_unit(route)
-    rank = PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), LEVEL_TO_RANK.get(unit["level"], 0))
+    if _is_reto(route):
+        unit["level"] = (route.get("meta") or {}).get("level") or unit["level"]
+        if not any(l.get("id") == lesson_id for l in unit["lessons"]):
+            return json_error("Preparando tu día…", 409)
+        rank = LEVEL_TO_RANK.get(unit["level"], 0)
+    else:
+        rank = PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), LEVEL_TO_RANK.get(unit["level"], 0))
     data = build_lesson_payload(unit, lesson_id, rank)
     data.update({"unit_code": unit["code"], "unit_title": unit["title"], "icon": unit["icon"], "lesson_id": lesson_id, "mode": "route", "route_id": route_id})
     if not data["exercises"]:
@@ -6133,12 +6193,14 @@ def route_complete(route_id):
     prev = prog.get(lesson_id) or {}
     first_time = passed and not prev.get("passed")
     prog[lesson_id] = {"passed": bool(prev.get("passed") or passed), "score": max(score, float(prev.get("score") or 0)),
-                       "stars": max(stars, int(prev.get("stars") or 0)), "tries": int(prev.get("tries") or 0) + 1}
+                       "stars": max(stars, int(prev.get("stars") or 0)), "tries": int(prev.get("tries") or 0) + 1,
+                       "mistakes": [m["en"] for m in mistakes][:8] or (prev.get("mistakes") if not passed else []) or [], "last": score,
+                       "day": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
     xp = 0
     if seconds >= 15 and passed:
         xp = (15 + 5 * stars) if first_time else 8
     route["progreso"] = prog
-    route_done = first_time and all(s["state"] == "done" or s["id"] == lesson_id for s in _route_states(route))
+    route_done = first_time and all(s["state"] == "done" or s["id"] == lesson_id for s in _route_states(route)) and (not _is_reto(route) or len(_reto_states(route)) >= 21)
     bonus = 40 if route_done else 0
     try:
         (supabase_admin or supabase).table("rutas_personalizadas").update(
@@ -6157,6 +6219,213 @@ def route_complete(route_id):
                     "xp": xp + bonus, "unit_completed": route_done, "unit_bonus": bonus, "mistakes": len(mistakes), "plan_bonus": 0,
                     "next_route": ({"route_id": route_id, "lesson_id": nxt["id"], "lesson_title": nxt["title"]} if (nxt and passed) else None),
                     "route_done": route_done})
+
+
+# ---------------------------------------------------------------------------
+#  RETO DE 21 DÍAS: estructura fija (3 semanas, un día por jornada) y contenido adaptativo.
+#  El esquema se crea una vez según tu meta; cada día se genera al abrirlo, con base en
+#  tu nivel, tus calificaciones recientes y las palabras que fallaste.
+# ---------------------------------------------------------------------------
+_RETO_WEEKS = ["Survive: the words and phrases you need first", "Interact: real back-and-forth conversations", "Perform: handle the real situation with confidence"]
+_LEVELS = ["A1", "A2", "B1", "B2"]
+
+
+def _reto_streak(route):
+    prog = route.get("progreso") or {}
+    days = sorted({int(k[1:]) for k, v in prog.items() if k.startswith("d") and k[1:].isdigit() and (v or {}).get("passed")})
+    best = cur = 0
+    prev = None
+    for d in days:
+        cur = cur + 1 if prev is not None and d == prev + 1 else 1
+        best = max(best, cur)
+        prev = d
+    return best
+
+
+def _reto_adapt(route):
+    """Mira cómo te ha ido y devuelve (instrucciones para la IA, palabras a repasar, nivel nuevo, nota)."""
+    meta = route.get("meta") or {}
+    prog = route.get("progreso") or {}
+    level = meta.get("level") or "A2"
+    done = sorted(((int(k[1:]), v) for k, v in prog.items() if k.startswith("d") and k[1:].isdigit() and (v or {}).get("passed")), key=lambda x: x[0])
+    scores = [float(v.get("score") or 0) for _, v in done]
+    recent = scores[-3:]
+    avg = sum(recent) / len(recent) if recent else 0
+    note = ""
+    if len(scores) >= 4:
+        gavg = sum(scores) / len(scores)
+        i = _LEVELS.index(level) if level in _LEVELS else 1
+        if gavg >= 90 and i < 3:
+            level, note = _LEVELS[i + 1], "Subí tu nivel: vas muy bien."
+        elif gavg < 65 and i > 0:
+            level, note = _LEVELS[i - 1], "Bajé un poco la dificultad para que avances con firmeza."
+    review = []
+    for _, v in done[-4:]:
+        for w in (v.get("mistakes") or []):
+            if w and w.lower() not in [x.lower() for x in review]:
+                review.append(w)
+    # lo que se falló en intentos no aprobados del último día pendiente también cuenta
+    for k, v in prog.items():
+        if k.startswith("d") and not (v or {}).get("passed"):
+            for w in (v.get("mistakes") or []):
+                if w and w.lower() not in [x.lower() for x in review]:
+                    review.append(w)
+    if not recent:
+        tone = "This is the first lesson: gentle, confidence-building."
+    elif avg < 70:
+        tone = "The learner is struggling (recent average %d%%): shorter, simpler sentences, more repetition of earlier words, an encouraging tip." % avg
+    elif avg >= 88:
+        tone = "The learner is doing great (recent average %d%%): slightly longer sentences, one natural idiom or phrasal verb, and a small stretch." % avg
+    else:
+        tone = "The learner is progressing normally (recent average %d%%): keep the difficulty steady." % avg
+    return tone, review[:8], level, note
+
+
+@app.post("/api/reto21/crear")
+def reto_create():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    pedido = _short(body.get("pedido"), 400)
+    if len(pedido) < 12:
+        return json_error("Cuéntame un poco más: ¿qué quieres lograr en inglés en 3 semanas y en qué situación?")
+    client = supabase_admin or supabase
+    try:
+        old = (client.table("rutas_personalizadas").select("id").eq("user_id", user.id).eq("meta->>tipo", "reto21").limit(1).execute()).data or []
+    except Exception as exc:
+        print(f"[RETO CHECK] {exc}")
+        return json_error("No se pudo revisar tu reto.", 500)
+    if old:
+        return _gate(user, "Ya tienes un reto de 21 días en marcha. Termínalo o elimínalo para empezar otro.")
+    if not ai_client:
+        return json_error("El reto no está disponible ahora mismo.", 503)
+    prof = _profile_for_path(user.id)
+    lvl = {"beginner": "A1", "elementary": "A2", "intermediate": "B1", "advanced": "B2"}.get(prof.get("cefr_level"), "")
+    asked = body.get("nivel") if body.get("nivel") in _LEVELS else ""
+    level = asked or lvl or "A2"
+    minutes = int(body.get("minutos")) if str(body.get("minutos") or "").isdigit() and int(body.get("minutos")) in (5, 10, 15, 20) else int(prof.get("daily_goal_minutes") or 10)
+    system = (
+        "You design a fixed 21-day English challenge for a Spanish-speaking adult, built around THEIR real goal and situation. " + _SAFE_SCENE + "\n"
+        f"Learner level: {level}. Time per day: {minutes} minutes. Weeks: 1) {_RETO_WEEKS[0]}; 2) {_RETO_WEEKS[1]}; 3) {_RETO_WEEKS[2]}.\n"
+        "Return JSON only: {title (<=40 chars), emoji, summary_es (<=140 chars, what they will be able to do on day 21), "
+        "days: [exactly 21 objects {title (English, <=34 chars), focus_es (Spanish, <=90 chars: what they will be able to say that day)}], "
+        "roleplay: {setup (English, 1-2 sentences), ai_role, user_role, goal (<=160 chars), opening (first line the AI says)}}.\n"
+        "Rules: days 7, 14 and 21 are review + real-life milestone days (title starts with 'Review' or 'Final'); each day builds on the previous one; "
+        "use real spoken English a native would say, never textbook phrases; no placeholders."
+    )
+    raw = None
+    for attempt in range(2):
+        try:
+            raw = ai_json(system, pedido, temperature=0.6)
+            days = [d for d in (raw.get("days") or []) if isinstance(d, dict) and d.get("title")]
+            if len(days) >= 21:
+                break
+        except Exception as exc:
+            print(f"[RETO AI try {attempt}] {str(exc)[:160]}")
+        raw = None
+    if not raw:
+        return json_error("No pude armar tu reto esta vez. Prueba describiéndolo con otras palabras.", 500)
+    plan = [{"title": _short(d.get("title"), 40), "focus": _short(d.get("focus_es"), 100)} for d in raw["days"][:21]]
+    rp = raw.get("roleplay") if isinstance(raw.get("roleplay"), dict) else {}
+    roleplay = {k: _short(rp.get(k), 300) for k in ("setup", "ai_role", "user_role", "goal", "opening")} if rp.get("setup") and rp.get("opening") else {}
+    tzname = str(body.get("tz") or "")[:60]
+    try:
+        tz = ZoneInfo(tzname) if (ZoneInfo and tzname) else LOCAL_TZ
+    except Exception:
+        tz, tzname = LOCAL_TZ, ""
+    meta = {"tipo": "reto21", "plan": plan, "level": level if level in _LEVELS else "A2", "minutes": minutes, "tz": tzname or "America/Mexico_City",
+            "start": datetime.now(tz).strftime("%Y-%m-%d"), "log": []}
+    try:
+        res = client.table("rutas_personalizadas").insert({
+            "user_id": user.id, "pedido": pedido, "titulo": _short(raw.get("title"), 60) or "Reto de 21 días", "emoji": _short(raw.get("emoji"), 4) or "🔥",
+            "nivel": meta["level"], "resumen": _short(raw.get("summary_es"), 200), "lecciones": [], "roleplay": roleplay, "progreso": {}, "meta": meta,
+        }).execute()
+        row = (res.data or [None])[0]
+    except Exception as exc:
+        print(f"[RETO SAVE] {exc}")
+        return json_error("No se pudo guardar tu reto.", 500)
+    if not row:
+        return json_error("No se pudo guardar tu reto.", 500)
+    return jsonify({"ok": True, "ruta": _route_summary(row)})
+
+
+@app.post("/api/reto21/dia")
+def reto_day():
+    """Genera (si falta) la lección de un día, adaptada a cómo te ha ido."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    route = _route_get(user.id, str(body.get("route_id") or ""))
+    if not route or not _is_reto(route):
+        return json_error("Reto no encontrado.", 404)
+    day_id = _short(body.get("lesson_id"), 6)
+    st = next((x for x in _reto_states(route) if x["id"] == day_id), None)
+    if not st:
+        return json_error("Día no encontrado.", 404)
+    if st["state"] == "locked":
+        return json_error("Este día se abre mañana. Un día a la vez: así se forma el hábito." if st.get("wait") else "Completa el día anterior primero.", 403)
+    if st.get("ready"):
+        try:  # ya existe: no cobres créditos
+            q = _use.get(user.id)
+            if q:
+                q.pop()
+            if _global_use:
+                _global_use.pop()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "ready": True})
+    if not ai_client:
+        return json_error("No se pudo preparar el día ahora mismo.", 503)
+    meta = dict(route.get("meta") or {})
+    tone, review, level, note = _reto_adapt(route)
+    if level != meta.get("level"):
+        meta["level"] = level
+        meta.setdefault("log", []).append({"day": st["n"], "note": note})
+    elif review and st["n"] > 1:
+        meta.setdefault("log", []).append({"day": st["n"], "note": "Hoy repasamos: " + ", ".join(review[:4]) + "."})
+    meta["log"] = (meta.get("log") or [])[-12:]
+    plan = meta.get("plan") or []
+    p = plan[st["n"] - 1] if st["n"] - 1 < len(plan) else {}
+    minutes = int(meta.get("minutes") or 10)
+    nw, nph, nd = (6, 5, 2) if minutes <= 5 else ((8, 6, 3) if minutes <= 10 else (10, 8, 4))
+    prev_words = [w["en"] for l in (route.get("lecciones") or []) for w in l.get("words", [])][-60:]
+    milestone = st["n"] % 7 == 0
+    system = (
+        "You write ONE lesson of a personalized 21-day English challenge for a Spanish-speaking adult, about THEIR real situation. " + _SAFE_SCENE + "\n"
+        f"Day {st['n']} of 21. Lesson title: {p.get('title')}. Focus: {p.get('focus')}. Target CEFR level: {level}.\n"
+        + ("This is a REVIEW + real-life milestone day: recombine earlier material into complete, natural interactions.\n" if milestone else "")
+        + tone + "\n"
+        + (f"Weak words to recycle naturally inside phrases and dialogs (do NOT list them as new words): {', '.join(review)}.\n" if review else "")
+        + (f"Do not reuse these words as new vocabulary: {', '.join(prev_words)}.\n" if prev_words else "")
+        + f"Return JSON only: {{title (English, <=34 chars), note_es (practical tip in Spanish, <=180 chars), words: [{nw} objects {{en (1-3 words), es (natural Mexican Spanish), emoji}}], "
+        f"phrases: [{nph} objects {{en (<=12 words, something the learner would really say), es}}], dialogs: [{nd} objects {{q (line the OTHER person says), a (best natural reply), wrong: [2 plausible but worse replies]}}]}}.\n"
+        + REAL_ENGLISH
+    )
+    lesson = None
+    for attempt in range(2):
+        try:
+            raw = ai_json(system, _short(route.get("pedido"), 300), temperature=0.6)
+            cl = _clean_route({"lessons": [raw]}, 1, 1) if isinstance(raw, dict) else None
+            if cl:
+                lesson = cl["lecciones"][0]
+                break
+        except Exception as exc:
+            print(f"[RETO DAY try {attempt}] {str(exc)[:160]}")
+    if not lesson:
+        return json_error("No pude preparar este día. Inténtalo otra vez en un momento.", 500)
+    lesson["id"] = day_id
+    lesson["title"] = lesson.get("title") or p.get("title") or f"Day {st['n']}"
+    lessons = [l for l in (route.get("lecciones") or []) if l.get("id") != day_id] + [lesson]
+    try:
+        (supabase_admin or supabase).table("rutas_personalizadas").update(
+            {"lecciones": lessons, "meta": meta, "nivel": meta.get("level") or route.get("nivel"),
+             "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", route["id"]).eq("user_id", user.id).execute()
+    except Exception as exc:
+        print(f"[RETO DAY SAVE] {exc}")
+        return json_error("No se pudo guardar tu día.", 500)
+    return jsonify({"ok": True, "ready": True, "nota": note})
 
 
 @app.post("/api/rutas/<route_id>/eliminar")

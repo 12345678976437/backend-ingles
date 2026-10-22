@@ -971,6 +971,108 @@ body:has(#sec-vocabulario.active #srs-session[style*="block"]) .mascot-widget{op
 .rt-w{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);background:rgba(8,12,24,.6);color:var(--text);text-align:left;cursor:pointer;font-size:13px}
 .rt-w small{display:block;color:var(--muted)}
 .rt-back{background:none;border:0;color:var(--cyan);font-size:13px;font-weight:600;cursor:pointer;padding:6px 0}
+
+/* rutas v2: panel, mapa y reto */
+#sec-rutas .rt-wrap{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:20px;align-items:start;max-width:1180px;margin-top:18px}
+#sec-rutas .rt-wrap.one{grid-template-columns:minmax(0,1fr);margin-top:6px}
+#sec-rutas .rt-main{min-width:0}
+#sec-rutas .rt-side{position:sticky;top:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+#sec-rutas .rt-pq{position:absolute;right:14px;bottom:0;width:112px;pointer-events:none;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))}
+#sec-rutas .rt-pq img{display:block;width:100%;height:auto}
+#sec-rutas .rt-pq.sm{position:static;width:64px;flex:none;filter:none}
+#sec-rutas .rt-pq.xs{position:static;width:42px;flex:none;filter:none}
+.rt-tag{display:inline-block;align-self:flex-start;padding:4px 10px;border:1px solid rgba(var(--c1-rgb),.5);border-radius:99px;background:rgba(var(--c1-rgb),.12);color:var(--cyan);font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.rt-reto{position:relative;overflow:hidden;isolation:isolate;display:grid;grid-template-columns:1fr auto;gap:12px;width:100%;padding:26px 150px 26px 26px;border:1px solid var(--line-strong);border-radius:16px;text-align:left;color:var(--text);cursor:default;
+  background:radial-gradient(circle at 88% 8%,rgba(var(--c2-rgb),.26),transparent 55%),linear-gradient(135deg,rgba(var(--c1-rgb),.2),rgba(8,12,24,.85))}
+.rt-reto::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:linear-gradient(120deg,#000,transparent 75%);mask-image:linear-gradient(120deg,#000,transparent 75%)}
+.rt-reto.on{cursor:pointer}.rt-reto.on:hover{border-color:var(--cyan)}
+.rt-reto-t{display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:0}
+.rt-reto-t>b{font-family:var(--display);font-size:clamp(22px,2.4vw,30px);line-height:1.15}
+.rt-reto-t>small{color:var(--muted);font-size:14px;line-height:1.6;max-width:52ch}
+.rt-reto-m{display:flex;flex-wrap:wrap;gap:8px}.rt-reto-m span{padding:6px 11px;border:1px solid var(--line);border-radius:8px;background:rgba(4,6,13,.55);font-family:var(--display);font-size:14px}.rt-reto-m em{font-style:normal;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.rt-go{color:var(--cyan);font-weight:700;font-size:13.5px}
+.rt-reto-r{position:absolute;right:140px;top:22px}
+.rt-pills{display:flex;flex-wrap:wrap;gap:8px}.rt-pills span{padding:6px 11px;border:1px solid var(--line);border-radius:99px;background:rgba(4,6,13,.5);font-size:12.5px;color:var(--text)}
+.rt-reto .btn{margin-top:4px}
+.rt-reto textarea,.rt-create textarea{width:100%;min-height:92px;padding:13px;border:1px solid var(--line-strong);border-radius:8px;background:rgba(4,6,13,.6);color:var(--text);font:inherit;font-size:14.5px;line-height:1.5;resize:vertical}
+.rt-reto textarea:focus,.rt-create textarea:focus{outline:none;border-color:var(--cyan)}
+.rt-reto.form{grid-template-columns:1fr;padding-right:150px}.rt-reto.form .rt-reto-t{width:100%}
+.rt-lbl{margin-top:6px;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.rt-opts{display:flex;flex-wrap:wrap;gap:8px}.rt-opts button{padding:8px 15px;border:1px solid var(--line);border-radius:99px;background:rgba(8,12,24,.65);color:var(--text);cursor:pointer;font-size:13.5px}
+.rt-opts button.on{border-color:var(--cyan);background:rgba(var(--c1-rgb),.22);color:var(--cyan);font-weight:700}
+.rt-mkb{width:100%;margin-top:6px}
+.rt-h{display:flex;justify-content:space-between;align-items:baseline;margin:22px 2px 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.rt-h b{font-family:var(--display);font-size:17px}.rt-h small{color:var(--muted)}
+#sec-rutas .rt-list{grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:0}
+#sec-rutas .rt-card{gap:10px;padding:16px;border-radius:12px;transition:transform .15s,border-color .15s}
+#sec-rutas .rt-card:hover{transform:translateY(-2px)}
+#sec-rutas .rt-card .h{align-items:center}.rt-card .h>div{flex:1;min-width:0}.rt-card .h>div small{display:block;margin-top:2px}
+.rt-card p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rt-empty{display:flex;align-items:center;gap:14px;margin-top:22px;padding:18px;border:1px dashed var(--line-strong);border-radius:12px}
+.rt-empty small{display:block;color:var(--muted);margin-top:3px;font-size:13px}
+.rt-create{padding:18px;border:1px solid var(--line-strong);border-radius:14px;background:linear-gradient(160deg,rgba(18,26,48,.75),rgba(8,12,24,.7))}
+.rt-create-h{display:flex;align-items:center;gap:12px;margin-bottom:12px}.rt-create-h b{font-family:var(--display);font-size:16px;display:block}.rt-create-h small{color:var(--muted);font-size:12.5px}
+.rt-how{padding:18px;border:1px solid var(--line);border-radius:14px;background:rgba(8,12,24,.6)}.rt-how>b{font-family:var(--display);font-size:16px}
+.rt-how ol{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.6;display:grid;gap:8px}.rt-how li b{color:var(--text)}
+.rt-ring{position:relative;width:var(--sz,84px);height:var(--sz,84px);flex:none;display:grid;place-items:center}
+.rt-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.rt-ring circle{fill:none;stroke-width:6}.rt-ring .bg{stroke:rgba(132,160,255,.16)}.rt-ring .fg{stroke:var(--cyan);stroke-linecap:round;transition:stroke-dashoffset .8s}
+.rt-ring b{position:relative;font-family:var(--display);font-size:calc(var(--sz,84px)*.24)}.rt-ring small{position:absolute;bottom:22%;color:var(--dim);font-size:10px;text-transform:uppercase}
+.rt-hero{position:relative;overflow:hidden;isolation:isolate;display:flex;align-items:center;gap:18px;padding:24px 150px 24px 24px;border:1px solid var(--line-strong);border-radius:16px;
+  background:radial-gradient(circle at 90% 0,rgba(var(--c2-rgb),.24),transparent 55%),linear-gradient(135deg,rgba(var(--c1-rgb),.2),rgba(8,12,24,.85))}
+.rt-hero::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:linear-gradient(120deg,#000,transparent 75%);mask-image:linear-gradient(120deg,#000,transparent 75%)}
+.rt-hico{flex:none;width:68px;height:68px;border-radius:18px;display:grid;place-items:center;font-size:34px;background:rgba(4,6,13,.6);border:1px solid var(--line-strong)}
+.rt-hmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.rt-hmain h2{margin:0;font-family:var(--display);font-size:clamp(22px,2.6vw,30px);line-height:1.15}.rt-hmain p{margin:0;color:var(--muted);font-size:14px;line-height:1.55;max-width:56ch}
+.rt-chips{display:flex;flex-wrap:wrap;gap:8px}.rt-chips span{padding:5px 11px;border:1px solid var(--line);border-radius:99px;background:rgba(4,6,13,.55);font-size:12.5px}
+.rt-hero .rt-ring{margin-right:6px}
+.rt-path{position:relative;display:flex;flex-direction:column;gap:10px;padding-left:4px}
+.rt-path::before{content:"";position:absolute;left:30px;top:24px;bottom:24px;width:2px;background:linear-gradient(var(--line-strong),var(--line));z-index:0}
+.rt-step{position:relative;z-index:1;display:flex;align-items:center;gap:14px;width:100%;padding:11px 14px 11px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(8,12,24,.72);color:var(--text);text-align:left;cursor:pointer;transition:border-color .15s,transform .15s}
+.rt-step:hover:not(.locked){border-color:var(--cyan);transform:translateX(3px)}
+.rt-node{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#0a1226;border:2px solid var(--line-strong);font-family:var(--display);font-weight:700;font-size:16px}
+.rt-step.available{border-color:rgba(var(--c1-rgb),.7);background:linear-gradient(90deg,rgba(var(--c1-rgb),.16),rgba(8,12,24,.72))}
+.rt-step.available .rt-node{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 18px rgba(var(--c1-rgb),.5);animation:lp2pulse 2s infinite}
+.rt-step.done .rt-node{border-color:var(--success);color:var(--success);background:#0d2a22}
+.rt-step.boss .rt-node{border-color:#ffd166}
+.rt-step.locked{opacity:.5;cursor:not-allowed}
+.rt-st-t{flex:1;min-width:0}.rt-st-t b{display:block;font-size:14.5px}.rt-st-t small{color:var(--muted);font-size:12px}
+.rt-pill{flex:none;padding:6px 14px;border-radius:99px;background:var(--signal);color:#04101a;font-weight:700;font-size:12px}
+.rt-next{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding:18px;border:1px solid rgba(var(--c1-rgb),.55);border-radius:14px;background:linear-gradient(160deg,rgba(var(--c1-rgb),.2),rgba(8,12,24,.75))}
+.rt-next small{color:var(--cyan);font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}.rt-next>b{font-family:var(--display);font-size:19px;line-height:1.25}
+.rt-next.done{border-color:rgba(61,240,176,.5);background:linear-gradient(160deg,rgba(61,240,176,.14),rgba(8,12,24,.75))}.rt-next.done small{color:var(--success)}
+.rt-next .btn{margin-top:4px}.rt-lockmsg{margin:4px 0 0;color:var(--muted);font-size:13px}
+.rt-card2{padding:16px;border:1px solid var(--line);border-radius:14px;background:rgba(8,12,24,.62)}
+.rt-c2h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}.rt-c2h b{font-family:var(--display);font-size:15px}.rt-c2h small{color:var(--muted)}
+.rt-cp{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.55}.rt-cp em{font-style:normal;color:var(--cyan);font-weight:700}
+.rt-card2 .rt-words{grid-template-columns:1fr 1fr;margin-top:6px}
+.rt-card2.adapt{border-color:rgba(var(--c2-rgb),.45);background:linear-gradient(160deg,rgba(var(--c2-rgb),.1),rgba(8,12,24,.62))}.rt-card2.adapt .rt-cp:last-child{margin-bottom:0}
+.rt-del{align-self:flex-start;background:none;border:0;color:var(--dim);font-size:12.5px;cursor:pointer;padding:4px 2px}.rt-del:hover{color:#ff9aa8}
+.r21-cal{display:flex;flex-direction:column;gap:16px}
+.r21-wh{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}.r21-wh b{font-family:var(--display);font-size:15px}.r21-wh span{color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
+.r21-row{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.r21-d{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:72px;padding:8px 2px;border:1px solid var(--line);border-radius:12px;background:rgba(8,12,24,.7);color:var(--text);cursor:pointer;transition:transform .15s,border-color .15s}
+.r21-d small{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.06em}.r21-d b{font-family:var(--display);font-size:20px}.r21-d i{font-style:normal;font-size:12px;min-height:14px}
+.r21-d:hover{transform:translateY(-2px);border-color:var(--line-strong)}
+.r21-d.available{border-color:rgba(var(--c1-rgb),.75);background:linear-gradient(160deg,rgba(var(--c1-rgb),.22),rgba(8,12,24,.7))}.r21-d.available b{color:var(--cyan)}
+.r21-d.done{border-color:rgba(61,240,176,.55);background:linear-gradient(160deg,rgba(61,240,176,.16),rgba(8,12,24,.7))}.r21-d.done b{color:var(--success)}
+.r21-d.locked{opacity:.55}.r21-d.boss{border-color:rgba(255,209,102,.6)}
+.r21-d.today::after{content:"";position:absolute;inset:-4px;border-radius:15px;border:1px solid var(--cyan);animation:skpulse 2.4s ease-out infinite;pointer-events:none}
+.r21-d.sel{box-shadow:0 0 0 2px var(--cyan)}
+@media(max-width:900px){
+  #sec-rutas .rt-wrap{grid-template-columns:minmax(0,1fr)}
+  #sec-rutas .rt-side{position:static}
+  #sec-rutas .rt-side .rt-create{order:-1}
+  #sec-rutas .rt-wrap:has(.rt-reto){}
+}
+@media(max-width:640px){
+  .rt-reto,.rt-reto.form,.rt-hero{padding:18px 16px 96px}
+  #sec-rutas .rt-pq{width:86px;right:8px}
+  .rt-reto-r{position:static;grid-column:1}
+  .rt-hero{flex-wrap:wrap}.rt-hero .rt-ring{display:none}
+  .r21-row{gap:5px}.r21-d{min-height:60px;border-radius:9px}.r21-d b{font-size:17px}.r21-d small{display:none}
+}
+@media(prefers-reduced-motion:reduce){.r21-d.today::after,.rt-step.available .rt-node{animation:none}}
 body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:none}
 @media(max-width:600px){.sc-m,.sc-fix,.tr-pair{max-width:94%}.sc-subs b{font-size:17px}}
 
@@ -3732,19 +3834,6 @@ async function rtHome(){
   root.innerHTML='<div class="empty">'+pq()+'</div>';
   try{R.list=await jsonFetch('/api/rutas');rtList()}catch(e){root.innerHTML='<div class="empty" data-i18n-skip>'+fmtErr(e)+'</div>'}
 }
-function rtList(){
-  R.cur=null;const d=R.list,root=$('rt-root');
-  let h='<div class="card rt-create"><b class="st-h" style="display:block;margin-top:0">What do you want to achieve in English?</b>'
-   +'<textarea id="rt-in" maxlength="400" placeholder="E.g. I sell artisan cheese and I want to hold a sales conversation in English"></textarea>'
-   +'<div class="rt-ex">'+(d.ejemplos||[]).slice(0,4).map((e,i)=>'<button type="button" class="st-chip" data-ex="'+i+'" data-i18n-skip>'+esc(e)+'</button>').join('')+'</div>'
-   +'<div class="st-row"><button type="button" class="btn primary" id="rt-mk">✨ Create my route</button><span class="st-note" style="margin:0">Your plan: '+esc(d.plan_nombre)+' · '+d.rutas.length+'/'+d.maximo+' routes · up to '+d.max_lecciones+' lessons · 4 credits</span></div><div id="rt-mkout"></div></div>';
-  if(d.rutas.length)h+='<b class="st-h" style="display:block">Your routes</b><div class="rt-list">'+d.rutas.map(r=>{const pc=r.lecciones?Math.round(r.completadas/r.lecciones*100):0;
-    return '<button type="button" class="rt-card" data-r="'+r.id+'"><div class="h"><span class="e">'+esc(r.emoji)+'</span><b data-i18n-skip>'+esc(r.titulo)+'</b></div><small data-i18n-skip>'+esc(r.resumen||r.pedido)+'</small><div class="bar" style="height:6px"><div class="fill" style="width:'+pc+'%"></div></div><small>'+r.completadas+'/'+r.lecciones+' lessons · '+esc(r.nivel)+'</small></button>'}).join('')+'</div>';
-  root.innerHTML=h;
-  root.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>{$('rt-in').value=d.ejemplos[+b.dataset.ex];$('rt-in').focus()});
-  root.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>rtOpen(b.dataset.r));
-  $('rt-mk').onclick=rtCreate;
-}
 const WAIT=['Palanqueta is gathering the right words for you…','Writing lessons about your situation…','Preparing dialogs and practice phrases…','Almost ready — polishing your route…'];
 async function rtCreate(){
   if(R.busy)return;const v=$('rt-in').value.trim();
@@ -3756,22 +3845,130 @@ async function rtCreate(){
   try{const d=await post('/api/rutas/crear',{pedido:v});clearInterval(iv);R.busy=false;toast('Your route is ready! 🎉');rtOpen(d.ruta.id)}
   catch(e){clearInterval(iv);R.busy=false;$('rt-mk').disabled=false;out.innerHTML='<p class="st-note" data-i18n-skip>'+fmtErr(e)+'</p>'}
 }
+const PQI='<img src="palanqueta-mascota.webp" alt="" draggable="false">';
+const PQA='<img src="palanqueta-a.webp" alt="" draggable="false">';
+function rtRing(pc,label,sz){const r=26,c=2*Math.PI*r;return '<div class="rt-ring" style="--sz:'+(sz||84)+'px"><svg viewBox="0 0 64 64"><circle class="bg" cx="32" cy="32" r="'+r+'"/><circle class="fg" cx="32" cy="32" r="'+r+'" stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+(c*(1-pc/100)).toFixed(1)+'"/></svg><b>'+pc+'%</b>'+(label?'<small>'+label+'</small>':'')+'</div>'}
+function rtList(){
+  R.cur=null;R.det=null;const d=R.list,root=$('rt-root'),reto=d.reto;
+  let main='';
+  if(reto){
+    const pc=Math.round(reto.completadas/21*100);
+    main+='<button type="button" class="rt-reto on" data-reto="'+reto.id+'"><div class="rt-reto-t"><span class="rt-tag">🔥 21-day challenge</span><b data-i18n-skip>'+esc(reto.titulo)+'</b><small data-i18n-skip>'+esc(reto.resumen||reto.pedido)+'</small>'
+      +'<div class="rt-reto-m"><span><em>Day</em> '+Math.min(21,reto.dia_hoy||1)+' / 21</span><span><em>Done</em> '+reto.completadas+'</span><span><em>Level</em> '+esc(reto.nivel)+'</span></div><span class="rt-go">Continue challenge →</span></div>'
+      +'<div class="rt-reto-r">'+rtRing(pc,'',92)+'</div><div class="rt-pq">'+PQI+'</div></button>';
+  }else{
+    main+='<div class="rt-reto"><div class="rt-reto-t"><span class="rt-tag">🔥 New · 21-day challenge</span><b>Speak real English in 3 weeks.</b>'
+      +'<small>A fixed plan of 21 short days built around your goal. It adapts to your level, your mistakes and your pace.</small>'
+      +'<div class="rt-pills"><span>📅 One day at a time</span><span>🎯 Built for your goal</span><span>🧠 Adapts to you</span></div>'
+      +'<button type="button" class="btn primary" id="rt-r21">Start my 21 days</button></div><div class="rt-pq">'+PQI+'</div></div>';
+  }
+  if(d.rutas.length)main+='<div class="rt-h"><b>Your routes</b><small>'+d.rutas.length+'/'+d.maximo+'</small></div><div class="rt-list">'+d.rutas.map(r=>{const pc=r.lecciones?Math.round(r.completadas/r.lecciones*100):0;
+    return '<button type="button" class="rt-card" data-r="'+r.id+'"><div class="h"><span class="e">'+esc(r.emoji)+'</span><div><b data-i18n-skip>'+esc(r.titulo)+'</b><small>'+esc(r.nivel)+' · '+r.completadas+'/'+r.lecciones+' lessons</small></div>'+rtRing(pc,'',46)+'</div><p data-i18n-skip>'+esc(r.resumen||r.pedido)+'</p></button>'}).join('')+'</div>';
+  else main+='<div class="rt-empty"><div class="rt-pq sm">'+PQA+'</div><div><b>No routes yet</b><small>Describe your goal on the right and Palanqueta will build your first course.</small></div></div>';
+  const side='<aside class="rt-side"><div class="rt-create"><div class="rt-create-h"><span class="rt-pq xs">'+PQA+'</span><div><b>Build a custom route</b><small>Lessons made for your real situation</small></div></div>'
+   +'<textarea id="rt-in" maxlength="400" placeholder="E.g. I sell artisan cheese and I want to hold a sales conversation in English"></textarea>'
+   +'<div class="rt-ex">'+(d.ejemplos||[]).slice(0,4).map((e,i)=>'<button type="button" class="st-chip" data-ex="'+i+'" data-i18n-skip>'+esc(e)+'</button>').join('')+'</div>'
+   +'<button type="button" class="btn primary rt-mkb" id="rt-mk">✨ Create my route</button><span class="st-note" style="margin:8px 0 0;display:block">Your plan: '+esc(d.plan_nombre)+' · '+d.rutas.length+'/'+d.maximo+' routes · up to '+d.max_lecciones+' lessons · 4 credits</span><div id="rt-mkout"></div></div></aside>';
+  root.innerHTML='<div class="rt-wrap"><div class="rt-main">'+main+'</div>'+side+'</div>';
+  root.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>{$('rt-in').value=d.ejemplos[+b.dataset.ex];$('rt-in').focus()});
+  root.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>rtOpen(b.dataset.r));
+  const rb=root.querySelector('[data-reto]');if(rb)rb.onclick=()=>rtOpen(rb.dataset.reto);
+  const r21=$('rt-r21');if(r21)r21.onclick=retoForm;
+  $('rt-mk').onclick=rtCreate;
+}
+function retoForm(){
+  const root=$('rt-root'),d=R.list;R.f={min:10,lvl:''};
+  root.innerHTML='<div class="rt-wrap"><div class="rt-main"><button type="button" class="rt-back" id="rt-b">← My routes</button><div class="rt-reto form"><div class="rt-reto-t"><span class="rt-tag">🔥 21-day challenge</span><b>Tell Palanqueta your goal.</b><small>The more specific, the better your 21 days will fit you.</small>'
+   +'<textarea id="r21-in" maxlength="400" placeholder="E.g. I work in customer service and I need to talk with English-speaking clients"></textarea>'
+   +'<div class="rt-ex">'+(d.ejemplos||[]).slice(0,3).map((e,i)=>'<button type="button" class="st-chip" data-ex="'+i+'" data-i18n-skip>'+esc(e)+'</button>').join('')+'</div>'
+   +'<b class="rt-lbl">Time per day</b><div class="rt-opts" id="r21-min">'+[5,10,15,20].map(m=>'<button type="button" data-v="'+m+'" class="'+(m===10?'on':'')+'">'+m+' min</button>').join('')+'</div>'
+   +'<b class="rt-lbl">Your level</b><div class="rt-opts" id="r21-lvl">'+[['','Auto'],['A1','A1'],['A2','A2'],['B1','B1'],['B2','B2']].map(x=>'<button type="button" data-v="'+x[0]+'" class="'+(x[0]===''?'on':'')+'">'+x[1]+'</button>').join('')+'</div>'
+   +'<button type="button" class="btn primary rt-mkb" id="r21-go">🔥 Create my challenge</button><div id="r21-out"></div></div><div class="rt-pq">'+PQI+'</div></div></div>'
+   +'<aside class="rt-side"><div class="rt-how"><b>How it works</b><ol><li><b>3 weeks, 21 days.</b> Survive → Interact → Perform.</li><li><b>One day at a time.</b> A new day opens every morning, so you build the habit.</li><li><b>It adapts.</b> Level, difficulty and review words change with your results.</li><li><b>Days 7, 14 and 21</b> are milestones with real-life practice.</li></ol></div></aside></div>';
+  $('rt-b').onclick=rtHome;
+  root.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>{$('r21-in').value=d.ejemplos[+b.dataset.ex];$('r21-in').focus()});
+  [['r21-min','min'],['r21-lvl','lvl']].forEach(([id,k])=>$(id).querySelectorAll('button').forEach(b=>b.onclick=()=>{$(id).querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');R.f[k]=k==='min'?+b.dataset.v:b.dataset.v}));
+  $('r21-go').onclick=retoCreate;
+}
+async function retoCreate(){
+  if(R.busy)return;const v=$('r21-in').value.trim();
+  if(v.length<12)return toast('Tell me a bit more: what do you want to achieve, and where?');
+  R.busy=true;$('r21-go').disabled=true;const out=$('r21-out');out.innerHTML='<div class="rt-wait">'+pq()+'<p>Palanqueta is designing your 21 days…</p></div>';
+  let tz='';try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){}
+  try{const d=await post('/api/reto21/crear',{pedido:v,minutos:R.f.min,nivel:R.f.lvl,tz});R.busy=false;toast('Your challenge is ready! 🔥');rtOpen(d.ruta.id)}
+  catch(e){R.busy=false;$('r21-go').disabled=false;out.innerHTML='<p class="st-note" data-i18n-skip>'+fmtErr(e)+'</p>'}
+}
+function rtLessonRow(l,i,last){
+  const ic=l.state==='locked'?(l.wait?'⏳':'🔒'):(l.challenge?'🏆':(l.state==='done'?'✓':l.n));
+  const sub=l.state==='done'?'Best '+Math.round(l.score||0)+'%':(l.wait?'Opens tomorrow':(l.state==='locked'?'Finish the previous lesson':'Ready'));
+  return '<button type="button" class="rt-step '+l.state+(l.challenge?' boss':'')+'" data-l="'+l.id+'"><span class="rt-node">'+ic+'</span><span class="rt-st-t"><b data-i18n-skip>'+esc(l.title)+'</b><small>'+sub+(l.state==='done'&&l.stars?' · '+'★'.repeat(l.stars):'')+'</small></span>'+(l.state==='available'?'<span class="rt-pill">Start</span>':'')+'</button>';
+}
+function rtWords(d){
+  return '<div class="rt-card2"><div class="rt-c2h"><b>📖 Key words</b><small>'+d.palabras.length+'</small></div><div class="rt-words">'+d.palabras.slice(0,12).map((w,i)=>'<button type="button" class="rt-w" data-w="'+i+'" data-i18n-skip><span>🔊</span><span><b>'+esc(w.en)+'</b><small>'+esc(w.es)+'</small></span></button>').join('')+'</div></div>';
+}
 async function rtOpen(id){
   R.cur=id;const root=$('rt-root');root.innerHTML='<div class="empty">'+pq()+'</div>';
   try{
     const d=await jsonFetch('/api/rutas/'+encodeURIComponent(id));R.det=d;const r=d.ruta;
+    if(r.tipo==='reto21')return retoView(d);
     const pc=r.lecciones?Math.round(r.completadas/r.lecciones*100):0;
-    root.innerHTML='<button type="button" class="rt-back" id="rt-b">← My routes</button><div class="card"><div class="sc-top"><span class="ic">'+esc(r.emoji)+'</span><div><b data-i18n-skip>'+esc(r.titulo)+'</b><small style="color:var(--muted)">'+esc(r.nivel)+' · '+r.completadas+'/'+r.lecciones+' lessons · ★ '+r.estrellas+'</small></div></div>'
-     +'<p class="st-note" data-i18n-skip>'+esc(r.resumen)+'</p><div class="bar" style="height:6px;margin-top:10px"><div class="fill" style="width:'+pc+'%"></div></div>'
-     +'<div class="rt-lessons">'+d.lecciones.map(l=>'<button type="button" class="rt-ls '+l.state+(l.challenge?' boss':'')+'" data-l="'+l.id+'"><span class="n">'+(l.state==='locked'?'🔒':(l.challenge?'🏆':(l.state==='done'?'✓':l.n)))+'</span><span class="t"><b data-i18n-skip>'+esc(l.title)+'</b><small>'+(l.state==='done'?'Best '+Math.round(l.score||0)+'%':(l.state==='locked'?'Finish the previous lesson':'Ready'))+'</small></span><span class="st">'+(l.state==='done'?'★'.repeat(l.stars||0)+'☆'.repeat(3-(l.stars||0)):'')+'</span></button>').join('')+'</div>'
-     +'<div class="st-row" style="margin-top:16px">'+(r.roleplay?'<button type="button" class="btn primary" id="rt-rp">🎭 Practice the real conversation</button>':'')+'<button type="button" class="btn" id="rt-words">📖 Words</button><button type="button" class="btn" id="rt-del">🗑 Delete</button></div><div id="rt-wl"></div></div>';
-    $('rt-b').onclick=()=>{R.cur=null;rtHome()};
-    root.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{if(b.classList.contains('locked'))return toast('Complete the previous lesson first.');rtStart(id,b.dataset.l)});
-    const rp=$('rt-rp');if(rp)rp.onclick=()=>window.TalvoScenarioFromRoute(id,d.roleplay,r);
-    $('rt-words').onclick=()=>{$('rt-wl').innerHTML='<div class="rt-words">'+d.palabras.map((w,i)=>'<button type="button" class="rt-w" data-w="'+i+'" data-i18n-skip><span>🔊</span><span><b>'+esc(w.en)+'</b><small>'+esc(w.es)+'</small></span></button>').join('')+'</div>';
-      $('rt-wl').querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>window.TalvoCore.speak(d.palabras[+b.dataset.w].en,.9))};
-    $('rt-del').onclick=async()=>{if(!confirm(window.TalvoI18n?TalvoI18n.tr('Delete this route and its progress?'):'Delete this route and its progress?'))return;try{await post('/api/rutas/'+id+'/eliminar');R.cur=null;toast('Route deleted');rtHome()}catch(e){toast(e.message)}};
+    const nxt=d.lecciones.find(l=>l.state==='available');
+    root.innerHTML='<div class="rt-wrap one"><div class="rt-main"><button type="button" class="rt-back" id="rt-b">← My routes</button>'
+     +'<div class="rt-hero"><span class="rt-hico">'+esc(r.emoji)+'</span><div class="rt-hmain"><span class="rt-tag">'+esc(r.nivel)+' · custom route</span><h2 data-i18n-skip>'+esc(r.titulo)+'</h2><p data-i18n-skip>'+esc(r.resumen)+'</p>'
+     +'<div class="rt-chips"><span>'+r.completadas+'/'+r.lecciones+' lessons</span><span>★ '+r.estrellas+'</span><span>'+d.palabras.length+' words</span></div></div>'+rtRing(pc,'done',96)+'<div class="rt-pq">'+PQI+'</div></div></div></div>'
+     +'<div class="rt-wrap"><div class="rt-main"><div class="rt-h"><b>Your path</b><small>'+d.lecciones.length+' steps</small></div><div class="rt-path">'+d.lecciones.map((l,i)=>rtLessonRow(l,i)).join('')+'</div></div>'
+     +'<aside class="rt-side">'+(nxt?'<div class="rt-next"><small>Up next</small><b data-i18n-skip>'+esc(nxt.title)+'</b><button type="button" class="btn primary" id="rt-nx">▶ Continue</button></div>':'<div class="rt-next done"><small>Route complete</small><b>Great job! 🎉</b></div>')
+     +(r.roleplay?'<div class="rt-card2"><div class="rt-c2h"><b>🎭 Real conversation</b></div><p class="rt-cp">Practice the real situation out loud with an AI partner.</p><button type="button" class="btn" id="rt-rp">Start the role-play</button></div>':'')
+     +rtWords(d)+'<button type="button" class="rt-del" id="rt-del">🗑 Delete route</button></aside></div>';
+    rtBind(id,d);
   }catch(e){R.cur=null;root.innerHTML='<div class="empty" data-i18n-skip>'+fmtErr(e)+'<br><button type="button" class="btn" style="margin-top:10px" id="rt-r">Back</button></div>';$('rt-r').onclick=rtHome}
+}
+function rtBind(id,d){
+  const root=$('rt-root'),r=d.ruta;
+  $('rt-b').onclick=()=>{R.cur=null;rtHome()};
+  root.querySelectorAll('.rt-step[data-l]').forEach(b=>b.onclick=()=>{if(b.classList.contains('locked'))return toast(b.querySelector('.rt-node').textContent==='⏳'?'This day opens tomorrow. One day at a time!':'Complete the previous lesson first.');rtStart(id,b.dataset.l)});
+  const nx=$('rt-nx');if(nx)nx.onclick=()=>{const l=d.lecciones.find(x=>x.state==='available');if(l)rtStart(id,l.id)};
+  const rp=$('rt-rp');if(rp)rp.onclick=()=>window.TalvoScenarioFromRoute(id,d.roleplay,r);
+  root.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>window.TalvoCore.speak(d.palabras[+b.dataset.w].en,.9));
+  $('rt-del').onclick=async()=>{if(!confirm(window.TalvoI18n?TalvoI18n.tr('Delete this route and its progress?'):'Delete this route and its progress?'))return;try{await post('/api/rutas/'+id+'/eliminar');R.cur=null;toast('Route deleted');rtHome()}catch(e){toast(e.message)}};
+}
+const R21W=[['Week 1','Survive'],['Week 2','Interact'],['Week 3','Perform']];
+function retoView(d){
+  const root=$('rt-root'),r=d.ruta,x=d.reto||{},pc=Math.round(r.completadas/21*100);
+  const today=Math.min(21,r.dia_hoy||1);
+  const sel=R.sel&&R.sel.id===r.id?R.sel.n:((d.lecciones.find(l=>l.state==='available')||d.lecciones.find(l=>l.state!=='done')||d.lecciones[20]).n);
+  let cal='';
+  for(let w=0;w<3;w++){
+    cal+='<div class="r21-w"><div class="r21-wh"><b>'+R21W[w][0]+'</b><span>'+R21W[w][1]+'</span></div><div class="r21-row">'
+      +d.lecciones.slice(w*7,w*7+7).map(l=>'<button type="button" class="r21-d '+l.state+(l.wait?' wait':'')+(l.challenge?' boss':'')+(l.n===today?' today':'')+(l.n===sel?' sel':'')+'" data-n="'+l.n+'"><small>Day</small><b>'+(l.state==='done'?'✓':l.n)+'</b><i>'+(l.challenge?'🏆':(l.wait?'⏳':(l.state==='locked'?'🔒':'')))+'</i></button>').join('')+'</div></div>';
+  }
+  const adj=(x.ajustes||[]).length?'<div class="rt-card2 adapt"><div class="rt-c2h"><b>🧠 Adapted for you</b></div>'+x.ajustes.slice().reverse().map(a=>'<p class="rt-cp" data-i18n-skip><em>Day '+a.day+'</em> · '+esc(a.note)+'</p>').join('')+'</div>':'';
+  root.innerHTML='<div class="rt-wrap one"><div class="rt-main"><button type="button" class="rt-back" id="rt-b">← My routes</button>'
+   +'<div class="rt-hero r21"><span class="rt-hico">'+esc(r.emoji)+'</span><div class="rt-hmain"><span class="rt-tag">🔥 21-day challenge</span><h2 data-i18n-skip>'+esc(r.titulo)+'</h2><p data-i18n-skip>'+esc(r.resumen)+'</p>'
+   +'<div class="rt-chips"><span>Day '+today+' of 21</span><span>🔥 '+(x.racha||0)+' in a row</span><span>Level '+esc(x.nivel||r.nivel)+'</span><span>'+(x.minutos||10)+' min/day</span></div></div>'+rtRing(pc,'done',96)+'<div class="rt-pq">'+PQI+'</div></div></div></div>'
+   +'<div class="rt-wrap"><div class="rt-main"><div class="r21-cal">'+cal+'</div></div><aside class="rt-side" id="r21-side"></aside></div>';
+  $('rt-b').onclick=()=>{R.cur=null;R.sel=null;rtHome()};
+  const side=()=>{
+    const n=R.sel&&R.sel.id===r.id?R.sel.n:sel,l=d.lecciones[n-1];if(!l)return;
+    const can=l.state==='available',done=l.state==='done';
+    $('r21-side').innerHTML='<div class="rt-next '+(done?'done':'')+'"><small>Day '+l.n+(l.challenge?' · milestone 🏆':'')+'</small><b data-i18n-skip>'+esc(l.title)+'</b><p class="rt-cp" data-i18n-skip>'+esc(l.focus)+'</p>'
+      +(can?'<button type="button" class="btn primary" id="r21-start">▶ '+(l.n===today?'Start today':'Start day '+l.n)+'</button>':(done?'<button type="button" class="btn" id="r21-start">↻ Practice again · Best '+Math.round(l.score||0)+'%</button>':'<p class="rt-lockmsg">'+(l.wait?'⏳ Opens tomorrow. One day at a time builds the habit.':'🔒 Finish the previous day first.')+'</p>'))+'</div>'
+      +adj+(r.roleplay?'<div class="rt-card2"><div class="rt-c2h"><b>🎭 Real conversation</b></div><p class="rt-cp">Practice your real situation out loud.</p><button type="button" class="btn" id="rt-rp">Start the role-play</button></div>':'')
+      +'<button type="button" class="rt-del" id="rt-del">🗑 Delete challenge</button>';
+    const st=$('r21-start');if(st)st.onclick=()=>retoStart(r.id,l,st);
+    const rp=$('rt-rp');if(rp)rp.onclick=()=>window.TalvoScenarioFromRoute(r.id,d.roleplay,r);
+    $('rt-del').onclick=async()=>{if(!confirm(window.TalvoI18n?TalvoI18n.tr('Delete this route and its progress?'):'Delete this route and its progress?'))return;try{await post('/api/rutas/'+r.id+'/eliminar');R.cur=null;R.sel=null;toast('Route deleted');rtHome()}catch(e){toast(e.message)}};
+  };
+  side();
+  root.querySelectorAll('.r21-d').forEach(b=>b.onclick=()=>{R.sel={id:r.id,n:+b.dataset.n};root.querySelectorAll('.r21-d').forEach(z=>z.classList.remove('sel'));b.classList.add('sel');side()});
+}
+async function retoStart(rid,l,btn){
+  if(R.busy)return;R.busy=true;const t=btn.innerHTML;btn.disabled=true;btn.textContent='…';
+  try{
+    if(!l.ready){const w=$('r21-side').querySelector('.rt-next');w.insertAdjacentHTML('beforeend','<div class="rt-wait" id="r21-w">'+pq()+'<p>Palanqueta is preparing your day…</p></div>');
+      await post('/api/reto21/dia',{route_id:rid,lesson_id:l.id})}
+    R.busy=false;await rtStart(rid,l.id,true);
+  }catch(e){R.busy=false;btn.disabled=false;btn.innerHTML=t;const w=$('r21-w');if(w)w.remove();toast(e.message)}
 }
 async function rtStart(id,lid){
   try{const d=await jsonFetch('/api/rutas/'+encodeURIComponent(id)+'/leccion/'+encodeURIComponent(lid));window.lpOpenRoute(d,'rutas')}
@@ -4358,7 +4555,8 @@ var PAIRS=[
 ['I could not hear you. Try again, a little closer to the mic.','No te escuché. Inténtalo de nuevo, un poco más cerca del micrófono.'],
 ['Your browser does not support microphone recording.','Tu navegador no permite grabar con el micrófono.'],
 ['Saving your progress...','Guardando tu progreso...'],['Could not save','No se pudo guardar'],['Try again','Intentar de nuevo'],
-['Review complete','Repaso completo'],['Sound practice','Práctica de sonido'],['Challenge complete','Reto completado'],['Lesson complete','Lección completada'],
+['Review complete','Repaso completo'],['Sound practice','Práctica de sonido'],['🔥 21-day challenge','🔥 Reto de 21 días'],['🔥 New · 21-day challenge','🔥 Nuevo · Reto de 21 días'],['Speak real English in 3 weeks.','Habla inglés real en 3 semanas.'],['A fixed plan of 21 short days built around your goal. It adapts to your level, your mistakes and your pace.','Un plan fijo de 21 días cortos hecho para tu meta. Se adapta a tu nivel, a tus errores y a tu ritmo.'],['📅 One day at a time','📅 Un día a la vez'],['🎯 Built for your goal','🎯 Hecho para tu meta'],['🧠 Adapts to you','🧠 Se adapta a ti'],['Start my 21 days','Empezar mis 21 días'],['Continue challenge →','Continuar el reto →'],['Day','Día'],['Done','Hecho'],['No routes yet','Aún no tienes rutas'],['Describe your goal on the right and Palanqueta will build your first course.','Describe tu meta a la derecha y Palanqueta armará tu primer curso.'],['Build a custom route','Crea una ruta a tu medida'],['Lessons made for your real situation','Lecciones hechas para tu situación real'],['Tell Palanqueta your goal.','Cuéntale tu meta a Palanqueta.'],['The more specific, the better your 21 days will fit you.','Mientras más específico, mejor se ajustarán tus 21 días.'],['E.g. I work in customer service and I need to talk with English-speaking clients','Ej. Trabajo en atención a clientes y necesito hablar con clientes en inglés'],['Time per day','Tiempo por día'],['Auto','Auto'],['🔥 Create my challenge','🔥 Crear mi reto'],['How it works','Cómo funciona'],['3 weeks, 21 days.','3 semanas, 21 días.'],['Survive → Interact → Perform.','Sobrevive → Interactúa → Desenvuélvete.'],['One day at a time.','Un día a la vez.'],['A new day opens every morning, so you build the habit.','Cada mañana se abre un nuevo día, así formas el hábito.'],['It adapts.','Se adapta.'],['Level, difficulty and review words change with your results.','El nivel, la dificultad y las palabras de repaso cambian según tus resultados.'],['Days 7, 14 and 21','Los días 7, 14 y 21'],['are milestones with real-life practice.','son hitos con práctica de la vida real.'],['Palanqueta is designing your 21 days…','Palanqueta está diseñando tus 21 días…'],['Your challenge is ready! 🔥','¡Tu reto está listo! 🔥'],['Your path','Tu camino'],['▶ Continue','▶ Continuar'],['Route complete','Ruta completa'],['Great job! 🎉','¡Buen trabajo! 🎉'],['🎭 Real conversation','🎭 Conversación real'],['Practice the real situation out loud with an AI partner.','Practica la situación real en voz alta con una IA.'],['Start the role-play','Empezar el role-play'],['📖 Key words','📖 Palabras clave'],['🗑 Delete route','🗑 Eliminar ruta'],['🗑 Delete challenge','🗑 Eliminar reto'],['Opens tomorrow','Se abre mañana'],['Week 1','Semana 1'],['Week 2','Semana 2'],['Week 3','Semana 3'],['Survive','Sobrevive'],['Interact','Interactúa'],['Perform','Desenvuélvete'],['🧠 Adapted for you','🧠 Adaptado para ti'],['Practice your real situation out loud.','Practica tu situación real en voz alta.'],['⏳ Opens tomorrow. One day at a time builds the habit.','⏳ Se abre mañana. Un día a la vez forma el hábito.'],['🔒 Finish the previous day first.','🔒 Termina primero el día anterior.'],['This day opens tomorrow. One day at a time!','Este día se abre mañana. ¡Un día a la vez!'],['Palanqueta is preparing your day…','Palanqueta está preparando tu día…'],['▶ Start today','▶ Empezar hoy'],['done','hecho'],['lessons','lecciones'],['custom route','ruta personalizada'],
+['Challenge complete','Reto completado'],['Lesson complete','Lección completada'],
 ['Flawless!','¡Impecable!'],['Excellent!','¡Excelente!'],['Almost there','Casi lo logras'],['Accuracy','Precisión'],['Time','Tiempo'],['Back to path','Volver a la ruta'],
 ['You need at least 60% to pass. You can retry as many times as you want — no hearts, no penalty.','Necesitas al menos 60% para aprobar. Puedes reintentar las veces que quieras: sin vidas ni castigos.'],
 ['Progress saved. Spend a little more time per lesson to earn XP.','Progreso guardado. Dedica un poco más de tiempo por lección para ganar XP.'],
