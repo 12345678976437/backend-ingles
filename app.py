@@ -4885,6 +4885,23 @@ def _adapt_level(user_id, level_rank):
 
 
 
+@app.post("/api/learning-path/level")
+def learning_path_set_level():
+    """La persona elige su nivel a mano (A1-B2). Nunca se cambia solo sin avisar."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    lvl = str((request.get_json(silent=True) or {}).get("level") or "")
+    if lvl not in LEVEL_NAMES:
+        return json_error("Nivel no válido.")
+    try:
+        (supabase_admin or supabase).table("profiles").update({"cefr_level": lvl}).eq("id", user.id).execute()
+    except Exception as exc:
+        print(f"[SET LEVEL] {exc}")
+        return json_error("No se pudo cambiar tu nivel.", 500)
+    return jsonify({"ok": True, "level": lvl, "label": LEVEL_LABEL[lvl]})
+
+
 @app.get("/api/learning-path")
 def learning_path():
     user, error = authenticated_user()
