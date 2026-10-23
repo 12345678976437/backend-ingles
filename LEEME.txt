@@ -4,3 +4,10 @@ Sube TODA esta carpeta a tu hosting (mismo lugar donde estaba tu index.html).
 Debe servirse por HTTPS (casi todos los hosting gratis ya lo hacen).
 Para actualizar en el futuro: sube de nuevo la carpeta completa. El service worker
 (sw.js) cambia solo cuando cambian los archivos y los usuarios reciben la version nueva.
+
+ESTRUCTURA DEL FRONT (desde oct 2026)
+- index.html: solo el HTML. Estilos en css/app.css. Imágenes incrustadas ahora en img/.
+- js/core.js (núcleo: sesión, UI general), js/extras.js, js/learning-path.js (+ reproductor de lecciones),
+  js/phrases.js, js/studio.js (traductor, escenarios, rutas y reto), js/voice-lab.js, js/tutorial.js,
+  js/clips-presentations.js, js/i18n.js (traducciones EN/ES). El orden de los <script> importa.
+- Pruebas: python3 tests/test_reto.py
