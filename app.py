@@ -6148,7 +6148,9 @@ def route_detail(route_id):
     meta = route.get("meta") or {}
     return jsonify({"ok": True, "ruta": _route_summary(route), "lecciones": _route_states(route), "roleplay": route.get("roleplay") or {},
                     "reto": ({"pedido": route.get("pedido"), "minutos": meta.get("minutes"), "nivel": meta.get("level"), "inicio": meta.get("start"),
-                              "ajustes": (meta.get("log") or [])[-4:], "racha": _reto_streak(route)} if _is_reto(route) else None),
+                              "ajustes": (meta.get("log") or [])[-4:], "racha": _reto_streak(route),
+                              "escucha": [{"day": k, "pct": round(100 * v["ok"] / v["n"])} for k in _RETO_CHECKS
+                                          for v in [((route.get("progreso") or {}).get(f"d{k}") or {}).get("listen")] if v]} if _is_reto(route) else None),
                     "palabras": [{"en": w["en"], "es": w["es"]} for l in route["lecciones"] for w in l["words"]][:40]})
 
 
@@ -6176,6 +6178,9 @@ def route_lesson(route_id, lesson_id):
     else:
         rank = PROFILE_LEVEL_RANK.get(_profile_for_path(user.id).get("cefr_level"), LEVEL_TO_RANK.get(unit["level"], 0))
     data = build_lesson_payload(unit, lesson_id, rank)
+    if _is_reto(route) and st["n"] in _RETO_CHECKS:
+        data["exercises"] = (data.get("exercises") or []) + _listen_check(route, st["n"])
+        data["listen_check"] = True
     data.update({"unit_code": unit["code"], "unit_title": unit["title"], "icon": unit["icon"], "lesson_id": lesson_id, "mode": "route", "route_id": route_id})
     if not data["exercises"]:
         return json_error("No se pudo preparar la lección.", 500)
@@ -6209,10 +6214,20 @@ def route_complete(route_id):
     prog = dict(route.get("progreso") or {})
     prev = prog.get(lesson_id) or {}
     first_time = passed and not prev.get("passed")
+    lk = body.get("listen") if isinstance(body.get("listen"), dict) else None
+    listen_row = None
+    if lk:
+        try:
+            n_ = max(1, min(10, int(lk.get("n") or 1)))
+            listen_row = {"ok": max(0, min(n_, int(lk.get("ok") or 0))), "n": n_}
+        except (TypeError, ValueError):
+            listen_row = None
     prog[lesson_id] = {"passed": bool(prev.get("passed") or passed), "score": max(score, float(prev.get("score") or 0)),
                        "stars": max(stars, int(prev.get("stars") or 0)), "tries": int(prev.get("tries") or 0) + 1,
                        "mistakes": [m["en"] for m in mistakes][:8] or (prev.get("mistakes") if not passed else []) or [], "last": score,
                        "day": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+    if listen_row or prev.get("listen"):
+        prog[lesson_id]["listen"] = listen_row or prev.get("listen")
     xp = 0
     if seconds >= 15 and passed:
         xp = (15 + 5 * stars) if first_time else 8
@@ -6245,6 +6260,27 @@ def route_complete(route_id):
 # ---------------------------------------------------------------------------
 _RETO_WEEKS = ["Survive: the words and phrases you need first", "Interact: real back-and-forth conversations", "Perform: handle the real situation with confidence"]
 _LEVELS = ["A1", "A2", "B1", "B2"]
+_RETO_CHECKS = (1, 7, 14, 21)  # días con mini examen de escucha a velocidad natural
+
+
+def _listen_check(route, day_n, count=4):
+    """Mini examen de escucha: frases del reto que debes reconocer al oírlas a velocidad natural."""
+    phrases = [p for l in (route.get("lecciones") or []) for p in (l.get("phrases") or []) if p.get("en")]
+    uniq = list({p["en"].lower(): p for p in phrases}.values())
+    if len(uniq) < 5:
+        return []
+    rng = random.Random(f"{route.get('id')}-{day_n}")
+    pool = uniq[:]
+    rng.shuffle(pool)
+    out = []
+    for p in pool[:count]:
+        others = [x["en"] for x in uniq if x["en"].lower() != p["en"].lower()]
+        rng.shuffle(others)
+        opts = [p["en"]] + others[:3]
+        rng.shuffle(opts)
+        out.append({"type": "listen_pick", "say": p["en"], "options": opts, "answer": p["en"], "check": True,
+                    "ref": {"en": p["en"], "es": p.get("es", "")}})
+    return out
 
 
 def _reto_streak(route):

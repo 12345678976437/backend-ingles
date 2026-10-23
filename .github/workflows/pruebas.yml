@@ -1,0 +1,15 @@
+name: Pruebas
+on:
+  push:
+    paths: ["app.py", "tests/**"]
+  workflow_dispatch:
+jobs:
+  reto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install flask flask-cors python-dotenv requests
+      - run: python tests/test_reto.py
