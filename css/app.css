@@ -1487,3 +1487,9 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 #w-better ins{text-decoration:none;color:var(--success);background:rgba(61,240,176,.12);border-radius:3px;padding:0 2px}
 .wb-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 @media (prefers-reduced-motion:reduce){.call-ui *{animation:none!important;transition:none!important}}
+
+/* pestañas de aprendizaje */
+.lt-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px;padding:5px;border:1px solid var(--line);border-radius:14px;background:rgba(8,12,24,.6);width:fit-content;max-width:100%}
+.lt-tab{padding:9px 16px;border:1px solid transparent;border-radius:10px;background:none;color:var(--muted);font-size:13.5px;font-weight:600;cursor:pointer;transition:color .15s,background .15s}
+.lt-tab:hover{color:var(--text)}.lt-tab.on{color:var(--cyan);border-color:rgba(var(--c1-rgb),.5);background:rgba(var(--c1-rgb),.14)}
+@media(max-width:560px){.lt-tabs{width:100%;flex-wrap:nowrap;overflow-x:auto}.lt-tab{flex:1;white-space:nowrap;padding:9px 10px;font-size:12.5px}}

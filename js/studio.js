@@ -215,11 +215,13 @@ window.TalvoScenarioFromRoute=(rid,rp,meta)=>{S.ruta=rid;section('escenarios');S
 
 /* ===================== RUTAS ===================== */
 const R={list:null,cur:null,busy:false};
+R.tab='rutas';
 async function rtHome(){
   const root=$('rt-root');if(!root)return;
+  window.ltRender&&ltRender(R.tab);
   if(R.cur){return rtOpen(R.cur)}
   root.innerHTML='<div class="empty">'+pq()+'</div>';
-  try{R.list=await jsonFetch('/api/rutas');rtList()}catch(e){root.innerHTML='<div class="empty" data-i18n-skip>'+fmtErr(e)+'</div>'}
+  try{R.list=await jsonFetch('/api/rutas');if(R.tab==='reto'&&R.list.reto)return rtOpen(R.list.reto.id);rtList()}catch(e){root.innerHTML='<div class="empty" data-i18n-skip>'+fmtErr(e)+'</div>'}
 }
 const WAIT=['Palanqueta is gathering the right words for you…','Writing lessons about your situation…','Preparing dialogs and practice phrases…','Almost ready — polishing your route…'];
 async function rtCreate(){
@@ -237,35 +239,34 @@ const PQA='<img src="palanqueta-a.webp" alt="" draggable="false">';
 function rtRing(pc,label,sz){const r=26,c=2*Math.PI*r;return '<div class="rt-ring" style="--sz:'+(sz||84)+'px"><svg viewBox="0 0 64 64"><circle class="bg" cx="32" cy="32" r="'+r+'"/><circle class="fg" cx="32" cy="32" r="'+r+'" stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+(c*(1-pc/100)).toFixed(1)+'"/></svg><b>'+pc+'%</b>'+(label?'<small>'+label+'</small>':'')+'</div>'}
 function rtList(){
   R.cur=null;R.det=null;const d=R.list,root=$('rt-root'),reto=d.reto;
+  window.ltRender&&ltRender(R.tab);
   let main='';
-  if(reto){
-    const pc=Math.round(reto.completadas/21*100);
-    main+='<button type="button" class="rt-reto on" data-reto="'+reto.id+'"><div class="rt-reto-t"><span class="rt-tag">🔥 21-day challenge</span><b data-i18n-skip>'+esc(reto.titulo)+'</b><small data-i18n-skip>'+esc(reto.resumen||reto.pedido)+'</small>'
-      +'<div class="rt-reto-m"><span><em>Day</em> '+Math.min(21,reto.dia_hoy||1)+' / 21</span><span><em>Done</em> '+reto.completadas+'</span><span><em>Level</em> '+esc(reto.nivel)+'</span></div><span class="rt-go">Continue challenge →</span></div>'
-      +'<div class="rt-reto-r">'+rtRing(pc,'',92)+'</div><div class="rt-pq">'+PQI+'</div></button>';
-  }else{
+  if(R.tab==='reto'){
     main+='<div class="rt-reto"><div class="rt-reto-t"><span class="rt-tag">🔥 New · 21-day challenge</span><b>Speak real English in 3 weeks.</b>'
       +'<small>A fixed plan of 21 short days built around your goal. It adapts to your level, your mistakes and your pace.</small>'
       +'<div class="rt-pills"><span>📅 One day at a time</span><span>🎯 Built for your goal</span><span>🧠 Adapts to you</span></div>'
       +'<button type="button" class="btn primary" id="rt-r21">Start my 21 days</button></div><div class="rt-pq">'+PQI+'</div></div>';
   }
-  if(d.rutas.length)main+='<div class="rt-h"><b>Your routes</b><small>'+d.rutas.length+'/'+d.maximo+'</small></div><div class="rt-list">'+d.rutas.map(r=>{const pc=r.lecciones?Math.round(r.completadas/r.lecciones*100):0;
+  if(R.tab==='reto'){}
+  else if(d.rutas.length)main+='<div class="rt-h"><b>Your routes</b><small>'+d.rutas.length+'/'+d.maximo+'</small></div><div class="rt-list">'+d.rutas.map(r=>{const pc=r.lecciones?Math.round(r.completadas/r.lecciones*100):0;
     return '<button type="button" class="rt-card" data-r="'+r.id+'"><div class="h"><span class="e">'+esc(r.emoji)+'</span><div><b data-i18n-skip>'+esc(r.titulo)+'</b><small>'+esc(r.nivel)+' · '+r.completadas+'/'+r.lecciones+' lessons</small></div>'+rtRing(pc,'',46)+'</div><p data-i18n-skip>'+esc(r.resumen||r.pedido)+'</p></button>'}).join('')+'</div>';
-  else main+='<div class="rt-empty"><div class="rt-pq sm">'+PQA+'</div><div><b>No routes yet</b><small>Describe your goal on the right and Palanqueta will build your first course.</small></div></div>';
-  const side='<aside class="rt-side"><div class="rt-create"><div class="rt-create-h"><span class="rt-pq xs">'+PQA+'</span><div><b>Build a custom route</b><small>Lessons made for your real situation</small></div></div>'
+  else if(R.tab!=='reto')main+='<div class="rt-empty"><div class="rt-pq sm">'+PQA+'</div><div><b>No routes yet</b><small>Describe your goal on the right and Palanqueta will build your first course.</small></div></div>';
+  const HOW='<aside class="rt-side"><div class="rt-how"><b>How it works</b><ol><li><b>3 weeks, 21 days.</b> Survive → Interact → Perform.</li><li><b>One day at a time.</b> A new day opens every morning, so you build the habit.</li><li><b>It adapts.</b> Level, difficulty and review words change with your results.</li><li><b>Days 7, 14 and 21</b> are milestones with real-life practice.</li></ol></div></aside>';
+  const side0='<aside class="rt-side"><div class="rt-create"><div class="rt-create-h"><span class="rt-pq xs">'+PQA+'</span><div><b>Build a custom route</b><small>Lessons made for your real situation</small></div></div>'
    +'<textarea id="rt-in" maxlength="400" placeholder="E.g. I sell artisan cheese and I want to hold a sales conversation in English"></textarea>'
    +'<div class="rt-ex">'+(d.ejemplos||[]).slice(0,4).map((e,i)=>'<button type="button" class="st-chip" data-ex="'+i+'" data-i18n-skip>'+esc(e)+'</button>').join('')+'</div>'
    +'<button type="button" class="btn primary rt-mkb" id="rt-mk">✨ Create my route</button><span class="st-note" style="margin:8px 0 0;display:block">Your plan: '+esc(d.plan_nombre)+' · '+d.rutas.length+'/'+d.maximo+' routes · up to '+d.max_lecciones+' lessons · 4 credits</span><div id="rt-mkout"></div></div></aside>';
+  const side=R.tab==='reto'?HOW:side0;
   root.innerHTML='<div class="rt-wrap"><div class="rt-main">'+main+'</div>'+side+'</div>';
   root.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>{$('rt-in').value=d.ejemplos[+b.dataset.ex];$('rt-in').focus()});
   root.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>rtOpen(b.dataset.r));
   const rb=root.querySelector('[data-reto]');if(rb)rb.onclick=()=>rtOpen(rb.dataset.reto);
   const r21=$('rt-r21');if(r21)r21.onclick=retoForm;
-  $('rt-mk').onclick=rtCreate;
+  if($('rt-mk'))$('rt-mk').onclick=rtCreate;
 }
 function retoForm(){
   const root=$('rt-root'),d=R.list;R.f={min:10,lvl:''};
-  root.innerHTML='<div class="rt-wrap"><div class="rt-main"><button type="button" class="rt-back" id="rt-b">← My routes</button><div class="rt-reto form"><div class="rt-reto-t"><span class="rt-tag">🔥 21-day challenge</span><b>Tell Palanqueta your goal.</b><small>The more specific, the better your 21 days will fit you.</small>'
+  root.innerHTML='<div class="rt-wrap"><div class="rt-main"><button type="button" class="rt-back" id="rt-b">← Back</button><div class="rt-reto form"><div class="rt-reto-t"><span class="rt-tag">🔥 21-day challenge</span><b>Tell Palanqueta your goal.</b><small>The more specific, the better your 21 days will fit you.</small>'
    +'<textarea id="r21-in" maxlength="400" placeholder="E.g. I work in customer service and I need to talk with English-speaking clients"></textarea>'
    +'<div class="rt-ex">'+(d.ejemplos||[]).slice(0,3).map((e,i)=>'<button type="button" class="st-chip" data-ex="'+i+'" data-i18n-skip>'+esc(e)+'</button>').join('')+'</div>'
    +'<b class="rt-lbl">Time per day</b><div class="rt-opts" id="r21-min">'+[5,10,15,20].map(m=>'<button type="button" data-v="'+m+'" class="'+(m===10?'on':'')+'">'+m+' min</button>').join('')+'</div>'
@@ -296,7 +297,7 @@ function rtWords(d){
 async function rtOpen(id){
   R.cur=id;const root=$('rt-root');root.innerHTML='<div class="empty">'+pq()+'</div>';
   try{
-    const d=await jsonFetch('/api/rutas/'+encodeURIComponent(id));R.det=d;const r=d.ruta;
+    const d=await jsonFetch('/api/rutas/'+encodeURIComponent(id));R.det=d;const r=d.ruta;R.tab=r.tipo==='reto21'?'reto':'rutas';window.ltRender&&ltRender(R.tab);
     if(r.tipo==='reto21')return retoView(d);
     const pc=r.lecciones?Math.round(r.completadas/r.lecciones*100):0;
     const nxt=d.lecciones.find(l=>l.state==='available');
@@ -331,11 +332,10 @@ function retoView(d){
   }
   const esc_=(x.escucha||[]).length?'<div class="rt-card2"><div class="rt-c2h"><b>🎧 Listening check</b></div><p class="rt-cp">How well you catch native-speed English (days 1, 7, 14, 21).</p><div class="r21-lc">'+[1,7,14,21].map(k=>{const e=x.escucha.find(z=>z.day===k);return '<div><i style="height:'+(e?Math.max(6,e.pct):4)+'%"></i><b>'+(e?e.pct+'%':'—')+'</b><small>Day '+k+'</small></div>'}).join('')+'</div></div>':'';
   const adj=(x.ajustes||[]).length?'<div class="rt-card2 adapt"><div class="rt-c2h"><b>🧠 Adapted for you</b></div>'+x.ajustes.slice().reverse().map(a=>'<p class="rt-cp" data-i18n-skip><em>Day '+a.day+'</em> · '+esc(a.note)+'</p>').join('')+'</div>':'';
-  root.innerHTML='<div class="rt-wrap one"><div class="rt-main"><button type="button" class="rt-back" id="rt-b">← My routes</button>'
+  root.innerHTML='<div class="rt-wrap one"><div class="rt-main">'
    +'<div class="rt-hero r21"><span class="rt-hico">'+esc(r.emoji)+'</span><div class="rt-hmain"><span class="rt-tag">🔥 21-day challenge</span><h2 data-i18n-skip>'+esc(r.titulo)+'</h2><p data-i18n-skip>'+esc(r.resumen)+'</p>'
    +'<div class="rt-chips"><span>Day '+today+' of 21</span><span>🔥 '+(x.racha||0)+' in a row</span><span>Level '+esc(x.nivel||r.nivel)+'</span><span>'+(x.minutos||10)+' min/day</span></div></div>'+rtRing(pc,'done',96)+'<div class="rt-pq">'+PQI+'</div></div></div></div>'
    +'<div class="rt-wrap"><div class="rt-main"><div class="r21-cal">'+cal+'</div></div><aside class="rt-side" id="r21-side"></aside></div>';
-  $('rt-b').onclick=()=>{R.cur=null;R.sel=null;rtHome()};
   const side=()=>{
     const n=R.sel&&R.sel.id===r.id?R.sel.n:sel,l=d.lecciones[n-1];if(!l)return;
     const can=l.state==='available',done=l.state==='done';
@@ -362,5 +362,5 @@ async function rtStart(id,lid){
   try{const d=await jsonFetch('/api/rutas/'+encodeURIComponent(id)+'/leccion/'+encodeURIComponent(lid));window.lpOpenRoute(d,'rutas')}
   catch(e){toast(e.message)}
 }
-window.TalvoStudio={onSection(name){if(name==='traductor')trRender();if(name==='escenarios')scHome();if(name==='rutas')rtHome()},startRouteLesson:rtStart};
+window.TalvoStudio={goTab(tab){R.tab=tab==='reto'?'reto':'rutas';R.cur=null;R.sel=null;const sec=document.getElementById('sec-rutas');if(sec&&sec.classList.contains('active'))rtHome();else section('rutas')},onSection(name){if(name==='traductor')trRender();if(name==='escenarios')scHome();if(name==='rutas')rtHome()},startRouteLesson:rtStart};
 })();

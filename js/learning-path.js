@@ -62,6 +62,7 @@ function renderHome(d,plan){
     h+='</div>';
   });
   $('lp-home').innerHTML='<div class="lp3">'+h+'</div></div>';
+  ltRender('path');
 }
 window.lpSetLevel=async function(l){
   try{await jsonFetch('/api/learning-path/level',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:l})});toast('Level updated');window.loadLearningPath()}catch(e){toast(e.message)}
@@ -444,3 +445,15 @@ window.continueLearning=function(){
 };
 ready(()=>{const b=$('home-next');if(b)b.addEventListener('click',()=>window.continueLearning())});
 })();
+
+/* ---- Pestañas de aprendizaje: Camino · Reto de 21 días · Mis rutas ---- */
+window.ltRender=function(active){
+  const T_=[['path','🗺️ Course path'],['reto','🔥 21-day challenge'],['rutas','🧭 My routes']];
+  document.querySelectorAll('[data-lt]').forEach(el=>{el.innerHTML=T_.map(t=>'<button type="button" class="lt-tab'+(t[0]===active?' on':'')+'" data-ltab="'+t[0]+'">'+t[1]+'</button>').join('')});
+};
+document.addEventListener('click',e=>{
+  const b=e.target.closest&&e.target.closest('[data-ltab]');if(!b)return;
+  const t=b.dataset.ltab;
+  if(t==='path'){window.TalvoCore.section('learning-path')}
+  else if(window.TalvoStudio&&window.TalvoStudio.goTab){window.TalvoStudio.goTab(t)}
+});
