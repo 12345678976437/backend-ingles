@@ -178,7 +178,7 @@ RATE_RULES = {
     "/api/sintetizar-audio": (120, 3600),
     "/api/transcribir-audio": (60, 3600),
     "/api/resumen-llamada": (10, 3600),
-    "/api/llamada/turno": (70, 3600),
+    "/api/llamada/turno": (90, 3600),
     "/analizar-escritura": (20, 3600),
     "/evaluar-lectura": (30, 3600),
     "/evaluar-dictado": (40, 3600),
@@ -2689,6 +2689,12 @@ def synthesize_audio():
     if len(text) > 600:
         text = text[:600]
 
+    if body.get("bilingual"):  # voz de la Maestra (español + inglés)
+        audio = tts_bytes(text, _DEFAULT_VOICE, True)
+        if not audio:
+            return json_error("No se pudo generar el audio. Inténtalo de nuevo.", 500)
+        return Response(audio, mimetype="audio/mpeg")
+
     voice = (body.get("voz") or "en-US-AvaMultilingualNeural").strip()
     # Solo voces neuronales estándar en inglés (evita voces HD que cuestan más).
     if not re.fullmatch(r"en-[A-Z]{2}-[A-Za-z]+Neural", voice):
@@ -3248,14 +3254,33 @@ _VOICE_RE = re.compile(r"en-[A-Z]{2}-[A-Za-z]+Neural")
 _DEFAULT_VOICE = "en-US-AvaMultilingualNeural"
 
 
-def tts_bytes(text, voice=_DEFAULT_VOICE):
+_QUOTED_EN = re.compile(r'("[^"\n]{1,160}"|“[^”\n]{1,160}”)')
+
+
+def _bilingual_ssml(text, voice):
+    """Maestra: español de México con las frases entre comillas dichas en inglés (misma voz multilingüe)."""
+    parts = []
+    for i, piece in enumerate(_QUOTED_EN.split(text)):
+        if not piece.strip():
+            continue
+        if i % 2:
+            inner = _xml_escape(piece.strip('"“”'))
+            parts.append(f"<lang xml:lang='en-US'><prosody rate='-8%'>{inner}</prosody></lang>")
+        else:
+            parts.append(f"<lang xml:lang='es-MX'>{_xml_escape(piece)}</lang>")
+    return f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='es-MX'><voice name='{voice}'>{''.join(parts)}</voice></speak>"
+
+
+def tts_bytes(text, voice=_DEFAULT_VOICE, bilingual=False):
     """MP3 de una frase (con la misma caché que /api/sintetizar-audio). Devuelve bytes o None."""
     text = (text or "").strip()[:600]
     if not text or not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
         return None
     if not _VOICE_RE.fullmatch(voice or ""):
         voice = _DEFAULT_VOICE
-    cache_key = hashlib.sha256(f"{voice}|{text}".encode("utf-8")).hexdigest()
+    if bilingual:
+        voice = _DEFAULT_VOICE  # solo las voces multilingües hablan español
+    cache_key = hashlib.sha256(f"{voice}|{'B' if bilingual else ''}|{text}".encode("utf-8")).hexdigest()
     with _tts_lock:
         cached = _tts_cache.get(cache_key)
         if cached is not None:
@@ -3263,7 +3288,7 @@ def tts_bytes(text, voice=_DEFAULT_VOICE):
             return cached
     audio = None
     try:
-        ssml = f"<speak version='1.0' xml:lang='en-US'><voice name='{voice}'>{_xml_escape(text)}</voice></speak>"
+        ssml = _bilingual_ssml(text, voice) if bilingual else f"<speak version='1.0' xml:lang='en-US'><voice name='{voice}'>{_xml_escape(text)}</voice></speak>"
         r = _tts_http.post(
             f"https://{AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1",
             headers={"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY, "Content-Type": "application/ssml+xml",
@@ -3280,7 +3305,8 @@ def tts_bytes(text, voice=_DEFAULT_VOICE):
             config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
             config.speech_synthesis_voice_name = voice
             config.set_speech_synthesis_output_format(speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3)
-            result = speechsdk.SpeechSynthesizer(speech_config=config, audio_config=None).speak_text_async(text).get()
+            synth = speechsdk.SpeechSynthesizer(speech_config=config, audio_config=None)
+            result = (synth.speak_ssml_async(_bilingual_ssml(text, voice)) if bilingual else synth.speak_text_async(text)).get()
             if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
                 audio = bytes(result.audio_data)
         except Exception as exc:
@@ -3330,6 +3356,12 @@ def call_turn():
             safe_history.append({"role": role, "content": content[:1500]})
     voice = (request.form.get("voz") or _DEFAULT_VOICE).strip()
     uid = user.id
+    maestro = (request.form.get("maestro") or "") == "1"
+    if maestro and not is_admin_user(user):
+        lim = PLAN_FEATURES[_user_plan(user)]["maestro_dia"]
+        ok_m, _w = _rate_hit((uid, "maestro"), lim, 86400)
+        if not ok_m:
+            return _gate(user, f"Llegaste a tus {lim} turnos con la Maestra de hoy. Vuelve mañana o sube de plan.", refund=False)
 
     # mientras se convierte y transcribe el audio, ya vamos pidiendo el contexto del alumno
     ctx_future = _ctx_pool.submit(_tutor_context, uid)
@@ -3341,8 +3373,16 @@ def call_turn():
     def generate():
         said = ""
         try:
-            recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(),
-                                                    audio_config=speechsdk.audio.AudioConfig(filename=wav_path))
+            audio_cfg = speechsdk.audio.AudioConfig(filename=wav_path)
+            if maestro:  # el alumno mezcla español e inglés
+                try:
+                    auto = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=["es-MX", "en-US"])
+                    recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(), audio_config=audio_cfg,
+                                                            auto_detect_source_language_config=auto)
+                except Exception:
+                    recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(), audio_config=audio_cfg)
+            else:
+                recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(), audio_config=audio_cfg)
             result = recognizer.recognize_once()
             if result.reason == speechsdk.ResultReason.RecognizedSpeech:
                 said = (result.text or "").strip()
@@ -3364,11 +3404,11 @@ def call_turn():
             level, prior = ctx_future.result(timeout=10)
         except Exception:
             level, prior = None, ""
-        system_prompt = build_tutor_system_prompt(level, prior, "llamada", "")
+        system_prompt = build_tutor_system_prompt(level, prior, "maestro" if maestro else "llamada", "")
         full, buf, pending, first = "", "", [], True
 
         def push(sentence):
-            pending.append((sentence, _tts_pool.submit(tts_bytes, sentence, voice)))
+            pending.append((sentence, _tts_pool.submit(tts_bytes, sentence, voice, maestro)))
 
         def drain(wait=False):
             import base64
@@ -4407,8 +4447,30 @@ def _tutor_context(user_id):
     return level, prior
 
 
+TEACHER_PROMPT = (
+    "You are Maestra Palanqueta, a warm, patient, bilingual private English teacher at Talvo English (a hen mascot, but a real teacher first). "
+    "Your student is a Spanish speaker who finds English hard and learns best with a human-style teacher who explains in SPANISH, like a private tutor who speaks both languages.\n\n"
+    "LANGUAGE RULES (very important):\n"
+    "- Speak mostly in natural, simple Mexican Spanish. Explain, encourage and give instructions in Spanish.\n"
+    "- Every English word, phrase or sentence the student must hear or say goes inside straight double quotes, e.g. Di conmigo: \"How's it going?\". Never put English outside quotes, except inside those quotes.\n"
+    "- If the student speaks Spanish, answer in Spanish. If they try English, praise the attempt first.\n\n"
+    "HOW YOU TEACH (a tiny class in every turn, never a lecture):\n"
+    "1. Teach ONE small thing at a time: one phrase or one idea, real everyday spoken English (what people actually say, contractions, 'gonna', 'wanna', 'how's it going'), not school English.\n"
+    "2. Give the phrase, say in a few Spanish words what it means or when you use it, and ask the student to repeat it or use it in a sentence.\n"
+    "3. When they answer, correct kindly: say what was good, then show the better version in quotes and ask them to try again. Do not move on until it is decent.\n"
+    "4. When they are lost, go slower and use more Spanish. When they do well, use a bit more English and raise the challenge.\n"
+    "5. Mix teaching with tiny speaking practice: short mini-dialogues where you play one role.\n"
+    "6. If they have no idea what to learn, propose a useful everyday situation (cafe, work, travel, small talk) and start with the first phrase.\n"
+    "7. End EVERY turn with one clear, easy question or task for the student.\n\n"
+    "FORMAT: this is a spoken lesson. Reply in 2-4 short sentences, no lists, no markdown, no emojis, no parentheses. Sound like a kind human teacher."
+)
+
+
 def build_tutor_system_prompt(level, prior_context, modo="", categoria=""):
     """Prompt de Palanqueta. Lo usan el chat del tutor y la llamada en vivo."""
+    if modo == "maestro":
+        lv = f"Estimated student level: {level}. Adapt how much English you use to it (A1-A2: almost all Spanish, tiny English pieces)." if level else "Student level unknown: assume beginner and check gently what they already know."
+        return f"{TEACHER_PROMPT}\n\n{lv}\n\n{REAL_ENGLISH}\n\n{prior_context}"
     level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
 
     call_line = (
@@ -4461,6 +4523,11 @@ def tutor():
         if role in {"user", "assistant"} and isinstance(content, str):
             safe_history.append({"role": role, "content": content[:2000]})
 
+    if modo == "maestro" and not is_admin_user(user):
+        lim = PLAN_FEATURES[_user_plan(user)]["maestro_dia"]
+        ok_m, _w = _rate_hit((user.id, "maestro"), lim, 86400)
+        if not ok_m:
+            return _gate(user, f"Llegaste a tus {lim} turnos con la Maestra de hoy. Vuelve mañana o sube de plan.", refund=False)
     level, prior_context = _tutor_context(user.id)
     system_prompt = build_tutor_system_prompt(level, prior_context, modo, categoria)
 
@@ -5558,10 +5625,10 @@ import uuid as _uuid
 #   shadowing_dia  = intentos de shadowing por día (cada uno usa Azure Speech, no créditos)
 #   shadowing_tema = shadowing con temas propios (usa IA, 0.5 créditos) · reunion = grabar reunión (6 créditos)
 PLAN_FEATURES = {
-    "gratis": {"rutas": 1,  "lecciones_ruta": 3, "escenarios": "basicos", "escenario_libre": False, "traductor_max": 300, "shadowing_dia": 15, "shadowing_tema": False, "reunion": False, "clips_dia": 5, "clip_tema": False, "presentacion": False, "presentacion_slides": 0},
-    "basico": {"rutas": 3,  "lecciones_ruta": 5, "escenarios": "todos",   "escenario_libre": False, "traductor_max": 600, "shadowing_dia": 60, "shadowing_tema": True, "reunion": False, "clips_dia": 15, "clip_tema": True, "presentacion": True, "presentacion_slides": 6},
-    "pro":    {"rutas": 8,  "lecciones_ruta": 6, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1000, "shadowing_dia": 200, "shadowing_tema": True, "reunion": True, "clips_dia": 40, "clip_tema": True, "presentacion": True, "presentacion_slides": 12},
-    "max":    {"rutas": 20, "lecciones_ruta": 8, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1500, "shadowing_dia": 500, "shadowing_tema": True, "reunion": True, "clips_dia": 100, "clip_tema": True, "presentacion": True, "presentacion_slides": 20},
+    "gratis": {"maestro_dia": 8, "rutas": 1,  "lecciones_ruta": 3, "escenarios": "basicos", "escenario_libre": False, "traductor_max": 300, "shadowing_dia": 15, "shadowing_tema": False, "reunion": False, "clips_dia": 5, "clip_tema": False, "presentacion": False, "presentacion_slides": 0},
+    "basico": {"maestro_dia": 40, "rutas": 3,  "lecciones_ruta": 5, "escenarios": "todos",   "escenario_libre": False, "traductor_max": 600, "shadowing_dia": 60, "shadowing_tema": True, "reunion": False, "clips_dia": 15, "clip_tema": True, "presentacion": True, "presentacion_slides": 6},
+    "pro":    {"maestro_dia": 120, "rutas": 8,  "lecciones_ruta": 6, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1000, "shadowing_dia": 200, "shadowing_tema": True, "reunion": True, "clips_dia": 40, "clip_tema": True, "presentacion": True, "presentacion_slides": 12},
+    "max":    {"maestro_dia": 300, "rutas": 20, "lecciones_ruta": 8, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1500, "shadowing_dia": 500, "shadowing_tema": True, "reunion": True, "clips_dia": 100, "clip_tema": True, "presentacion": True, "presentacion_slides": 20},
 }
 
 

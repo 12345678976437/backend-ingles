@@ -1493,3 +1493,10 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .lt-tab{padding:9px 16px;border:1px solid transparent;border-radius:10px;background:none;color:var(--muted);font-size:13.5px;font-weight:600;cursor:pointer;transition:color .15s,background .15s}
 .lt-tab:hover{color:var(--text)}.lt-tab.on{color:var(--cyan);border-color:rgba(var(--c1-rgb),.5);background:rgba(var(--c1-rgb),.14)}
 @media(max-width:560px){.lt-tabs{width:100%;flex-wrap:nowrap;overflow-x:auto}.lt-tab{flex:1;white-space:nowrap;padding:9px 10px;font-size:12.5px}}
+
+/* --- Maestra bilingüe --- */
+#call-mode-bar .mode{font-size:13px}
+.call-ui[data-teacher="1"] .core{position:relative;box-shadow:0 0 0 2px rgba(255,200,87,.55),0 0 28px rgba(255,200,87,.25)}
+.call-ui[data-teacher="1"] .core::after{content:"🎓";position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-8deg);font-size:34px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.4))}
+.call-ui[data-teacher="1"] .call-badge{background:rgba(255,200,87,.16);color:#ffc857}
+@media(max-width:640px){#tutor-category-bar{grid-template-columns:repeat(3,1fr)!important}}
