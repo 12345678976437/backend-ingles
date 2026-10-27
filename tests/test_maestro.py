@@ -18,3 +18,10 @@ assert 'EXAM MODE' in e1 and 'question 1 of 8' in e1 and 'LAST' in e8
 assert m._CEFR_TO_LEVEL['B1']=='intermediate'
 assert [m.PLAN_FEATURES[k]['examen_mes'] for k in ('gratis','basico','pro','max')]==[1,4,10,30]
 print('examen OK')
+# clase como maestro humano
+new=m.build_tutor_system_prompt('A2','','maestro','',ficha={},clases=1,clase_n=1)
+assert 'Nice to meet you' in new and 'new student' in new
+back=m.build_tutor_system_prompt('A2','','maestro','',ficha={'nombre':'Ana','gustos':['cocinar']},clases=3,clase_n=1)
+assert 'RETURNING' in back and 'Ana' in back
+assert 'WRAP UP' in m._class_plan({}, 1, 12) and 'role-play' in m._class_plan({'nombre':'Ana'}, 3, 9)
+print('clase OK')

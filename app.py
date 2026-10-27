@@ -3357,6 +3357,10 @@ def call_turn():
     voice = (request.form.get("voz") or _DEFAULT_VOICE).strip()
     uid = user.id
     maestro = (request.form.get("maestro") or "") == "1"
+    try:
+        clase_n = max(1, min(int(request.form.get("clase_n") or 1), 60))
+    except ValueError:
+        clase_n = 1
     examen = (request.form.get("examen") or "") == "1"
     try:
         exam_turn = max(1, min(int(request.form.get("turno_n") or 1), EXAM_TOTAL))
@@ -3416,7 +3420,7 @@ def call_turn():
             level, prior = ctx_future.result(timeout=10)
         except Exception:
             level, prior = None, ""
-        system_prompt = build_exam_prompt(exam_turn) if examen else build_tutor_system_prompt(level, prior, "maestro" if maestro else "llamada", "")
+        system_prompt = build_exam_prompt(exam_turn) if examen else build_tutor_system_prompt(level, prior, "maestro" if maestro else "llamada", "", **(_teacher_kw(uid, clase_n) if maestro else {}))
         full, buf, pending, first = "", "", [], True
 
         def push(sentence):
@@ -3483,6 +3487,9 @@ def call_turn():
         reply = full.strip() or "Let's keep practicing. Tell me more."
         threading.Thread(target=save_history, args=("historial_tutor", uid, {
             "mensaje_usuario": said, "respuesta_tutor": reply}), daemon=True).start()
+        if maestro and clase_n % 3 == 2:
+            lines = [("Student: " if h["role"] == "user" else "Teacher: ") + h["content"] for h in safe_history[-8:]]
+            threading.Thread(target=_ficha_update, args=(uid, lines + ["Student: " + said, "Teacher: " + reply]), daemon=True).start()
         yield _ndjson({"type": "done", "reply": reply})
 
     return Response(stream_with_context(generate()), mimetype="application/x-ndjson",
@@ -4500,6 +4507,106 @@ def _tutor_context(user_id):
     return level, prior
 
 
+# ---------------------------------------------------------------------------
+#  MAESTRA: ficha del alumno (nombre, gustos, objetivo, lo aprendido) y plan de la clase
+# ---------------------------------------------------------------------------
+def _ficha_get(uid):
+    def load():
+        client = supabase_admin or supabase
+        if not client:
+            return {"ficha": {}, "clases": 0}
+        try:
+            rows = client.table("maestro_ficha").select("ficha,clases").eq("user_id", uid).limit(1).execute().data or []
+            return rows[0] if rows else {"ficha": {}, "clases": 0}
+        except Exception as exc:
+            print(f"[FICHA] {exc}")
+            return {"ficha": {}, "clases": 0}
+    row = _cached_call(("ficha", uid), 30, load)
+    return {"ficha": row.get("ficha") or {}, "clases": int(row.get("clases") or 0)}
+
+
+def _ficha_save(uid, ficha=None, clases=None):
+    client = supabase_admin or supabase
+    if not client:
+        return
+    cur = _ficha_get(uid)
+    row = {"user_id": uid, "ficha": cur["ficha"] if ficha is None else ficha,
+           "clases": cur["clases"] if clases is None else clases,
+           "updated_at": datetime.now(timezone.utc).isoformat()}
+    try:
+        client.table("maestro_ficha").upsert(row, on_conflict="user_id").execute()
+        with _ctx_lock:
+            _ctx_cache.pop(("ficha", uid), None)
+    except Exception as exc:
+        print(f"[FICHA save] {exc}")
+
+
+def _ficha_update(uid, lines):
+    """Pone al día la ficha leyendo lo último de la clase (corre en segundo plano)."""
+    try:
+        cur = _ficha_get(uid)["ficha"]
+        data = ai_json(
+            "You keep the private student file of a bilingual English teacher. Given the current file (JSON) and the latest part of a class transcript, return the UPDATED file as JSON with exactly these keys: "
+            "nombre (string, first name or empty), ocupacion (string), gustos (array of up to 6 short strings in Spanish), objetivo (string, why they want English), "
+            "dificultad (string, what feels hardest, in Spanish), frases_aprendidas (array of up to 12 English phrases the student has practiced successfully), "
+            "para_repasar (array of up to 6 English phrases or points the student got wrong or struggled with), ultimo_tema (string, short Spanish). "
+            "Keep old facts unless the student corrected them. Only write what the student actually said or did. No invented facts.",
+            "CURRENT FILE:\n" + json.dumps(cur, ensure_ascii=False) + "\n\nTRANSCRIPT:\n" + "\n".join(lines)[-3500:],
+            temperature=0.2)
+        clean = {}
+        for k in ("nombre", "ocupacion", "objetivo", "dificultad", "ultimo_tema"):
+            clean[k] = _short(data.get(k), 120)
+        for k, n in (("gustos", 6), ("frases_aprendidas", 12), ("para_repasar", 6)):
+            v = data.get(k) or []
+            clean[k] = [_short(x, 90) for x in v if isinstance(x, str) and x.strip()][:n] if isinstance(v, list) else []
+        _ficha_save(uid, ficha=clean)
+    except Exception as exc:
+        print(f"[FICHA update] {exc}")
+
+
+def _class_plan(ficha, clases, n):
+    """Qué toca hacer en ESTE turno de la clase, como lo haría un maestro particular."""
+    nombre = ficha.get("nombre") or ""
+    if not nombre and clases <= 1:
+        steps = {
+            1: "The student just told you their name (or answered your hello). React warmly and say it back like a human: 'Mucho gusto, <name>' and the English \"Nice to meet you, <name>.\" (ask them to repeat that one phrase). Then ask what they do (work or study).",
+            2: "React to what they do with real interest (one short human comment). Then ask what they like to do for fun or what they enjoy.",
+            3: "React to their hobbies. Then ask why they want to learn English and what feels hardest for them, and tell them it is totally normal to find it hard. Keep it warm.",
+            4: "Now teach your FIRST mini-lesson using THEIR own answers: teach 'My name is ...' / \"I'm from ...\" / \"I work as ...\" or \"I like ...\" with their real data. One phrase per turn, ask them to say it.",
+            5: "Continue the mini-lesson: next phrase built with their data, ask them to say it, correct kindly if needed.",
+        }
+        if n in steps:
+            return steps[n]
+    else:
+        steps = {
+            1: f"This is a RETURNING student{(' named ' + nombre) if nombre else ''}. Greet them by name, ask how they are in English (\"How are you doing today?\") and how the days since the last class went. React humanly to what they answer.",
+            2: "Quick warm-up: review 1-2 phrases from the 'para_repasar' or 'frases_aprendidas' list in their file, ask them to say them. Praise what they remember.",
+            3: "Tell them in one sentence what you will learn today (pick a topic from their goals/likes/last topic) and teach the first phrase of it.",
+        }
+        if n in steps:
+            return steps[n]
+    if n >= 12:
+        return ("WRAP UP the class like a real teacher: say what they did well, recap the 3 most useful phrases of today (in quotes, one by one), give a tiny homework (use one phrase once today), "
+                "say you are proud of them and \"See you next class!\". If they keep talking you may continue gently.")
+    if n >= 8:
+        return "Do a short role-play: you play a real person (barista, coworker, new friend) in a tiny dialogue using today's phrases; they answer; you correct kindly after each answer."
+    return "Keep teaching the next small piece (one phrase or one idea), have the student say it or use it in a sentence, correct kindly, praise real progress. Use THEIR life (job, hobbies, goals) in the examples."
+
+
+def _teacher_kw(uid, clase_n):
+    row = _ficha_get(uid)
+    if clase_n == 1:  # primer turno de una clase nueva
+        _ficha_save(uid, clases=row["clases"] + 1)
+        row["clases"] += 1
+    return {"ficha": row["ficha"], "clases": row["clases"], "clase_n": clase_n}
+
+
+def _ficha_text(ficha, clases):
+    if not ficha:
+        return "STUDENT FILE: empty (this is a new student)."
+    return "STUDENT FILE (private notes from previous classes; use them naturally, never read them out like a list): " + json.dumps(ficha, ensure_ascii=False) + f". Classes so far: {clases}."
+
+
 TEACHER_PROMPT = (
     "You are Maestra Palanqueta, a warm, patient, bilingual private English teacher at Talvo English (a hen mascot, but a real teacher first). "
     "Your student is a Spanish speaker who finds English hard and learns best with a human-style teacher who explains in SPANISH, like a private tutor who speaks both languages.\n\n"
@@ -4539,13 +4646,15 @@ def build_exam_prompt(turn):
     )
 
 
-def build_tutor_system_prompt(level, prior_context, modo="", categoria=""):
+def build_tutor_system_prompt(level, prior_context, modo="", categoria="", ficha=None, clases=0, clase_n=1):
     """Prompt de Palanqueta. Lo usan el chat del tutor y la llamada en vivo."""
     if modo == "maestro":
         lv = f"Estimated student level: {level}. Adapt how much English you use to it (A1-A2: almost all Spanish, tiny English pieces)." if level else "Student level unknown: assume beginner and check gently what they already know."
-        cont = ("\n\nCONTINUITY: if the earlier-conversation context below shows things this student already practiced, start your FIRST reply by briefly recalling one of them in Spanish "
-                "(\"la clase pasada vimos...\") and doing a 20-second review before teaching anything new.")
-        return f"{TEACHER_PROMPT}{cont}\n\n{lv}\n\n{REAL_ENGLISH}\n\n{prior_context}"
+        plan = _class_plan(ficha or {}, clases, clase_n)
+        extra = (f"\n\n{_ficha_text(ficha or {}, clases)}\n\nTHIS TURN OF THE CLASS (turn {clase_n}): {plan}\n"
+                 "Act like a real human teacher: react to what the student actually said before moving on, remember their name and use it now and then, "
+                 "be curious about them as a person, and never ask more than one question per turn.")
+        return f"{TEACHER_PROMPT}{extra}\n\n{lv}\n\n{REAL_ENGLISH}\n\n{prior_context}"
     level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
 
     call_line = (
@@ -4604,7 +4713,12 @@ def tutor():
         if not ok_m:
             return _gate(user, f"Llegaste a tus {lim} turnos con la Maestra de hoy. Vuelve mañana o sube de plan.", refund=False)
     level, prior_context = _tutor_context(user.id)
-    system_prompt = build_tutor_system_prompt(level, prior_context, modo, categoria)
+    try:
+        clase_n = max(1, min(int(body.get("clase_n") or 1), 60))
+    except (TypeError, ValueError):
+        clase_n = 1
+    system_prompt = build_tutor_system_prompt(level, prior_context, modo, categoria,
+                                              **(_teacher_kw(user.id, clase_n) if modo == "maestro" else {}))
 
     try:
         response = ai_client.chat.completions.create(
@@ -4621,9 +4735,23 @@ def tutor():
             "mensaje_usuario": message,
             "respuesta_tutor": reply,
         }), daemon=True).start()
+        if modo == "maestro" and clase_n % 3 == 2:
+            lines = [("Student: " if h["role"] == "user" else "Teacher: ") + h["content"] for h in safe_history[-8:]]
+            threading.Thread(target=_ficha_update, args=(user.id, lines + ["Student: " + message, "Teacher: " + reply]), daemon=True).start()
         return jsonify({"ok": True, "respuesta": reply})
     except Exception as exc:
         return json_error(_err_log("El tutor no pudo responder", exc), 500)
+
+
+@app.get("/api/maestro/ficha")
+def teacher_file():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    row = _ficha_get(user.id)
+    f = row["ficha"]
+    return jsonify({"ok": True, "nombre": f.get("nombre") or "", "clases": row["clases"],
+                    "ultimo_tema": f.get("ultimo_tema") or ""})
 
 
 @app.get("/obtener-historial")
