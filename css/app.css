@@ -1526,3 +1526,22 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .hm-card:hover{border-color:rgba(255,200,87,.6)}
 .hm-ic{font-size:30px}.hm-card b{display:block;font-size:14px}.hm-card small{color:var(--muted);font-size:12px}
 @media(max-width:640px){.home-maestra{grid-template-columns:1fr}}
+
+/* Mapa del temario de la maestra */
+.tmap{margin-top:16px}
+.tmap .tm-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:12px}
+.tmap h3{margin:2px 0}.tmap small{color:var(--muted)}
+.tm-ring{--p:0;width:74px;height:74px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#43e0ff calc(var(--p)*1%),rgba(255,255,255,.08) 0);position:relative;flex-shrink:0}
+.tm-ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--card,#0b1220)}
+.tm-ring b{position:relative;font:800 16px var(--display)}
+.tm-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:340px;overflow:auto}
+.tm-list li{display:flex;gap:12px;align-items:flex-start;padding:9px 12px;border-radius:12px;border:1px solid var(--line,rgba(255,255,255,.08));opacity:.6}
+.tm-list li.actual{opacity:1;border-color:rgba(255,200,87,.6);background:rgba(255,200,87,.07)}
+.tm-list li.hecha{opacity:.9}
+.tm-list .tm-dot{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;background:rgba(255,255,255,.08)}
+.tm-list li.hecha .tm-dot{background:#3ddc97;color:#06130d}
+.tm-list li.actual .tm-dot{background:#ffc857;color:#201500}
+.tm-list b{font-size:13.5px}.tm-list small{display:block;margin-top:3px;font-size:12px}
+.tmap h4{margin:14px 0 6px;font-size:13px;color:var(--muted)}
+.tm-chips{display:flex;flex-wrap:wrap;gap:6px}.tm-chips span{padding:5px 10px;border-radius:999px;font-size:12px;background:rgba(61,220,151,.12);border:1px solid rgba(61,220,151,.35)}
+.tm-chips.warn span{background:rgba(255,160,90,.12);border-color:rgba(255,160,90,.4)}

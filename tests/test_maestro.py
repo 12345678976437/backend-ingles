@@ -33,3 +33,6 @@ assert 'STREET ENGLISH' in m.build_tutor_system_prompt('A1','','maestro','',fich
 print('temario OK')
 assert any(u['code']=='grammar_basics' for u in m.LEARNING_UNITS) and all(c in {x for s in m.SECTION_DEFS for x in s['units']} for c in ('spoken_real','grammar_build','grammar_pro'))
 print('rutas OK')
+assert m._syllabus_unit({}, 'C1')[0]==19 and m._syllabus_unit({}, 'B1')[0]==13
+assert any(r.rule.startswith('/api/maestro/temario') for r in m.app.url_map.iter_rules())
+print('mapa OK')

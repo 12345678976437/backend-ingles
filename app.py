@@ -3533,6 +3533,11 @@ def exam_finish():
         try:
             (supabase_admin or supabase).table("profiles").update({"cefr_level": level}).eq("id", user.id).execute()
             data["aplicado"] = True
+            row = _ficha_get(user.id)  # la maestra empieza el temario donde te ubicó el examen
+            fich = dict(row["ficha"])
+            fich["unidad"] = _syllabus_unit({}, cefr)[0]
+            _ficha_save(user.id, ficha=fich)
+            data["unidad"] = fich["unidad"] + 1
         except Exception as exc:
             print(f"[EXAM LEVEL] {exc}")
     save_history("historial_tutor", user.id, {"mensaje_usuario": "[Examen de nivel]", "respuesta_tutor": json.dumps(data, ensure_ascii=False)})
@@ -4541,7 +4546,7 @@ def _syllabus_unit(ficha, level):
     try:
         i = int(ficha.get("unidad"))
     except (TypeError, ValueError):
-        start = {"A1": 0, "A2": 6, "B1": 13, "B2": 17}.get(str(level or "")[:2], 0)
+        start = {"A1": 0, "A2": 6, "B1": 13, "B2": 17, "C1": 19}.get(str(level or "")[:2], 0)
         i = start
     i = max(0, min(i, len(TEACHER_SYLLABUS) - 1))
     return i, TEACHER_SYLLABUS[i]
@@ -4802,6 +4807,26 @@ def tutor():
         return jsonify({"ok": True, "respuesta": reply})
     except Exception as exc:
         return json_error(_err_log("El tutor no pudo responder", exc), 500)
+
+
+@app.get("/api/maestro/temario")
+def teacher_syllabus():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    row = _ficha_get(user.id)
+    f = row["ficha"]
+    try:
+        level, _p = _tutor_context(user.id)
+    except Exception:
+        level = None
+    cur, _u = _syllabus_unit(f, level)
+    units = [{"n": i + 1, "tema": t[0], "real": t[1].replace('\\"', '"'),
+              "estado": "hecha" if i < cur else ("actual" if i == cur else "pendiente")}
+             for i, t in enumerate(TEACHER_SYLLABUS)]
+    return jsonify({"ok": True, "nombre": f.get("nombre") or "", "clases": row["clases"], "actual": cur + 1,
+                    "total": len(TEACHER_SYLLABUS), "unidades": units,
+                    "dominadas": f.get("frases_aprendidas") or [], "repasar": f.get("para_repasar") or []})
 
 
 @app.get("/api/maestro/ficha")
