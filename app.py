@@ -1874,9 +1874,9 @@ PROFILE_LEVEL_RANK = {"beginner": 0, "elementary": 1, "intermediate": 2, "advanc
 GOAL_LABELS = {"work": "Work", "travel": "Travel", "study": "Study", "exams": "Exams", "personal": "Personal growth"}
 
 SECTION_DEFS = [
-    {"code": "foundations", "title": "Foundations", "level": "A1", "units": ["first_steps", "everyday_english", "home_and_city"]},
-    {"code": "real_life", "title": "Real Life", "level": "A2", "units": ["at_the_restaurant", "shopping_and_money", "travel_and_tourism", "health_and_body"]},
-    {"code": "career_social", "title": "Career & Social", "level": "B1", "units": ["work_and_business", "social_life"]},
+    {"code": "foundations", "title": "Foundations", "level": "A1", "units": ["grammar_basics", "first_steps", "everyday_english", "home_and_city"]},
+    {"code": "real_life", "title": "Real Life", "level": "A2", "units": ["spoken_real", "grammar_build", "at_the_restaurant", "shopping_and_money", "travel_and_tourism", "health_and_body"]},
+    {"code": "career_social", "title": "Career & Social", "level": "B1", "units": ["grammar_pro", "work_and_business", "social_life"]},
     {"code": "fluency", "title": "Fluency", "level": "B2", "units": ["fluent_moves", "big_ideas"]},
 ]
 
@@ -1919,7 +1919,10 @@ def _parse_curriculum(text):
     return units
 
 
-LEARNING_UNITS = _parse_curriculum(CURRICULUM_TEXT)
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from curriculum_gramatica import CURRICULUM_TEXT_2
+LEARNING_UNITS = _parse_curriculum(CURRICULUM_TEXT + "\n" + CURRICULUM_TEXT_2)
 
 LEARNING_TOOL_LABELS = {
     "pronunciation": "Pronunciation",

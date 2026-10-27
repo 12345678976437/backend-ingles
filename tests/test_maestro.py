@@ -31,3 +31,5 @@ pl=m._class_plan({'nombre':'Ana'},3,6,'A1'); assert 'SCHOOL BASE' in pl and 'CUR
 assert 'REAL LIFE' in m._class_plan({'nombre':'Ana'},3,7,'A1') and 'UNDERSTAND THEM' in m._class_plan({'nombre':'Ana'},3,8,'A1')
 assert 'STREET ENGLISH' in m.build_tutor_system_prompt('A1','','maestro','',ficha={'nombre':'Ana'},clases=2,clase_n=6)
 print('temario OK')
+assert any(u['code']=='grammar_basics' for u in m.LEARNING_UNITS) and all(c in {x for s in m.SECTION_DEFS for x in s['units']} for c in ('spoken_real','grammar_build','grammar_pro'))
+print('rutas OK')
