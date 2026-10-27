@@ -5379,6 +5379,38 @@ def learning_path():
     })
 
 
+@app.get("/api/learning-path/offline-pack")
+def learning_path_offline_pack():
+    """Las próximas lecciones en orden, completas, para practicar sin conexión (se guardan en el teléfono)."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    prof, level_rank, progress, gems, sections, _nxt = _path_for_user(user.id)
+    try:
+        n = max(1, min(8, int(request.args.get("n") or 6)))
+    except ValueError:
+        n = 6
+    out = []
+    for sec in sections:
+        for u in sec["units"]:
+            if not u.get("unlocked"):
+                continue
+            unit = get_unit(u["code"])
+            for l in u["lessons"]:
+                if l["challenge"] or l["completed"] or not unit:
+                    continue
+                data = build_lesson_payload(unit, l["id"], level_rank)
+                if not data.get("exercises"):
+                    continue
+                data.update({"unit_code": u["code"], "unit_title": unit["title"], "icon": unit["icon"],
+                             "lesson_id": l["id"], "mode": "lesson", "replay": False, "best_score": None,
+                             "lesson_title": l["title"]})
+                out.append(data)
+                if len(out) >= n:
+                    return jsonify({"ok": True, "lessons": out})
+    return jsonify({"ok": True, "lessons": out})
+
+
 @app.get("/api/learning-path/sounds")
 def learning_path_sounds():
     user, error = authenticated_user()

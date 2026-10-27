@@ -22,7 +22,7 @@ function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 window.loadLearningPath=async function(){
   const root=$('lp-home');if(!root)return;
   root.innerHTML='<div class="empty">'+window.pqLoader()+'</div>';
-  try{const [d,plan]=await Promise.all([jsonFetch('/api/learning-path'),jsonFetch('/api/learning-path/daily-plan').catch(()=>null)]);LP.data=d;LP.plan=plan;renderHome(d,plan)}
+  try{const [d,plan]=await Promise.all([jsonFetch('/api/learning-path'),jsonFetch('/api/learning-path/daily-plan').catch(()=>null)]);LP.data=d;LP.plan=plan;renderHome(d,plan);if(window.TalvoOffline&&!d.__offline)setTimeout(()=>window.TalvoOffline.prefetch(d),2500)}
   catch(e){root.innerHTML='<div class="empty">'+esc(e.message)+'<br><button type="button" class="btn" style="margin-top:10px" onclick="loadLearningPath()">Retry</button></div>'}
 };
 function ring(pct){const r=22,c=2*Math.PI*r;return '<svg viewBox="0 0 54 54" class="lp2-ring"><circle cx="27" cy="27" r="'+r+'" class="bg"/><circle cx="27" cy="27" r="'+r+'" class="fg" style="stroke-dasharray:'+c+';stroke-dashoffset:'+(c*(1-Math.min(1,pct)))+'"/></svg>'}
@@ -164,6 +164,7 @@ function nextEx(){
   if(P.i>=P.queue.length)return finish();
   const ex=P.queue[P.i];P.cur=ex;P.answered=false;P.ready=false;P.evalFn=null;progress();
   const r=R[ex.type];if(!r){P.i++;return nextEx()}
+  if(ex.type==='speak'&&window.TalvoOffline&&window.TalvoOffline.isOff()){if(P.kind!=='sound')P.total=Math.max(1,P.total-1);P.queue.splice(P.i,1);P.cur=null;progress();return nextEx()}
   if(ex.check)coach('🎧 Listening check: native speed, like real life. Don\'t translate word by word — catch the meaning.','idle');
   if(P.streak<2||Math.random()<.35)coach(realTip(),'idle');
   r(ex);
@@ -360,6 +361,7 @@ function renderResults(r,pct,secs){
   if(r.plan_bonus)h+='<div class="lp-banner">🎯 Daily plan complete! +'+r.plan_bonus+' bonus XP</div>';
   if(r.unit_completed)h+=(P.kind==='route'?'<div class="lp-banner">🏆 Route completed! +'+r.unit_bonus+' bonus XP</div>':'<div class="lp-banner">🏆 Unit completed! +'+r.unit_bonus+' bonus XP</div>');
   if(!r.passed)h+='<p class="lp-tip">You need at least 60% to pass. You can retry as many times as you want — no hearts, no penalty.</p>';
+  else if(r.offline)h+='<p class="lp-tip">Saved on this device. It will sync and count for XP when you are back online.</p>';
   else if(r.xp===0)h+='<p class="lp-tip">Progress saved. Spend a little more time per lesson to earn XP.</p>';
   const ms=P.mistakes.filter((m,i,a)=>m&&m.en&&a.findIndex(x=>x.en===m.en)===i).slice(0,6);
   if(ms.length)h+='<div class="lp-mist"><div class="lp-kicker">Worth a second look'+(P.kind==='sound'?'':' · saved to your vocabulary')+'</div>'+ms.map(m=>'<div class="lp-mrow" data-i18n-skip><button type="button" class="lp-mplay" data-t="'+esc(m.en)+'">🔊</button><b>'+esc(m.en)+'</b><small>'+esc(m.es||'')+'</small></div>').join('')+'</div>';

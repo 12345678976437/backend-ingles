@@ -1,7 +1,7 @@
 name: Pruebas
 on:
   push:
-    paths: ["app.py", "tests/**"]
+    paths: ["app.py", "tests/**", "sw.js", "index.html", "js/**", "css/**", "img/**", "curriculum_gramatica.py"]
   workflow_dispatch:
 jobs:
   reto:
@@ -13,3 +13,5 @@ jobs:
           python-version: "3.12"
       - run: pip install flask flask-cors python-dotenv requests
       - run: python tests/test_reto.py
+      - run: python tests/test_sw.py
+      - run: python tests/test_maestro.py

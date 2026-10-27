@@ -83,10 +83,29 @@ function showPlanModal(info,msg){
 }
 function closePlanModal(){const m=$('plan-modal');if(m)m.remove()}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-plan-pick]');if(b){toast('Para activar el plan '+b.dataset.planPick.toUpperCase()+' escríbenos en Soporte y te lo activamos.');section('soporte')}});
-async function jsonFetch(path,options={}){const r=await authFetch(path,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('Request failed ('+r.status+')'));return d}
+const OFL=window.TalvoOffline||null;
+function offlineErr(){return new Error('No internet connection. This needs to be online.')}
+async function jsonFetch(path,options={}){
+  if(OFL&&OFL.isOff()){const c=OFL.handle(path,options);if(c!==undefined)return c;throw offlineErr()}
+  let r;
+  try{r=await authFetch(path,options)}
+  catch(e){if(OFL&&OFL.isNetErr(e)){const c=OFL.handle(path,options);if(c!==undefined)return c;throw offlineErr()}throw e}
+  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('Request failed ('+r.status+')'));
+  if(OFL&&r.ok&&(!options.method||String(options.method).toUpperCase()==='GET'))OFL.put(path,d);
+  return d}
 async function syncUser(user){try{return await syncUserInner(user)}finally{if(window.hideBoot)window.hideBoot()}}
-async function syncUserInner(user){state.user=user;if(user){vfHide();setTimeout(()=>{PUSH.sync().catch(()=>{});pushAskMaybe()},2500)}const content=$('app-content'),locked=$('locked-view');if(!user){document.querySelector('.app').style.display='none';$('welcome-view').style.display='flex';closeAuth();return}document.querySelector('.app').style.display='';$('welcome-view').style.display='none';$('user-display').textContent=user.email||'Signed in';$('side-email').textContent=user.email||'Student';$('login-btn').style.display='none';$('logout-btn').style.display='inline-block';try{const d=await jsonFetch('/api/session');if(!d.authenticated)throw new Error('The session is not recognized by the server.');state.subscribed=!!d.is_subscribed;renderAccountInfo(user,d);applyProfileIdentity(user,d);if(d.es_admin){$('nav-admin').style.display='flex'}if(d.en_prueba){$('side-status').textContent=`Free trial · ${d.trial_dias_restantes} day(s) left`}else{$('side-status').textContent=state.subscribed?'Practice access active':'Trial ended · subscribe to continue'}content.style.display=state.subscribed?'block':'none';locked.style.display=state.subscribed?'none':'block';if(state.subscribed){if(d.user&&!d.user.onboarded){content.style.display='none';initOnboarding()}else{closeAuth();loadDashboard();}}}catch(e){console.error('[SESSION]',e);state.subscribed=false;content.style.display='none';locked.style.display='block';$('side-status').textContent='Access check failed';toast('We could not verify your access. Please sign in again.')}}
-function section(name,button){if(!state.user||!state.subscribed){showAuth();return}$$('.section').forEach(s=>s.classList.toggle('active',s.id==='sec-'+name));$$('#main-nav button,[data-section-jump]').forEach(b=>b.classList.remove('active'));if(button)button.classList.add('active');const nav=document.querySelector(`#main-nav button[data-section="${name}"]`);if(nav)nav.classList.add('active');if(name==='escritura')loadWritingChallenge();if(name==='lectura')loadReadingLibrary().catch(e=>toast(e.message));if(name==='escucha')loadListeningLibrary().catch(e=>toast(e.message));if(name==='historial')loadProgress().catch(e=>toast(e.message));if(name==='admin')loadAdminActivity();if(name==='home')loadDashboard();if(name==='logros')loadAchievements();if(name==='shop')loadShop();if(name==='notificaciones')loadNotifications();if(name==='vocabulario'){loadVocabDaily()}
+/* Sin internet: entra con la última sesión verificada en este teléfono (solo para ver y practicar). */
+function enterOffline(user){
+  const sn=OFL&&OFL.snap();if(!sn)return false;
+  if(user&&user.id&&user.id!==sn.id)return false;
+  const u=user||{id:sn.id,email:sn.email};OFL.setUser(u.id);state.user=u;state.subscribed=true;
+  document.querySelector('.app').style.display='';$('welcome-view').style.display='none';closeAuth();
+  $('user-display').textContent=u.email||'Signed in';$('side-email').textContent=u.email||'Student';$('login-btn').style.display='none';$('logout-btn').style.display='inline-block';
+  $('side-status').textContent='Offline mode';$('app-content').style.display='block';$('locked-view').style.display='none';
+  OFL.badge();try{loadDashboard()}catch(e){}return true}
+window.addEventListener('online',()=>{if(state.user&&$('side-status')&&$('side-status').textContent==='Offline mode'){setTimeout(()=>{try{syncUser(state.user)}catch(e){}},1500)}});
+async function syncUserInner(user){state.user=user;if(user){vfHide();setTimeout(()=>{PUSH.sync().catch(()=>{});pushAskMaybe()},2500)}const content=$('app-content'),locked=$('locked-view');if(!user){document.querySelector('.app').style.display='none';$('welcome-view').style.display='flex';closeAuth();return}document.querySelector('.app').style.display='';$('welcome-view').style.display='none';$('user-display').textContent=user.email||'Signed in';$('side-email').textContent=user.email||'Student';$('login-btn').style.display='none';$('logout-btn').style.display='inline-block';try{const d=await jsonFetch('/api/session');if(!d.authenticated)throw new Error('The session is not recognized by the server.');if(OFL)OFL.snapSave(user,d);state.subscribed=!!d.is_subscribed;renderAccountInfo(user,d);applyProfileIdentity(user,d);if(d.es_admin){$('nav-admin').style.display='flex'}if(d.en_prueba){$('side-status').textContent=`Free trial · ${d.trial_dias_restantes} day(s) left`}else{$('side-status').textContent=state.subscribed?'Practice access active':'Trial ended · subscribe to continue'}content.style.display=state.subscribed?'block':'none';locked.style.display=state.subscribed?'none':'block';if(state.subscribed){if(d.user&&!d.user.onboarded){content.style.display='none';initOnboarding()}else{closeAuth();loadDashboard();}}}catch(e){console.error('[SESSION]',e);if(OFL&&(OFL.isOff()||OFL.isNetErr(e))&&enterOffline(user))return;state.subscribed=false;content.style.display='none';locked.style.display='block';$('side-status').textContent='Access check failed';toast('We could not verify your access. Please sign in again.')}}
+function section(name,button){if(!state.user||!state.subscribed){showAuth();return}if(OFL&&OFL.isOff()&&!OFL.allowed(name)){toast('This section needs internet. Lessons in Learning Path work offline.');return}$$('.section').forEach(s=>s.classList.toggle('active',s.id==='sec-'+name));$$('#main-nav button,[data-section-jump]').forEach(b=>b.classList.remove('active'));if(button)button.classList.add('active');const nav=document.querySelector(`#main-nav button[data-section="${name}"]`);if(nav)nav.classList.add('active');if(name==='escritura')loadWritingChallenge();if(name==='lectura')loadReadingLibrary().catch(e=>toast(e.message));if(name==='escucha')loadListeningLibrary().catch(e=>toast(e.message));if(name==='historial')loadProgress().catch(e=>toast(e.message));if(name==='admin')loadAdminActivity();if(name==='home')loadDashboard();if(name==='logros')loadAchievements();if(name==='shop')loadShop();if(name==='notificaciones')loadNotifications();if(name==='vocabulario'){loadVocabDaily()}
   if(name==='pronunciacion')pronAutoload();if(name==='cuenta'){loadPlanCard();pushUI()}if(window.TalvoStudio)window.TalvoStudio.onSection(name);if(window.TalvoVoice)window.TalvoVoice.onSection(name);if(window.TalvoClips)window.TalvoClips.onSection(name);if(name!=='llamada')callLeave();if(name==='learning-path')(window.loadLearningPath&&window.loadLearningPath());setTimeout(showCardPeek,600)}
 let writingLevel='intermediate';
 const WRITING_TARGETS={easy:80,intermediate:150,advanced:220};
@@ -147,6 +166,7 @@ function browserSpeak(text,btn){
 function fetchTts(text){
   if(audioCache.has(text))return Promise.resolve(audioCache.get(text));
   if(ttsPending.has(text))return ttsPending.get(text);
+  if(OFL&&OFL.isOff())return Promise.reject(new Error('offline'));
   const p=(async()=>{
     const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),45000);
     try{
@@ -954,7 +974,7 @@ function selectObOption(groupId,key,value,btn){$$('#'+groupId+' .ob-option').for
 async function finishOnboarding(){try{await jsonFetch('/api/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obAnswers)})}catch(e){toast(e.message)}$('onboarding-view').style.display='none';$('app-content').style.display='block';closeAuth();loadDashboard()}
 function openAuthAs(register){state.authRegister=register;$('auth-title').textContent=register?'Create account':'Sign in';$('auth-submit').textContent=register?'Create account':'Sign in';$('auth-toggle').textContent=register?'Back to sign in':'Create an account';authError('');showAuth()}
 function toggleAuthMode(){state.authRegister=!state.authRegister;$('auth-title').textContent=state.authRegister?'Create account':'Sign in';$('auth-submit').textContent=state.authRegister?'Create account':'Sign in';$('auth-toggle').textContent=state.authRegister?'Back to sign in':'Create an account';authError('')}
-async function signOut(){await sb.auth.signOut();state.user=null;state.subscribed=false;syncUser(null)}
+async function signOut(){try{if(OFL)OFL.clearUser()}catch(e){}await sb.auth.signOut();state.user=null;state.subscribed=false;syncUser(null)}
 function openSidebar(){document.querySelector('.sidebar')?.classList.add('open');$('sidebar-overlay')?.classList.add('show');document.body.style.overflow='hidden'}
 function closeSidebar(){document.querySelector('.sidebar')?.classList.remove('open');$('sidebar-overlay')?.classList.remove('show');document.body.style.overflow=''}
 function bind(){
@@ -1563,9 +1583,9 @@ function admBoot(){
 }
 
 Object.assign(window,{cambiarPestana:(n,b)=>section(n,b),cambiarModoPronunciacion:pronMode,obtenerNuevaFrase:newPhrase,obtenerNuevoTemaHablaLibre:newTopic,obtenerNuevoTrabalenguas:newTwister,alternarGrabacion:toggleRecording,evaluarEscritura:analyzeWriting,cargarLectura:loadReading,evaluarLectura:evaluateReading,cargarDictado:loadDictation,evaluarDictado:evaluateDictation,cargarHistorial:loadProgress,procesarAuth:authSubmit,abrirModalAuth:showAuth,cerrarModalAuth:closeAuth,cerrarSesion:signOut,hablarNativo:t=>speak(t),hablarTrabalenguasNativo:t=>speak(t,.85)});
-document.addEventListener('DOMContentLoaded',async()=>{bind();try{const s=await getSession();if(!recoveryMode)await syncUser(s?.user||null)}catch(e){console.error('[INIT]',e);if(!recoveryMode)syncUser(null)}});
+document.addEventListener('DOMContentLoaded',async()=>{bind();try{const s=await getSession();if(!recoveryMode)await syncUser(s?.user||null)}catch(e){console.error('[INIT]',e);if(!recoveryMode){if(OFL&&OFL.isOff()&&enterOffline(null)){if(window.hideBoot)window.hideBoot()}else syncUser(null)}}if(OFL&&!OFL.isOff())setTimeout(()=>OFL.flush(),3000)});
 Object.assign(window,{playGuideAudio,speak});
 document.querySelectorAll('#home-maestra .hm-card').forEach(b=>b.addEventListener('click',()=>{callModeSet(b.dataset.m);section('llamada')}));
-window.TalvoCore={$,$$,jsonFetch,state,toast,section,speak,esc,teacherSpeak,setMascotState,reactToScore,loadDashboard};
+window.TalvoCore={$,$$,jsonFetch,authFetch,state,toast,section,speak,esc,teacherSpeak,setMascotState,reactToScore,loadDashboard};
 $$('[data-pq]').forEach(el=>{el.innerHTML=pqLoader(el.dataset.pq||'')});
 })();

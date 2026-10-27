@@ -11,3 +11,9 @@ ESTRUCTURA DEL FRONT (desde oct 2026)
   js/phrases.js, js/studio.js (traductor, escenarios, rutas y reto), js/voice-lab.js, js/tutorial.js,
   js/clips-presentations.js, js/i18n.js (traducciones EN/ES). El orden de los <script> importa.
 - Pruebas: python3 tests/test_reto.py
+
+MODO SIN CONEXIÓN
+- sw.js: guarda la app; archivos propios con "red primero" (cada despliegue llega al instante) y copia local solo si no hay internet.
+  Si agregas un archivo a js/, css/ o img/, agrégalo también a SHELL en sw.js (tests/test_sw.py avisa si falta).
+- js/offline.js: caché local de mapa/lecciones/panel, sesión offline (solo ver y practicar), cola de avances que se envía al reconectar.
+- Sin internet NO funcionan: llamada, examen, tutor, pronunciación, rutas nuevas (necesitan Azure).
