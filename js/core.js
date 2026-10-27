@@ -516,19 +516,21 @@ async function callStartTalk(){
     $('call-talk-btn').classList.add('recording');callSetState('hearing');callStatus('Listening… let go when you are done.')
   }catch(e){toast('Error de micrófono: '+e.message);callIdle()}
 }
+function callSendTyped(){const inp=$('call-type-input');if(!inp)return;const t=inp.value.trim();if(!t)return;if(state.callBusy){if(CALL.playing||CALL.abort){callSkip()}}inp.value='';callSendTurn(null,t)}
 function callStopTalk(){
   $('call-talk-btn').classList.remove('recording');
   if(state.callRecorder&&state.callRecorder.state!=='inactive')state.callRecorder.stop()
 }
-async function callSendTurn(){
-  const blob=new Blob(state.callChunks,{type:state.callChunks[0]?.type||'audio/webm'});
-  if(blob.size<2500){callIdle();return}
-  state.callBusy=true;callSetState('thinking');callStatus('Transcribing…');CALL.aiEl=null;
-  const fd=new FormData();fd.append('audio',blob,'call.webm');fd.append('history',JSON.stringify(state.callMessages.slice(-12)));if(teacherOn()){fd.append('maestro','1');fd.append('clase_n',String(state.callMessages.filter(m=>m.role==='user').length+1))}if(examOn()){fd.append('examen','1');fd.append('turno_n',String((CALL.examN||0)+1))}
+async function callSendTurn(ev,typed){
+  const isTyped=typeof typed==='string'&&typed.trim().length>0;
+  const blob=isTyped?null:new Blob(state.callChunks,{type:state.callChunks[0]?.type||'audio/webm'});
+  if(!isTyped&&blob.size<2500){callIdle();return}
+  state.callBusy=true;callSetState('thinking');callStatus(isTyped?'Thinking…':'Transcribing…');CALL.aiEl=null;
+  const fd=new FormData();if(isTyped)fd.append('texto',typed.trim());else fd.append('audio',blob,'call.webm');fd.append('history',JSON.stringify(state.callMessages.slice(-12)));if(teacherOn()){fd.append('maestro','1');fd.append('clase_n',String(state.callMessages.filter(m=>m.role==='user').length+1))}if(examOn()){fd.append('examen','1');fd.append('turno_n',String((CALL.examN||0)+1))}
   CALL.abort=new AbortController();
   try{
     const r=await authFetch('/api/llamada/turno',{method:'POST',body:fd,signal:CALL.abort.signal});
-    if(r.status===404||r.status===405){await callTurnLegacy(blob)}
+    if((r.status===404||r.status===405)&&blob){await callTurnLegacy(blob)}
     else{
       if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||('Request failed ('+r.status+')'))}
       await callReadStream(r)
@@ -1127,6 +1129,7 @@ function vadLoop(){
     if(vad.rec&&now-vad.last>((teacherOn()||examOn())?2100:1500)&&now-vad.started>900){vad.rec=false;vad.voice=0;vad.cool=now+1200;callStopTalk()}
   }else if(!vad.starting){vad.voice=0;vad.rec=false}
 }
+$('call-type-send')?.addEventListener('click',callSendTyped);$('call-type-input')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();callSendTyped()}});
 $('call-handsfree')?.addEventListener('click',()=>{if(vad.on)vadStop();else vadStart()});
 $('call-start')?.addEventListener('click',callStart);
 $('call-mute')?.addEventListener('click',callToggleMute);

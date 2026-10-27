@@ -3391,7 +3391,8 @@ def call_turn():
     if not ai_client:
         return json_error("Azure OpenAI no está configurado en el servidor.", 500)
     upload = request.files.get("audio")
-    if not upload:
+    typed = _short(request.form.get("texto"), 400)  # el alumno lo escribe cuando la transcripción falla
+    if not upload and not typed:
         return json_error("No se recibió audio.")
     try:
         history = json.loads(request.form.get("history") or "[]")
@@ -3430,15 +3431,19 @@ def call_turn():
 
     # mientras se convierte y transcribe el audio, ya vamos pidiendo el contexto del alumno
     ctx_future = _ctx_pool.submit(_tutor_context, uid)
-    try:
-        wav_path = convert_audio_to_wav(upload)
-    except Exception as exc:
-        return json_error(_err_log("No se pudo leer el audio", exc), 500)
+    wav_path = None
+    if upload:
+        try:
+            wav_path = convert_audio_to_wav(upload)
+        except Exception as exc:
+            return json_error(_err_log("No se pudo leer el audio", exc), 500)
 
     def generate():
-        said = ""
+        said = typed
         try:
-            if maestro:  # el alumno mezcla español e inglés
+            if typed:
+                pass  # texto escrito: no hace falta transcribir
+            elif maestro:  # el alumno mezcla español e inglés
                 names = tuple(n for n in [(_ficha_get(uid)["ficha"].get("nombre") or "").strip()] if n)
                 said = stt_bilingual(wav_path, names)
             else:
@@ -3453,7 +3458,8 @@ def call_turn():
             return
         finally:
             try:
-                os.remove(wav_path)
+                if wav_path:
+                    os.remove(wav_path)
             except OSError:
                 pass
         if not said:

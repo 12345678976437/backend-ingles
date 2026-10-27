@@ -1546,3 +1546,5 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .tm-chips{display:flex;flex-wrap:wrap;gap:6px}.tm-chips span{padding:5px 10px;border-radius:999px;font-size:12px;background:rgba(61,220,151,.12);border:1px solid rgba(61,220,151,.35)}
 .tm-chips.warn span{background:rgba(255,160,90,.12);border-color:rgba(255,160,90,.4)}
 .tm-go{margin-left:auto;font-size:12px;padding:6px 10px;white-space:nowrap;border-color:rgba(255,200,87,.6);color:#ffc857}
+.call-ui .call-type.live-only{width:100%;max-width:520px;margin:12px auto 0;gap:8px}
+.call-type .input{flex:1;min-width:0}
