@@ -36,3 +36,14 @@ print('rutas OK')
 assert m._syllabus_unit({}, 'C1')[0]==19 and m._syllabus_unit({}, 'B1')[0]==13
 assert any(r.rule.startswith('/api/maestro/temario') for r in m.app.url_map.iter_rules())
 print('mapa OK')
+assert len(m.TEACHER_ROUTE_MAP)==len(m.TEACHER_SYLLABUS)
+for uc,lid in m.TEACHER_ROUTE_MAP:
+    assert m.get_lesson(m.get_unit(uc),lid),(uc,lid)
+# ruta -> ficha
+saved={}
+m._ficha_get=lambda uid:{"ficha":{"nombre":"Ana","en_rutas":[]},"clases":2}
+m._ficha_save=lambda uid,ficha=None,clases=None:saved.update(f=ficha)
+m._ficha_note_route("u1","grammar_basics","to_be",70,[{"en":"I am tired"}])
+assert saved["f"]["en_rutas"][0]["leccion"].startswith("The verb to be") and saved["f"]["para_repasar"]==["I am tired"],saved
+assert "en_rutas" in m.build_tutor_system_prompt('A1','','maestro','',ficha={'en_rutas':[1]},clases=2,clase_n=1)
+print('puente OK')

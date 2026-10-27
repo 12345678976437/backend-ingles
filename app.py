@@ -4541,6 +4541,17 @@ TEACHER_SYLLABUS = [
 ]
 
 
+TEACHER_ROUTE_MAP = [
+    ("grammar_basics", "pronouns"), ("grammar_basics", "to_be"), ("grammar_basics", "articles"),
+    ("grammar_basics", "present_simple"), ("grammar_basics", "questions_do"), ("everyday_english", "numbers_time"),
+    ("grammar_build", "have_got"), ("grammar_build", "can_could"), ("grammar_build", "past_simple"),
+    ("grammar_build", "present_cont"), ("at_the_restaurant", "ordering"), ("travel_and_tourism", "directions"),
+    ("grammar_build", "comparatives"), ("grammar_pro", "future_will"), ("grammar_pro", "present_perfect"),
+    ("work_and_business", "interview"), ("grammar_pro", "phrasal_verbs"), ("grammar_pro", "modals"),
+    ("grammar_pro", "conditionals"), ("spoken_real", "small_talk_slang"),
+]
+
+
 def _syllabus_unit(ficha, level):
     """Unidad actual del temario. Arranca según el nivel estimado y avanza cuando la ficha lo marca."""
     try:
@@ -4586,6 +4597,31 @@ def _ficha_save(uid, ficha=None, clases=None):
         print(f"[FICHA save] {exc}")
 
 
+def _ficha_note_route(uid, unit_code, lesson_id, score, mistakes):
+    """Lo que hiciste en las rutas llega a la maestra: lección, calificación y errores para repasar."""
+    try:
+        unit = get_unit(unit_code)
+        lesson = get_lesson(unit, lesson_id) if unit else None
+        if not lesson:
+            return
+        row = _ficha_get(uid)
+        f = dict(row["ficha"])
+        notes = [n for n in (f.get("en_rutas") or []) if n.get("leccion") != lesson["title"]]
+        notes.append({"leccion": lesson["title"], "unidad": unit["title"], "puntos": int(score)})
+        f["en_rutas"] = notes[-6:]
+        wrong = []
+        for m_ in mistakes or []:
+            if isinstance(m_, dict):
+                w = _short(m_.get("en") or m_.get("q") or m_.get("answer") or "", 60)
+                if w:
+                    wrong.append(w)
+        if wrong:
+            f["para_repasar"] = (list(dict.fromkeys(wrong[:3] + (f.get("para_repasar") or []))))[:6]
+        _ficha_save(uid, ficha=f)
+    except Exception as exc:
+        print(f"[FICHA ruta] {exc}")
+
+
 def _ficha_update(uid, lines):
     """Pone al día la ficha leyendo lo último de la clase (corre en segundo plano)."""
     try:
@@ -4609,6 +4645,7 @@ def _ficha_update(uid, lines):
         for k, n in (("gustos", 6), ("frases_aprendidas", 12), ("para_repasar", 6)):
             v = data.get(k) or []
             clean[k] = [_short(x, 90) for x in v if isinstance(x, str) and x.strip()][:n] if isinstance(v, list) else []
+        clean["en_rutas"] = cur.get("en_rutas") or []
         ui = _syllabus_unit(cur, lvl)[0]
         clean["unidad"] = min(ui + 1, len(TEACHER_SYLLABUS) - 1) if data.get("unidad_dominada") is True else ui
         _ficha_save(uid, ficha=clean)
@@ -4719,7 +4756,9 @@ def build_tutor_system_prompt(level, prior_context, modo="", categoria="", ficha
         plan = _class_plan(ficha or {}, clases, clase_n, level)
         extra = (f"\n\n{_ficha_text(ficha or {}, clases)}\n\nTHIS TURN OF THE CLASS (turn {clase_n}): {plan}\n"
                  "Act like a real human teacher: react to what the student actually said before moving on, remember their name and use it now and then, "
-                 "be curious about them as a person, and never ask more than one question per turn.")
+                 "be curious about them as a person, and never ask more than one question per turn. "
+                 "If the file has 'en_rutas' (lessons the student did on their own in the app), mention ONE by name early in the class (e.g. 'vi que hiciste la lección X, ¡muy bien!'), "
+                 "and if they scored under 80 or have items in 'para_repasar', review those first.")
         return f"{TEACHER_PROMPT}{extra}\n\n{lv}\n\n{REAL_ENGLISH}\n\n{prior_context}"
     level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
 
@@ -4822,11 +4861,13 @@ def teacher_syllabus():
         level = None
     cur, _u = _syllabus_unit(f, level)
     units = [{"n": i + 1, "tema": t[0], "real": t[1].replace('\\"', '"'),
-              "estado": "hecha" if i < cur else ("actual" if i == cur else "pendiente")}
+              "estado": "hecha" if i < cur else ("actual" if i == cur else "pendiente"),
+              "ruta": {"unit": TEACHER_ROUTE_MAP[i][0], "lesson": TEACHER_ROUTE_MAP[i][1]}}
              for i, t in enumerate(TEACHER_SYLLABUS)]
     return jsonify({"ok": True, "nombre": f.get("nombre") or "", "clases": row["clases"], "actual": cur + 1,
                     "total": len(TEACHER_SYLLABUS), "unidades": units,
-                    "dominadas": f.get("frases_aprendidas") or [], "repasar": f.get("para_repasar") or []})
+                    "dominadas": f.get("frases_aprendidas") or [], "repasar": f.get("para_repasar") or [],
+                    "rutas": f.get("en_rutas") or []})
 
 
 @app.get("/api/maestro/ficha")
@@ -5440,6 +5481,8 @@ def learning_path_complete():
     if kind != "sound":
         _save_mistakes_as_vocab(user.id, mistakes)
 
+    if kind == "lesson" and unit and lesson_id != "challenge" and seconds >= 15:
+        threading.Thread(target=_ficha_note_route, args=(user.id, unit_code, lesson_id, score, mistakes), daemon=True).start()
     level_change = None
     if kind == "lesson":
         try:
