@@ -177,7 +177,7 @@ RATE_RULES = {
     "/api/tutor": (60, 3600),
     "/api/sintetizar-audio": (120, 3600),
     "/api/transcribir-audio": (60, 3600),
-    "/api/resumen-llamada": (10, 3600),
+    "/api/resumen-llamada": (10, 3600), "/api/examen/fin": (6, 3600),
     "/api/llamada/turno": (90, 3600),
     "/analizar-escritura": (20, 3600),
     "/evaluar-lectura": (30, 3600),
@@ -247,7 +247,7 @@ PLANS = {
 }
 # Cuánto cuesta cada acción (lo caro de Azure cuesta más créditos; 1 crédito ≈ 1 mensaje al tutor).
 CREDIT_COST = {
-    "/api/tutor": 1, "/api/resumen-llamada": 3, "/api/transcribir-audio": 1,
+    "/api/tutor": 1, "/api/resumen-llamada": 3, "/api/examen/fin": 3, "/api/transcribir-audio": 1,
     "/api/llamada/turno": 2.1,   # un turno de llamada = transcribir (1) + tutor (1) + voz (0.1), igual que antes pero en una sola petición
     "/api/sintetizar-audio": 0.1,
     "/analizar-escritura": 2, "/evaluar-lectura": 2, "/evaluar-dictado": 1.5,
@@ -3357,6 +3357,18 @@ def call_turn():
     voice = (request.form.get("voz") or _DEFAULT_VOICE).strip()
     uid = user.id
     maestro = (request.form.get("maestro") or "") == "1"
+    examen = (request.form.get("examen") or "") == "1"
+    try:
+        exam_turn = max(1, min(int(request.form.get("turno_n") or 1), EXAM_TOTAL))
+    except ValueError:
+        exam_turn = 1
+    if examen:
+        maestro = False
+        if exam_turn == 2 and not is_admin_user(user):
+            lim = PLAN_FEATURES[_user_plan(user)]["examen_mes"]
+            ok_e, _w = _rate_hit((uid, "examen"), lim, 30 * 86400)
+            if not ok_e:
+                return _gate(user, f"Ya usaste tus {lim} examen(es) de nivel de este mes. Sube de plan para hacer más.", refund=False)
     if maestro and not is_admin_user(user):
         lim = PLAN_FEATURES[_user_plan(user)]["maestro_dia"]
         ok_m, _w = _rate_hit((uid, "maestro"), lim, 86400)
@@ -3404,7 +3416,7 @@ def call_turn():
             level, prior = ctx_future.result(timeout=10)
         except Exception:
             level, prior = None, ""
-        system_prompt = build_tutor_system_prompt(level, prior, "maestro" if maestro else "llamada", "")
+        system_prompt = build_exam_prompt(exam_turn) if examen else build_tutor_system_prompt(level, prior, "maestro" if maestro else "llamada", "")
         full, buf, pending, first = "", "", [], True
 
         def push(sentence):
@@ -3475,6 +3487,47 @@ def call_turn():
 
     return Response(stream_with_context(generate()), mimetype="application/x-ndjson",
                     headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+_CEFR_TO_LEVEL = {"A1": "beginner", "A2": "elementary", "B1": "intermediate", "B2": "advanced", "C1": "advanced", "C2": "advanced"}
+
+
+@app.post("/api/examen/fin")
+def exam_finish():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    lines = []
+    for item in (body.get("history") or [])[-30:]:
+        role = item.get("role") if isinstance(item, dict) else None
+        content = item.get("content") if isinstance(item, dict) else None
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            lines.append(f"{'Student' if role == 'user' else 'Examiner'}: {content.strip()[:600]}")
+    if sum(1 for l in lines if l.startswith("Student")) < 3:
+        return json_error("El examen fue muy corto para calcular tu nivel. Responde al menos 3 preguntas.")
+    try:
+        data = ai_json(
+            "You are a strict but kind CEFR examiner. Read this spoken placement-exam transcript (speech-to-text, ignore punctuation/spelling artifacts) and decide the student's level. "
+            "Return JSON only, text in Spanish, exact keys: cefr (one of A1,A2,B1,B2,C1), puntuacion (0-100), resumen (2 sentences), fortalezas (array of 2-3 short strings), "
+            "a_mejorar (array of 2-4 short strings, each with a tiny English example in quotes), plan (array of exactly 3 concrete study steps), frase_para_practicar (one useful English sentence at their next level).",
+            "\n".join(lines), temperature=0.2)
+    except Exception as exc:
+        return json_error(_err_log("No se pudo calificar el examen", exc), 500)
+    cefr = str(data.get("cefr") or "A1").upper()[:2]
+    level = _CEFR_TO_LEVEL.get(cefr, "beginner")
+    data["cefr"] = cefr
+    data["level"] = level
+    data["level_label"] = LEVEL_LABEL.get(level, "")
+    if body.get("aplicar"):
+        try:
+            (supabase_admin or supabase).table("profiles").update({"cefr_level": level}).eq("id", user.id).execute()
+            data["aplicado"] = True
+        except Exception as exc:
+            print(f"[EXAM LEVEL] {exc}")
+    save_history("historial_tutor", user.id, {"mensaje_usuario": "[Examen de nivel]", "respuesta_tutor": json.dumps(data, ensure_ascii=False)})
+    award_xp(user.id, 40)
+    return jsonify({"ok": True, **data})
 
 
 @app.post("/api/resumen-llamada")
@@ -4466,11 +4519,33 @@ TEACHER_PROMPT = (
 )
 
 
+EXAM_TOTAL = 8
+
+
+def build_exam_prompt(turn):
+    """Examinadora de nivel por llamada: preguntas de dificultad creciente, sin enseñar durante el examen."""
+    stage = ("Turn 1: friendly greeting, ask their name and where they are from (very easy)." if turn <= 1 else
+             "Turns 2-3: easy A1-A2 questions about daily life, routine, likes (present simple, basic vocabulary)." if turn <= 3 else
+             "Turns 4-5: A2-B1 questions: past events (what did you do last weekend?), plans, simple opinions." if turn <= 5 else
+             "Turns 6-7: B1-B2 questions: hypotheticals, comparisons, give an opinion and reasons, tell a short story." if turn <= 7 else
+             "Turn 8 is the LAST: thank them warmly, say the exam is finished and that their result is ready, and ask NOTHING more.")
+    return (
+        "You are Palanqueta in EXAM MODE: a kind, professional English placement examiner doing a live voice call. "
+        f"This is question {min(turn, EXAM_TOTAL)} of {EXAM_TOTAL}. {stage}\n\n"
+        "Rules: speak English at a natural, clear pace. Do NOT teach, correct or give feedback during the exam; just react briefly ('Nice!', 'I see.') and ask the next question. "
+        "If the student is clearly lost or answers in Spanish, repeat the question more simply once; only if they are still lost, say a very short hint in Spanish. "
+        "If the student answers well, make the next question a bit harder; if they struggle, keep it simple. "
+        "Reply in 1-2 short spoken sentences, no lists, no markdown, no emojis."
+    )
+
+
 def build_tutor_system_prompt(level, prior_context, modo="", categoria=""):
     """Prompt de Palanqueta. Lo usan el chat del tutor y la llamada en vivo."""
     if modo == "maestro":
         lv = f"Estimated student level: {level}. Adapt how much English you use to it (A1-A2: almost all Spanish, tiny English pieces)." if level else "Student level unknown: assume beginner and check gently what they already know."
-        return f"{TEACHER_PROMPT}\n\n{lv}\n\n{REAL_ENGLISH}\n\n{prior_context}"
+        cont = ("\n\nCONTINUITY: if the earlier-conversation context below shows things this student already practiced, start your FIRST reply by briefly recalling one of them in Spanish "
+                "(\"la clase pasada vimos...\") and doing a 20-second review before teaching anything new.")
+        return f"{TEACHER_PROMPT}{cont}\n\n{lv}\n\n{REAL_ENGLISH}\n\n{prior_context}"
     level_line = f"Estimated student level: {level} (adapt vocabulary and grammar complexity to this level)." if level else "Student level unknown yet: keep it accessible (around B1) and adjust as you learn more from their messages."
 
     call_line = (
@@ -5625,10 +5700,10 @@ import uuid as _uuid
 #   shadowing_dia  = intentos de shadowing por día (cada uno usa Azure Speech, no créditos)
 #   shadowing_tema = shadowing con temas propios (usa IA, 0.5 créditos) · reunion = grabar reunión (6 créditos)
 PLAN_FEATURES = {
-    "gratis": {"maestro_dia": 8, "rutas": 1,  "lecciones_ruta": 3, "escenarios": "basicos", "escenario_libre": False, "traductor_max": 300, "shadowing_dia": 15, "shadowing_tema": False, "reunion": False, "clips_dia": 5, "clip_tema": False, "presentacion": False, "presentacion_slides": 0},
-    "basico": {"maestro_dia": 40, "rutas": 3,  "lecciones_ruta": 5, "escenarios": "todos",   "escenario_libre": False, "traductor_max": 600, "shadowing_dia": 60, "shadowing_tema": True, "reunion": False, "clips_dia": 15, "clip_tema": True, "presentacion": True, "presentacion_slides": 6},
-    "pro":    {"maestro_dia": 120, "rutas": 8,  "lecciones_ruta": 6, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1000, "shadowing_dia": 200, "shadowing_tema": True, "reunion": True, "clips_dia": 40, "clip_tema": True, "presentacion": True, "presentacion_slides": 12},
-    "max":    {"maestro_dia": 300, "rutas": 20, "lecciones_ruta": 8, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1500, "shadowing_dia": 500, "shadowing_tema": True, "reunion": True, "clips_dia": 100, "clip_tema": True, "presentacion": True, "presentacion_slides": 20},
+    "gratis": {"examen_mes": 1, "maestro_dia": 8, "rutas": 1,  "lecciones_ruta": 3, "escenarios": "basicos", "escenario_libre": False, "traductor_max": 300, "shadowing_dia": 15, "shadowing_tema": False, "reunion": False, "clips_dia": 5, "clip_tema": False, "presentacion": False, "presentacion_slides": 0},
+    "basico": {"examen_mes": 4, "maestro_dia": 40, "rutas": 3,  "lecciones_ruta": 5, "escenarios": "todos",   "escenario_libre": False, "traductor_max": 600, "shadowing_dia": 60, "shadowing_tema": True, "reunion": False, "clips_dia": 15, "clip_tema": True, "presentacion": True, "presentacion_slides": 6},
+    "pro":    {"examen_mes": 10, "maestro_dia": 120, "rutas": 8,  "lecciones_ruta": 6, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1000, "shadowing_dia": 200, "shadowing_tema": True, "reunion": True, "clips_dia": 40, "clip_tema": True, "presentacion": True, "presentacion_slides": 12},
+    "max":    {"examen_mes": 30, "maestro_dia": 300, "rutas": 20, "lecciones_ruta": 8, "escenarios": "todos",   "escenario_libre": True,  "traductor_max": 1500, "shadowing_dia": 500, "shadowing_tema": True, "reunion": True, "clips_dia": 100, "clip_tema": True, "presentacion": True, "presentacion_slides": 20},
 }
 
 

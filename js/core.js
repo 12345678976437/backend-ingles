@@ -447,10 +447,13 @@ async function evaluateDictation(){const answer=$('dictation-answer').value.trim
 const CALL={mic:null,live:false,muted:false,t0:0,timer:0,abort:null,queue:[],playing:false,audio:null,unlocked:false,skip:false,aiEl:null};
 const CALL_SILENT='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 const CALL_HELLO="Hi! It's Palanqueta. I'm so happy you called. What would you like to talk about today?";
+const EXAM_HELLO="Hi! I'm Palanqueta, and today I'll check your English level. I'll ask you eight questions, from easy to harder. Just answer naturally, there are no wrong answers. Ready? Let's start. What's your name, and where are you from?";
 const TEACHER_HELLO='¡Hola! Soy la maestra Palanqueta. Hoy vamos a aprender inglés juntas, paso a paso, y yo te explico todo en español. Para empezar, dime: ¿para qué quieres el inglés, trabajo, viajes o platicar con gente? Puedes contestarme en español.';
-function teacherOn(){try{return localStorage.getItem('talvo_maestro')==='1'}catch(e){return false}}
-function teacherSet(on){try{localStorage.setItem('talvo_maestro',on?'1':'0')}catch(e){}teacherRender()}
-function teacherRender(){const on=teacherOn();const ui=callEl('call-ui');if(ui)ui.dataset.teacher=on?'1':'0';$$('#call-mode-bar .mode').forEach(b=>b.classList.toggle('active',(b.dataset.m==='teacher')===on));const h=$('call-title');if(h)h.textContent=on?'Aprende con tu maestra bilingüe.':'Practice like a real phone call.';const d=document.querySelector('#sec-llamada .page-desc');if(d){if(!d.dataset.en)d.dataset.en=d.textContent;d.textContent=on?'Tu maestra Palanqueta te explica en español, te enseña frases reales en inglés y te hace repetirlas, como un maestro particular. Toca Start call y habla.':d.dataset.en}}
+function callMode(){try{return localStorage.getItem('talvo_callmode')||(localStorage.getItem('talvo_maestro')==='1'?'teacher':'talk')}catch(e){return 'talk'}}
+function teacherOn(){return callMode()==='teacher'}
+function examOn(){return callMode()==='exam'}
+function callModeSet(m){if(m===callMode())return;try{localStorage.setItem('talvo_callmode',m)}catch(e){}state.callMessages=[];CALL.examN=0;const w=$('call-messages');if(w)w.innerHTML='';teacherRender()}
+function teacherRender(){const on=teacherOn(),ex=examOn();const ui=callEl('call-ui');if(ui){ui.dataset.teacher=on?'1':'0';ui.dataset.exam=ex?'1':'0'}$$('#call-mode-bar .mode').forEach(b=>b.classList.toggle('active',b.dataset.m===callMode()));const h=$('call-title');if(h)h.textContent=ex?'Examen de nivel por llamada.':on?'Aprende con tu maestra bilingüe.':'Practice like a real phone call.';const d=document.querySelector('#sec-llamada .page-desc');if(d){if(!d.dataset.en)d.dataset.en=d.textContent;d.textContent=ex?'Palanqueta te hace 8 preguntas por voz, cada vez más difíciles, y al final te dice tu nivel real (A1 a C1) y qué estudiar. Respira, habla con calma y no te preocupes por equivocarte.':on?'Tu maestra Palanqueta te explica en español, te enseña frases reales en inglés y te hace repetirlas, como un maestro particular. Toca Start call y habla.':d.dataset.en}}
 async function teacherSpeak(text){try{const r=await authFetch('/api/sintetizar-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:text,bilingual:true})});if(!r.ok)throw new Error('tts');const url=URL.createObjectURL(await r.blob());const a=new Audio(url);a.onended=()=>URL.revokeObjectURL(url);await a.play()}catch(e){try{speak(String(text).replace(/"/g,''))}catch(_){}}}
 function callEl(id){return document.getElementById(id)}
 function callSetState(s){const ui=callEl('call-ui');if(ui)ui.dataset.state=s}
@@ -513,7 +516,7 @@ async function callSendTurn(){
   const blob=new Blob(state.callChunks,{type:state.callChunks[0]?.type||'audio/webm'});
   if(blob.size<2500){callIdle();return}
   state.callBusy=true;callSetState('thinking');callStatus('Transcribing…');CALL.aiEl=null;
-  const fd=new FormData();fd.append('audio',blob,'call.webm');fd.append('history',JSON.stringify(state.callMessages.slice(-12)));if(teacherOn())fd.append('maestro','1');
+  const fd=new FormData();fd.append('audio',blob,'call.webm');fd.append('history',JSON.stringify(state.callMessages.slice(-12)));if(teacherOn())fd.append('maestro','1');if(examOn()){fd.append('examen','1');fd.append('turno_n',String((CALL.examN||0)+1))}
   CALL.abort=new AbortController();
   try{
     const r=await authFetch('/api/llamada/turno',{method:'POST',body:fd,signal:CALL.abort.signal});
@@ -522,7 +525,9 @@ async function callSendTurn(){
       if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||('Request failed ('+r.status+')'))}
       await callReadStream(r)
     }
-    await callWaitPlayback()
+    if(examOn()&&CALL.aiEl&&CALL.aiEl.textContent)CALL.examN=(CALL.examN||0)+1;
+    await callWaitPlayback();
+    if(examOn()&&(CALL.examN||0)>=8){setTimeout(()=>examFinish(),400)}
   }catch(e){if(e.name!=='AbortError')toast(e.message)}
   finally{
     if(CALL.aiEl&&CALL.aiEl.textContent&&!CALL.aiPushed){state.callMessages.push({role:'assistant',content:CALL.aiEl.textContent})}
@@ -569,15 +574,15 @@ async function callStart(){
   if(!navigator.mediaDevices?.getUserMedia)return toast('Your browser does not support microphone recording.');
   callUnlockAudio();
   try{await callGetMic()}catch(e){return toast('Microphone error: '+e.message)}
-  CALL.live=true;CALL.muted=false;CALL.t0=Date.now();callRenderLive(true);callEl('call-mute').textContent='🎙️ Mute';
+  if(!state.callMessages.length)CALL.examN=0;CALL.live=true;CALL.muted=false;CALL.t0=Date.now();callRenderLive(true);callEl('call-mute').textContent='🎙️ Mute';
   clearInterval(CALL.timer);CALL.timer=setInterval(()=>{const t=callEl('call-timer');if(t)t.textContent=callFmt(Date.now()-CALL.t0)},500);
   await vadStart();
   if(!state.callMessages.length){
     state.callBusy=true;callSetState('speaking');callStatus('Palanqueta is speaking…');
     try{
-      const r=await authFetch('/api/sintetizar-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(teacherOn()?{texto:TEACHER_HELLO,bilingual:true}:{texto:CALL_HELLO,voz:'en-US-AvaMultilingualNeural'})});
+      const r=await authFetch('/api/sintetizar-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(teacherOn()?{texto:TEACHER_HELLO,bilingual:true}:{texto:examOn()?EXAM_HELLO:CALL_HELLO,voz:'en-US-AvaMultilingualNeural'})});
       let b64=null;if(r.ok){const buf=new Uint8Array(await r.arrayBuffer());let s='';for(let i=0;i<buf.length;i+=8192)s+=String.fromCharCode.apply(null,buf.subarray(i,i+8192));b64=btoa(s)}
-      {const hi=teacherOn()?TEACHER_HELLO:CALL_HELLO;addCallMessage(hi,'ai');state.callMessages.push({role:'assistant',content:hi});callCaption('ai',hi);callEnqueue(hi,b64)}await callWaitPlayback()
+      {const hi=teacherOn()?TEACHER_HELLO:examOn()?EXAM_HELLO:CALL_HELLO;if(examOn())CALL.examN=1;addCallMessage(hi,'ai');state.callMessages.push({role:'assistant',content:hi});callCaption('ai',hi);callEnqueue(hi,b64)}await callWaitPlayback()
     }catch(e){}finally{state.callBusy=false;callIdle()}
   }else callIdle()
 }
@@ -593,7 +598,21 @@ function callTeardown(){
   callReleaseMic();clearInterval(CALL.timer);CALL.live=false;CALL.muted=false;state.callBusy=false;
   callRenderLive(false);callSetState('idle');callStatus('Tap Start call and just talk.');callCaption('','');
 }
+async function examFinish(){
+  if(!examOn()||CALL.examBusy)return;CALL.examBusy=true;
+  const hist=state.callMessages.slice();callTeardown();callStatus('Calificando tu examen…');callSetState('thinking');
+  try{
+    const d=await jsonFetch('/api/examen/fin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({history:hist})});
+    const box=$('exam-result');if(!box)return;
+    box.innerHTML=`<div class="ex-badge">${esc(d.cefr)}</div><div class="ex-lvl">${esc(d.level_label||'')}</div><div class="ex-score">${Math.round(d.puntuacion||0)}<small>/100</small></div><p>${esc(d.resumen||'')}</p><h3>Lo que haces bien</h3><ul class="list">${(d.fortalezas||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h3>A mejorar</h3><ul class="list">${(d.a_mejorar||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h3>Tu plan</h3><ol class="list">${(d.plan||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol><div class="notice">Practica esta frase: <b>${esc(d.frase_para_practicar||'')}</b></div><div class="ex-actions"><button type="button" class="btn primary" id="exam-apply">Usar este nivel en mi app</button><button type="button" class="btn" id="exam-again">Cerrar</button></div>`;
+    box.style.display='block';box.scrollIntoView({behavior:'smooth',block:'start'});
+    $('exam-apply').onclick=async()=>{try{await jsonFetch('/api/examen/fin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({history:hist,aplicar:true})});toast('Nivel actualizado: '+(d.level_label||d.cefr));$('exam-apply').disabled=true}catch(e){toast(e.message)}};
+    $('exam-again').onclick=()=>{box.style.display='none'};
+    state.callMessages=[];CALL.examN=0;$('call-messages').innerHTML=''
+  }catch(e){toast(e.message)}finally{CALL.examBusy=false;callSetState('idle');callStatus('Toca Iniciar llamada y habla.')}
+}
 async function endCall(){
+  if(examOn()&&(CALL.examN||0)>=3){return examFinish()}
   const dur=CALL.live?callFmt(Date.now()-CALL.t0):'';
   callTeardown();
   if(!state.callMessages||!state.callMessages.length)return toast('Todavía no has hablado con Palanqueta.');
@@ -939,7 +958,7 @@ $('sidebar-close')?.addEventListener('click',closeSidebar);
 $('sidebar-overlay')?.addEventListener('click',closeSidebar);
 $$('.mode[data-pron]').forEach(b=>b.addEventListener('click',()=>pronMode(b.dataset.pron)));
 $$('#writing-level-bar .mode').forEach(b=>b.addEventListener('click',()=>setWritingLevel(b.dataset.level,b)));
-$$('#tutor-category-bar .mode').forEach(b=>b.addEventListener('click',()=>setTutorCategory(b.dataset.cat)));$$('#call-mode-bar .mode').forEach(b=>b.addEventListener('click',()=>{if(CALL.live)return toast('Cuelga primero para cambiar de modo.');teacherSet(b.dataset.m==='teacher')}));teacherRender();
+$$('#tutor-category-bar .mode').forEach(b=>b.addEventListener('click',()=>setTutorCategory(b.dataset.cat)));$$('#call-mode-bar .mode').forEach(b=>b.addEventListener('click',()=>{if(CALL.live)return toast('Cuelga primero para cambiar de modo.');callModeSet(b.dataset.m)}));teacherRender();
 {const f0=document.querySelector('#tutor-messages .msg.ai');if(f0&&!f0.querySelector('.msg-ac'))tutorAudio(f0,f0.textContent)}
 $$('#setting-autoplay-bar .mode').forEach(b=>b.addEventListener('click',()=>setSettingAutoplay(b.dataset.val)));
 $$('#setting-rate-bar .mode').forEach(b=>b.addEventListener('click',()=>setSettingRate(b.dataset.val)));
@@ -1534,6 +1553,7 @@ function admBoot(){
 Object.assign(window,{cambiarPestana:(n,b)=>section(n,b),cambiarModoPronunciacion:pronMode,obtenerNuevaFrase:newPhrase,obtenerNuevoTemaHablaLibre:newTopic,obtenerNuevoTrabalenguas:newTwister,alternarGrabacion:toggleRecording,evaluarEscritura:analyzeWriting,cargarLectura:loadReading,evaluarLectura:evaluateReading,cargarDictado:loadDictation,evaluarDictado:evaluateDictation,cargarHistorial:loadProgress,procesarAuth:authSubmit,abrirModalAuth:showAuth,cerrarModalAuth:closeAuth,cerrarSesion:signOut,hablarNativo:t=>speak(t),hablarTrabalenguasNativo:t=>speak(t,.85)});
 document.addEventListener('DOMContentLoaded',async()=>{bind();try{const s=await getSession();if(!recoveryMode)await syncUser(s?.user||null)}catch(e){console.error('[INIT]',e);if(!recoveryMode)syncUser(null)}});
 Object.assign(window,{playGuideAudio,speak});
-window.TalvoCore={$,$$,jsonFetch,state,toast,section,speak,esc,setMascotState,reactToScore,loadDashboard};
+document.querySelectorAll('#home-maestra .hm-card').forEach(b=>b.addEventListener('click',()=>{callModeSet(b.dataset.m);section('llamada')}));
+window.TalvoCore={$,$$,jsonFetch,state,toast,section,speak,esc,teacherSpeak,setMascotState,reactToScore,loadDashboard};
 $$('[data-pq]').forEach(el=>{el.innerHTML=pqLoader(el.dataset.pq||'')});
 })();

@@ -95,11 +95,22 @@ const REAL_TIPS=["Real English: people say “gonna”, “wanna” and “gotta
 const COACH_OK=["Nice! That's exactly how people say it.","You got it. Keep that rhythm!","Clean. That one's yours now.","Perfect — that's real, everyday English.","Yes! Your ear is getting sharper."];
 const COACH_NO=["No worries — mistakes are how it sticks. I'll bring it back.","Close! Read the correct one below and say it out loud once.","That one trips everyone. It will come back in a moment.","Good try. Listen again, then keep going."];
 const KIND_LABEL={pick_meaning:'Meaning',pick_word:'Vocabulary',listen_pick:'Listening',dialog:'Conversation',fill:'Grammar in context',build:'Build the sentence',type_listen:'Dictation',type_translate:'Writing',match:'Match',speak:'Speaking'};
-let tipI=0;
+let tipI=0;document.addEventListener('click',e=>{if(e.target&&e.target.id==='lp-explain')explainNow()});
 function coach(msg,mood){
   const b=$('lp-cbub'),pq=$('lp-cpq');if(!b)return;
   b.innerHTML='<span>'+msg+'</span>';b.className='lp-cbub '+(mood||'');
   pq.className='lp-coach-pq '+(mood||'');void pq.offsetWidth;
+}
+let explainBusy=false;
+async function explainNow(){
+  const ex=P.cur;if(!ex||explainBusy)return;explainBusy=true;const btn=$('lp-explain');if(btn)btn.disabled=true;
+  coach('🎓 Un momento, te lo explico…','idle');
+  try{
+    const info=[ex.q,ex.text,ex.say,ex.answer,ex.es].filter(Boolean).join(' | ').slice(0,400);
+    const d=await TalvoCore.jsonFetch('/api/tutor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({modo:'maestro',mensaje:'Estoy en una lección y no entiendo este ejercicio ('+ex.type+'): '+info+'. Explícamelo en español, muy corto y fácil, y dime cómo se dice de forma natural.'})});
+    const t=d.respuesta||'';coach(TalvoCore.esc(t),'idle');TalvoCore.teacherSpeak(t)
+  }catch(e){coach(TalvoCore.esc(e.message),'idle')}
+  finally{explainBusy=false;if(btn)btn.disabled=false}
 }
 function realTip(){return REAL_TIPS[(tipI++)%REAL_TIPS.length]}
 function coachStats(){

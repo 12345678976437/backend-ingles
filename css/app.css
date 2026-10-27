@@ -1500,3 +1500,29 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 .call-ui[data-teacher="1"] .core::after{content:"🎓";position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-8deg);font-size:34px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.4))}
 .call-ui[data-teacher="1"] .call-badge{background:rgba(255,200,87,.16);color:#ffc857}
 @media(max-width:640px){#tutor-category-bar{grid-template-columns:repeat(3,1fr)!important}}
+
+/* Palanqueta grande y viva en la llamada */
+.call-orb{width:280px;height:280px}
+.call-orb .core{width:210px;height:210px}
+.call-orb .core img{padding:0!important;height:100%!important;width:100%;object-fit:cover!important;object-position:center 20%!important;border-radius:50%;filter:saturate(1.12) contrast(1.04)}
+.call-ui[data-state="idle"] .core,.call-ui[data-state="muted"] .core{filter:none}
+.call-ui[data-teacher="1"] .core::after{top:-26px;font-size:54px}
+@media(max-width:640px){.call-orb{width:240px;height:240px}.call-orb .core{width:180px;height:180px}}
+
+/* Examen de nivel */
+.exam-result{text-align:center;margin-top:16px;border-color:rgba(255,200,87,.4)}
+.exam-result .ex-badge{display:inline-grid;place-items:center;width:96px;height:96px;border-radius:50%;font:800 34px var(--display);background:linear-gradient(135deg,#43e0ff,#7180ff);color:#071018;box-shadow:0 0 38px rgba(113,128,255,.45)}
+.exam-result .ex-lvl{margin-top:8px;color:var(--muted);letter-spacing:.06em;font-size:13px}
+.exam-result .ex-score{font:800 40px var(--display);margin:4px 0 8px}.exam-result .ex-score small{font-size:15px;color:var(--muted)}
+.exam-result .list,.exam-result h3{text-align:left}
+.exam-result .ex-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+#call-mode-bar .mode{font-size:12.5px}
+.call-ui[data-exam="1"] .core{box-shadow:0 0 0 2px rgba(113,128,255,.6),0 0 28px rgba(113,128,255,.3)}
+.call-ui[data-exam="1"] .core::after{content:"📝";position:absolute;top:-22px;right:-6px;font-size:44px;transform:rotate(10deg)}
+
+.lp-explain{width:100%;margin:10px 0 0;border-color:rgba(255,200,87,.5);color:#ffc857}
+.home-maestra{display:grid;grid-template-columns:1fr 1fr;gap:12px;grid-column:1/-1;margin:12px 0}
+.hm-card{display:flex;gap:12px;align-items:center;text-align:left;padding:14px 16px;border-radius:16px;border:1px solid var(--line-strong);background:linear-gradient(135deg,rgba(255,200,87,.08),rgba(113,128,255,.08));color:var(--text);cursor:pointer}
+.hm-card:hover{border-color:rgba(255,200,87,.6)}
+.hm-ic{font-size:30px}.hm-card b{display:block;font-size:14px}.hm-card small{color:var(--muted);font-size:12px}
+@media(max-width:640px){.home-maestra{grid-template-columns:1fr}}

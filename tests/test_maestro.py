@@ -13,3 +13,8 @@ assert 'LIVE VOICE CALL' not in p
 for k,v in m.PLAN_FEATURES.items(): assert v['maestro_dia']>0
 assert [m.PLAN_FEATURES[k]['maestro_dia'] for k in ('gratis','basico','pro','max')]==sorted(m.PLAN_FEATURES[k]['maestro_dia'] for k in ('gratis','basico','pro','max'))
 print('maestro OK')
+e1=m.build_exam_prompt(1); e8=m.build_exam_prompt(8)
+assert 'EXAM MODE' in e1 and 'question 1 of 8' in e1 and 'LAST' in e8
+assert m._CEFR_TO_LEVEL['B1']=='intermediate'
+assert [m.PLAN_FEATURES[k]['examen_mes'] for k in ('gratis','basico','pro','max')]==[1,4,10,30]
+print('examen OK')
