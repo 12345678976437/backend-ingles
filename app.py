@@ -805,6 +805,52 @@ def convert_audio_to_wav(upload):
         raise
 
 
+def _stt_once(wav_path, lang, names=()):
+    """Una pasada de reconocimiento en un idioma. Devuelve (texto, confianza 0-1)."""
+    cfg = speech_config()
+    cfg.speech_recognition_language = lang
+    cfg.output_format = speechsdk.OutputFormat.Detailed
+    rec = speechsdk.SpeechRecognizer(speech_config=cfg, audio_config=speechsdk.audio.AudioConfig(filename=wav_path))
+    if names:  # solo NOMBRES propios del alumno: jamás frases de la lección (eso sería regalarle la respuesta)
+        pl = speechsdk.PhraseListGrammar.from_recognizer(rec)
+        for n in names:
+            pl.addPhrase(n)
+    res = rec.recognize_once()
+    if res.reason != speechsdk.ResultReason.RecognizedSpeech:
+        return "", 0.0
+    conf = 0.0
+    try:
+        conf = float((json.loads(res.json).get("NBest") or [{}])[0].get("Confidence") or 0)
+    except Exception:
+        pass
+    return (res.text or "").strip(), conf
+
+
+def stt_bilingual(wav_path, names=()):
+    """La maestra oye español e inglés mezclados. La detección automática de idioma de Azure se equivoca con
+    palabras sueltas (Caleb -> 'Canet'), así que se reconoce en los DOS idiomas a la vez y gana el más seguro."""
+    out = {}
+
+    def run(lang):
+        try:
+            out[lang] = _stt_once(wav_path, lang, names)
+        except Exception as exc:
+            print(f"[STT {lang}] {exc}")
+            out[lang] = ("", 0.0)
+
+    threads = [threading.Thread(target=run, args=(l,), daemon=True) for l in ("en-US", "es-MX")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=25)
+    en, es = out.get("en-US", ("", 0.0)), out.get("es-MX", ("", 0.0))
+    if not en[0]:
+        return es[0]
+    if not es[0]:
+        return en[0]
+    return en[0] if en[1] + 0.03 >= es[1] else es[0]
+
+
 def assess_pronunciation(wav_path, reference_text=None):
     config = speech_config()
     if reference_text:
@@ -3392,19 +3438,15 @@ def call_turn():
     def generate():
         said = ""
         try:
-            audio_cfg = speechsdk.audio.AudioConfig(filename=wav_path)
             if maestro:  # el alumno mezcla español e inglés
-                try:
-                    auto = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=["es-MX", "en-US"])
-                    recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(), audio_config=audio_cfg,
-                                                            auto_detect_source_language_config=auto)
-                except Exception:
-                    recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(), audio_config=audio_cfg)
+                names = tuple(n for n in [(_ficha_get(uid)["ficha"].get("nombre") or "").strip()] if n)
+                said = stt_bilingual(wav_path, names)
             else:
-                recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(), audio_config=audio_cfg)
-            result = recognizer.recognize_once()
-            if result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                said = (result.text or "").strip()
+                recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(),
+                                                        audio_config=speechsdk.audio.AudioConfig(filename=wav_path))
+                result = recognizer.recognize_once()
+                if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                    said = (result.text or "").strip()
         except Exception as exc:
             print(f"[CALL STT] {exc}")
             yield _ndjson({"type": "error", "message": "No se pudo transcribir el audio. Inténtalo de nuevo."})
@@ -4658,7 +4700,7 @@ def _class_plan(ficha, clases, n, level=None):
     nombre = ficha.get("nombre") or ""
     if not nombre and clases <= 1:
         steps = {
-            1: "The student just told you their name (or answered your hello). React warmly and say it back like a human: 'Mucho gusto, <name>' and the English \"Nice to meet you, <name>.\" (ask them to repeat that one phrase). Then ask what they do (work or study).",
+            1: "The student just told you their name (or answered your hello). React warmly and say it back like a human: 'Mucho gusto, <name>' and the English \"Nice to meet you, <name>.\" (ask them to repeat that one phrase). Then say their name back to confirm you heard it right (\"¿Lo entendí bien?\") and ask what they do (work or study).",
             2: "React to what they do with real interest (one short human comment). Then ask what they like to do for fun or what they enjoy.",
             3: "React to their hobbies. Then ask why they want to learn English and what feels hardest for them, and tell them it is totally normal to find it hard. Keep it warm.",
             4: "Now teach your FIRST mini-lesson using THEIR own answers: teach 'My name is ...' / \"I'm from ...\" / \"I work as ...\" or \"I like ...\" with their real data. One phrase per turn, ask them to say it.",
@@ -4725,6 +4767,10 @@ TEACHER_PROMPT = (
     "6. If they have no idea what to learn, propose a useful everyday situation (cafe, work, travel, small talk) and start with the first phrase.\n"
     "7. YOUR METHOD COMBINES TWO WORLDS: (a) SCHOOL ENGLISH: a real structured course (pronouns, verb to be, present simple, questions, past, etc.) with a clear rule explained in Spanish; and (b) STREET ENGLISH: how people really say it (contractions, reductions like gonna/wanna/whaddya, slang, fast speech) and how to UNDERSTAND foreigners who talk fast. Every lesson shows both: 'en el libro dice X, pero la gente dice Y'. Follow the curriculum unit given below; use the student's interests only for the examples, not to replace the course.\n"
     "8. End EVERY turn with one clear, easy question or task for the student.\n\n"
+    "9. BE HONEST, NEVER A YES-MAN: what you read is automatic speech-to-text of the student's voice, which can be wrong. Never say 'perfect' unless the transcript really matches the target phrase. "
+    "If it differs, say so kindly, show exactly which word was off, and ask them to try again (up to 2 tries), and only then model it again. Do NOT reveal the full answer before they have tried. "
+    "Never give the student the phrase they are supposed to produce on their own (translating from Spanish, filling in a gap, answering a question): let them try first. "
+    "If a word looks like a recognition error (e.g. an odd name), say it back and ask 'lo entendí bien?' instead of assuming. Praise must be specific and earned.\n"
     "FORMAT: this is a spoken lesson. Reply in 2-4 short sentences, no lists, no markdown, no emojis, no parentheses. Sound like a kind human teacher."
 )
 

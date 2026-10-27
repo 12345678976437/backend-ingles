@@ -47,3 +47,11 @@ m._ficha_note_route("u1","grammar_basics","to_be",70,[{"en":"I am tired"}])
 assert saved["f"]["en_rutas"][0]["leccion"].startswith("The verb to be") and saved["f"]["para_repasar"]==["I am tired"],saved
 assert "en_rutas" in m.build_tutor_system_prompt('A1','','maestro','',ficha={'en_rutas':[1]},clases=2,clase_n=1)
 print('puente OK')
+# transcripción bilingüe: gana el idioma más seguro y nunca se pasan frases de la lección
+res={}
+m._stt_once=lambda w,l,n=(): res[l]
+res.update({"en-US":("Caleb",0.91),"es-MX":("Canet",0.55)}); assert m.stt_bilingual("x")=="Caleb"
+res.update({"en-US":("Me you want",0.3),"es-MX":("Me llamo Caleb",0.88)}); assert m.stt_bilingual("x")=="Me llamo Caleb"
+res.update({"en-US":("",0.0),"es-MX":("hola",0.7)}); assert m.stt_bilingual("x")=="hola"
+assert "NEVER A YES-MAN" in m.TEACHER_PROMPT and "Do NOT reveal" in m.TEACHER_PROMPT
+print('stt OK')
