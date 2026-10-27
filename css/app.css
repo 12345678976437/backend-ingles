@@ -1552,3 +1552,13 @@ body:has(#sec-escenarios.active #sc-in) .mascot-widget{opacity:0;pointer-events:
 /* Modo sin conexión */
 #off-banner{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:2147483000;max-width:min(92vw,560px);padding:9px 16px;border-radius:999px;font-size:12.5px;font-weight:600;text-align:center;color:#ffe7b0;background:rgba(40,28,6,.94);border:1px solid rgba(255,200,87,.55);box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none}
 body.is-offline .nav-needs-net{opacity:.45}
+
+/* Pronunciación medida en la llamada de la maestra */
+.cp-pron{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1);font-size:12.5px}
+.cp-pron .cp-t{color:var(--muted);margin-bottom:6px}.cp-pron .cp-t b{color:var(--text)}
+.cp-pron .cp-w{display:flex;flex-wrap:wrap;gap:6px}
+.cp-pron .cp-w span{padding:4px 9px;border-radius:999px;font-weight:700;border:1px solid transparent}
+.cp-pron .cp-w span i{font-style:normal;font-size:10.5px;opacity:.75;margin-left:5px}
+.cp-pron .g{background:rgba(61,220,151,.14);border-color:rgba(61,220,151,.45);color:#7ff0bd}
+.cp-pron .m{background:rgba(255,200,87,.14);border-color:rgba(255,200,87,.5);color:#ffd98a}
+.cp-pron .b{background:rgba(255,92,92,.16);border-color:rgba(255,92,92,.55);color:#ff9d9d}

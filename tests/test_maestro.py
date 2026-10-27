@@ -55,3 +55,18 @@ res.update({"en-US":("Me you want",0.3),"es-MX":("Me llamo Caleb",0.88)}); asser
 res.update({"en-US":("",0.0),"es-MX":("hola",0.7)}); assert m.stt_bilingual("x")=="hola"
 assert "NEVER A YES-MAN" in m.TEACHER_PROMPT and "Do NOT reveal" in m.TEACHER_PROMPT
 print('stt OK')
+# basura tipo "0138" no se acepta como transcripción
+assert not m._plausible("0138",0.9) and not m._plausible("-",0.9) and not m._plausible("hola",0.1) and m._plausible("Caleb",0.8)
+res.update({"en-US":("0138",0.8),"es-MX":("",0.0)}); assert m.stt_bilingual("x")==""
+# frase meta: solo cuando la maestra pidió repetir; usa la última frase entre comillas
+h=[{"role":"assistant","content":'Muy bien. Ahora repite conmigo: "How\'s it going?" Dilo despacio.'}]
+assert m._target_phrase(h)=="How's it going?"
+assert m._target_phrase([{"role":"assistant","content":'Eso se dice "How\'s it going?" y significa qué tal.'}])==""
+assert m._target_phrase([])==""
+# Pronunciation Assessment contra la frase meta (simulado)
+m.assess_pronunciation=lambda w,t:{"transcript":"How's it going","pronunciation_score":72.4,"completeness_score":100,"words":[{"word":"How's","accuracy":90},{"word":"it","accuracy":85},{"word":"going","accuracy":41}]}
+pr=m._pron_check("x","How's it going?"); assert pr["score"]==72 and pr["words"][2]=={"w":"going","a":41}
+assert "going (41)" in m._pron_note(pr) and "do NOT say it was perfect" in m._pron_note(pr)
+m.assess_pronunciation=lambda w,t:{"transcript":"no entiendo","pronunciation_score":10,"completeness_score":0,"words":[]}
+assert m._pron_check("x","How's it going?") is None   # contestó otra cosa: no cuenta como intento
+print('pron OK')

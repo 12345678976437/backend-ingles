@@ -826,6 +826,62 @@ def _stt_once(wav_path, lang, names=()):
     return (res.text or "").strip(), conf
 
 
+_REPEAT_CUE = re.compile(r"\b(repite|rep[ií]telo|rep[ií]tela|di conmigo|dilo|d[ií]melo|ahora t[uú]|intenta|prueba|say it|repeat)\b", re.I)
+_QUOTED = re.compile(r'"([^"\n]{2,120})"|“([^”\n]{2,120})”')
+
+
+def _target_phrase(history):
+    """Frase en inglés que la maestra acaba de pedirte repetir (la que ella misma dijo en su turno anterior)."""
+    last = next((h for h in reversed(history or []) if isinstance(h, dict) and h.get("role") == "assistant"), None)
+    if not last:
+        return ""
+    text = str(last.get("content") or "")
+    if not _REPEAT_CUE.search(text):
+        return ""
+    spans = [a or b for a, b in _QUOTED.findall(text)]
+    spans = [x.strip() for x in spans if 1 <= len(x.split()) <= 10 and re.search(r"[A-Za-z]", x)]
+    return spans[-1] if spans else ""
+
+
+def _norm_words(t):
+    return re.findall(r"[a-z']+", (t or "").lower().replace("’", "'"))
+
+
+def _pron_check(wav_path, target):
+    """Pronunciation Assessment de Azure contra la frase meta. None si no fue un intento real de decirla."""
+    try:
+        r = assess_pronunciation(wav_path, target)
+    except Exception as exc:
+        print(f"[CALL PRON] {exc}")
+        return None
+    heard = _norm_words(r.get("transcript"))
+    want = _norm_words(target)
+    overlap = len(set(heard) & set(want)) / max(1, len(set(want)))
+    if overlap < 0.34 and r.get("completeness_score", 0) < 50:
+        return None  # contestó otra cosa (p. ej. en español): no se califica como intento
+    words = [{"w": w["word"], "a": round(w["accuracy"])} for w in r["words"] if w.get("word")]
+    return {"target": target, "score": round(r["pronunciation_score"]), "words": words,
+            "heard": r.get("transcript") or ""}
+
+
+def _pron_note(p):
+    weak = [f"{w['w']} ({w['a']})" for w in p["words"] if w["a"] < 70]
+    return ("\n\nPRONUNCIATION CHECK (measured by Azure on the student's real voice; trust it over the transcript): "
+            f"target phrase \"{p['target']}\", overall {p['score']}/100"
+            + (f", weak words: {', '.join(weak)}" if weak else ", no weak words")
+            + ". Give feedback based on THIS: name the exact weak word(s) and how to fix the sound in Spanish terms; do NOT say it was perfect unless the overall score is 85 or more; "
+            "if it is below 70 ask them to try again (max 2 tries) before you say the phrase again.")
+
+
+def _plausible(text, conf):
+    """Descarta ruido que el reconocedor convierte en basura (por ejemplo '0138' o un solo símbolo)."""
+    t = (text or "").strip()
+    letters = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]", t)
+    if len(letters) < 2:
+        return False
+    return conf >= 0.2 or len(t.split()) >= 3
+
+
 def stt_bilingual(wav_path, names=()):
     """La maestra oye español e inglés mezclados. La detección automática de idioma de Azure se equivoca con
     palabras sueltas (Caleb -> 'Canet'), así que se reconoce en los DOS idiomas a la vez y gana el más seguro."""
@@ -844,6 +900,10 @@ def stt_bilingual(wav_path, names=()):
     for t in threads:
         t.join(timeout=25)
     en, es = out.get("en-US", ("", 0.0)), out.get("es-MX", ("", 0.0))
+    if not _plausible(*en):
+        en = ("", 0.0)
+    if not _plausible(*es):
+        es = ("", 0.0)
     if not en[0]:
         return es[0]
     if not es[0]:
@@ -3440,12 +3500,19 @@ def call_turn():
 
     def generate():
         said = typed
+        pron_box, t_pron = {}, None
         try:
             if typed:
                 pass  # texto escrito: no hace falta transcribir
             elif maestro:  # el alumno mezcla español e inglés
                 names = tuple(n for n in [(_ficha_get(uid)["ficha"].get("nombre") or "").strip()] if n)
+                target = _target_phrase(safe_history)
+                if target:  # en paralelo: la voz del alumno contra la frase que la maestra pidió repetir
+                    t_pron = threading.Thread(target=lambda: pron_box.update(r=_pron_check(wav_path, target)), daemon=True)
+                    t_pron.start()
                 said = stt_bilingual(wav_path, names)
+                if t_pron:
+                    t_pron.join(timeout=20)
             else:
                 recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config(),
                                                         audio_config=speechsdk.audio.AudioConfig(filename=wav_path))
@@ -3466,12 +3533,17 @@ def call_turn():
             yield _ndjson({"type": "empty"})
             return
         yield _ndjson({"type": "user", "text": said})
+        pron = pron_box.get("r")
+        if pron:
+            yield _ndjson({"type": "pron", **pron})
 
         try:
             level, prior = ctx_future.result(timeout=10)
         except Exception:
             level, prior = None, ""
         system_prompt = build_exam_prompt(exam_turn) if examen else build_tutor_system_prompt(level, prior, "maestro" if maestro else "llamada", "", **(_teacher_kw(uid, clase_n) if maestro else {}))
+        if pron:
+            system_prompt += _pron_note(pron)
         full, buf, pending, first = "", "", [], True
 
         def push(sentence):

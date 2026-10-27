@@ -537,6 +537,10 @@ async function callStartTalk(){
   }catch(e){toast('Error de micrófono: '+e.message);callIdle()}
 }
 function callSendTyped(){const inp=$('call-type-input');if(!inp)return;const t=inp.value.trim();if(!t)return;if(state.callBusy){if(CALL.playing||CALL.abort){callSkip()}}inp.value='';callSendTurn(null,t)}
+function callPronChips(ev){const el=CALL.userEl;if(!el||!ev.words||!ev.words.length)return;
+  const c=document.createElement('div');c.className='cp-pron';
+  c.innerHTML=`<div class="cp-t">Tu pronunciación de "${esc(ev.target)}": <b>${ev.score}</b>/100</div><div class="cp-w">${ev.words.map(w=>`<span class="${w.a>=80?'g':w.a>=60?'m':'b'}" data-i18n-skip>${esc(w.w)}<i>${w.a}</i></span>`).join('')}</div>`;
+  el.appendChild(c);const wrap=$('call-messages');if(wrap)wrap.scrollTop=wrap.scrollHeight}
 function callStopTalk(){
   $('call-talk-btn').classList.remove('recording');
   if(state.callRecorder&&state.callRecorder.state!=='inactive')state.callRecorder.stop()
@@ -569,8 +573,9 @@ async function callSendTurn(ev,typed){
 async function callReadStream(r){
   CALL.aiPushed=false;
   const handle=ev=>{
-    if(ev.type==='user'){addCallMessage(ev.text,'user');state.callMessages.push({role:'user',content:ev.text});callCaption('user',ev.text);callStatus('Palanqueta is thinking…')}
+    if(ev.type==='user'){CALL.userEl=addCallMessage(ev.text,'user');state.callMessages.push({role:'user',content:ev.text});callCaption('user',ev.text);callStatus('Palanqueta is thinking…')}
     else if(ev.type==='ai'){if(!CALL.aiEl)CALL.aiEl=addCallMessage('','ai');CALL.aiEl.textContent=(CALL.aiEl.textContent+' '+ev.text).trim();callCaption('ai',CALL.aiEl.textContent);callEnqueue(ev.text,ev.audio)}
+    else if(ev.type==='pron'){callPronChips(ev)}
     else if(ev.type==='empty'){callStatus('I did not catch that, try again.')}
     else if(ev.type==='error'){throw new Error(ev.message)}
     else if(ev.type==='done'){if(CALL.aiEl){state.callMessages.push({role:'assistant',content:ev.reply||CALL.aiEl.textContent});CALL.aiPushed=true}}
