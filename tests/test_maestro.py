@@ -23,5 +23,11 @@ new=m.build_tutor_system_prompt('A2','','maestro','',ficha={},clases=1,clase_n=1
 assert 'Nice to meet you' in new and 'new student' in new
 back=m.build_tutor_system_prompt('A2','','maestro','',ficha={'nombre':'Ana','gustos':['cocinar']},clases=3,clase_n=1)
 assert 'RETURNING' in back and 'Ana' in back
-assert 'WRAP UP' in m._class_plan({}, 1, 12) and 'role-play' in m._class_plan({'nombre':'Ana'}, 3, 9)
+assert 'WRAP UP' in m._class_plan({}, 1, 12) and 'role-play' in m._class_plan({'nombre':'Ana'}, 3, 10)
 print('clase OK')
+# temario escuela + calle
+assert len(m.TEACHER_SYLLABUS)>=15 and m._syllabus_unit({}, 'A2')[0]==6 and m._syllabus_unit({'unidad':99}, None)[0]==len(m.TEACHER_SYLLABUS)-1
+pl=m._class_plan({'nombre':'Ana'},3,6,'A1'); assert 'SCHOOL BASE' in pl and 'CURRICULUM UNIT 1' in pl
+assert 'REAL LIFE' in m._class_plan({'nombre':'Ana'},3,7,'A1') and 'UNDERSTAND THEM' in m._class_plan({'nombre':'Ana'},3,8,'A1')
+assert 'STREET ENGLISH' in m.build_tutor_system_prompt('A1','','maestro','',ficha={'nombre':'Ana'},clases=2,clase_n=6)
+print('temario OK')

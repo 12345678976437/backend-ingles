@@ -4507,6 +4507,43 @@ def _tutor_context(user_id):
     return level, prior
 
 
+# Temario de la maestra: base de escuela + cómo lo dice la gente de verdad.
+# (tema de escuela, versión real / de la calle que hay que entender y usar)
+TEACHER_SYLLABUS = [
+    ("Pronombres personales (I, you, he, she, it, we, they)", "en la calle casi nunca se dice el pronombre completo: \"I'm\", \"you're\", \"he's\", \"they're\"; y se oye \"ya\" por \"you\" y \"em\" por \"them\""),
+    ("Verbo to be (am, is, are) y presentarse", "contracciones \"I'm / she's / we're\" y respuestas cortas: \"Where are you from?\" -> \"Mexico, you?\""),
+    ("Artículos y sustantivos (a, an, the, plurales)", "\"a\" suena \"uh\" y \"the\" suena \"thuh\"; \"a cup of coffee\" se oye \"acuppa coffee\""),
+    ("Verbos de uso diario en presente simple (work, live, like, want, need)", "\"I wanna...\", \"I need to...\" -> \"I needta...\", \"Do you...?\" -> \"D'you...?\""),
+    ("Preguntas con Do/Does y palabras interrogativas (what, where, when, who, why, how)", "\"What do you do?\" se oye \"Whaddya do?\"; \"How's it going?\" en vez de \"How are you?\""),
+    ("Números, hora, días y fechas", "\"a quarter to / half past\", \"around five\", \"fifteen\" vs \"fifty\" y cómo distinguirlos al oírlos"),
+    ("Verbo have / has y there is / there are", "\"I've got\", \"there's a...\", \"got any...?\""),
+    ("Can / can't / could y pedir cosas con cortesía", "\"can\" y \"can't\" se oyen casi igual: \"I kin\" vs \"I CAN'T\"; \"Can I get...?\", \"Could you...?\""),
+    ("Pasado simple regular e irregular (went, saw, had, did)", "\"I did\" -> \"I did\", \"Did you...?\" -> \"Didja...?\"; \"What did you do?\" -> \"Whaddidja do?\""),
+    ("Presente continuo y planes cercanos (I'm going to)", "\"I'm gonna\", \"I'm just...\", \"What are you up to?\""),
+    ("Comida, restaurante y café: pedir y pagar", "\"Can I get...\", \"for here or to go?\", \"I'll have...\", \"the check, please\" / \"the bill\""),
+    ("Direcciones, transporte y viajes", "\"Is this the right way to...?\", \"how far is it?\", \"take a left\", \"hop on\""),
+    ("Comparativos y superlativos (bigger, the best)", "\"way better\", \"kinda\", \"a lot more\", \"the best ever\""),
+    ("Futuro: will / going to", "\"I'll\", \"we'll\", \"I'll text you\", \"I'm gonna be late\""),
+    ("Presente perfecto (have you ever...?)", "\"Have you ever...?\" -> \"Ever been to...?\", \"I've never...\""),
+    ("Trabajo y escuela: hablar de lo que haces", "\"I'm in sales\", \"I'm between jobs\", \"I'm studying...\", \"it's a long day\""),
+    ("Phrasal verbs de todos los días (pick up, hang out, give up, find out)", "es lo que más usa la gente y casi no se enseña: \"hang out\", \"come over\", \"run into\""),
+    ("Modales: should, must, have to, might", "\"gotta\", \"hafta\", \"you should totally...\", \"I might...\""),
+    ("Condicionales y hablar de opiniones", "\"If I were you...\", \"I guess\", \"honestly\", \"to be honest\""),
+    ("Small talk y conversación natural", "\"Not bad\", \"can't complain\", \"no worries\", \"for real?\", \"I mean...\", \"you know\""),
+]
+
+
+def _syllabus_unit(ficha, level):
+    """Unidad actual del temario. Arranca según el nivel estimado y avanza cuando la ficha lo marca."""
+    try:
+        i = int(ficha.get("unidad"))
+    except (TypeError, ValueError):
+        start = {"A1": 0, "A2": 6, "B1": 13, "B2": 17}.get(str(level or "")[:2], 0)
+        i = start
+    i = max(0, min(i, len(TEACHER_SYLLABUS) - 1))
+    return i, TEACHER_SYLLABUS[i]
+
+
 # ---------------------------------------------------------------------------
 #  MAESTRA: ficha del alumno (nombre, gustos, objetivo, lo aprendido) y plan de la clase
 # ---------------------------------------------------------------------------
@@ -4545,13 +4582,18 @@ def _ficha_update(uid, lines):
     """Pone al día la ficha leyendo lo último de la clase (corre en segundo plano)."""
     try:
         cur = _ficha_get(uid)["ficha"]
+        try:
+            lvl = _cached_call(("level", uid), 300, estimate_level, uid)
+        except Exception:
+            lvl = None
         data = ai_json(
             "You keep the private student file of a bilingual English teacher. Given the current file (JSON) and the latest part of a class transcript, return the UPDATED file as JSON with exactly these keys: "
             "nombre (string, first name or empty), ocupacion (string), gustos (array of up to 6 short strings in Spanish), objetivo (string, why they want English), "
             "dificultad (string, what feels hardest, in Spanish), frases_aprendidas (array of up to 12 English phrases the student has practiced successfully), "
             "para_repasar (array of up to 6 English phrases or points the student got wrong or struggled with), ultimo_tema (string, short Spanish). "
+            "unidad_dominada (boolean: true ONLY if the student has clearly practiced the CURRENT unit named below with good results in this transcript, including the real spoken form). "
             "Keep old facts unless the student corrected them. Only write what the student actually said or did. No invented facts.",
-            "CURRENT FILE:\n" + json.dumps(cur, ensure_ascii=False) + "\n\nTRANSCRIPT:\n" + "\n".join(lines)[-3500:],
+            "CURRENT UNIT: " + _syllabus_unit(cur, lvl)[1][0] + "\n\nCURRENT FILE:\n" + json.dumps(cur, ensure_ascii=False) + "\n\nTRANSCRIPT:\n" + "\n".join(lines)[-3500:],
             temperature=0.2)
         clean = {}
         for k in ("nombre", "ocupacion", "objetivo", "dificultad", "ultimo_tema"):
@@ -4559,12 +4601,14 @@ def _ficha_update(uid, lines):
         for k, n in (("gustos", 6), ("frases_aprendidas", 12), ("para_repasar", 6)):
             v = data.get(k) or []
             clean[k] = [_short(x, 90) for x in v if isinstance(x, str) and x.strip()][:n] if isinstance(v, list) else []
+        ui = _syllabus_unit(cur, lvl)[0]
+        clean["unidad"] = min(ui + 1, len(TEACHER_SYLLABUS) - 1) if data.get("unidad_dominada") is True else ui
         _ficha_save(uid, ficha=clean)
     except Exception as exc:
         print(f"[FICHA update] {exc}")
 
 
-def _class_plan(ficha, clases, n):
+def _class_plan(ficha, clases, n, level=None):
     """Qué toca hacer en ESTE turno de la clase, como lo haría un maestro particular."""
     nombre = ficha.get("nombre") or ""
     if not nombre and clases <= 1:
@@ -4581,16 +4625,29 @@ def _class_plan(ficha, clases, n):
         steps = {
             1: f"This is a RETURNING student{(' named ' + nombre) if nombre else ''}. Greet them by name, ask how they are in English (\"How are you doing today?\") and how the days since the last class went. React humanly to what they answer.",
             2: "Quick warm-up: review 1-2 phrases from the 'para_repasar' or 'frases_aprendidas' list in their file, ask them to say them. Praise what they remember.",
-            3: "Tell them in one sentence what you will learn today (pick a topic from their goals/likes/last topic) and teach the first phrase of it.",
+            3: "Tell them in one sentence what you will learn today: the current curriculum unit (see below), and mention that you will teach it twice: the way school teaches it AND the way people really say it.",
         }
         if n in steps:
             return steps[n]
     if n >= 12:
         return ("WRAP UP the class like a real teacher: say what they did well, recap the 3 most useful phrases of today (in quotes, one by one), give a tiny homework (use one phrase once today), "
                 "say you are proud of them and \"See you next class!\". If they keep talking you may continue gently.")
-    if n >= 8:
+    if n in (10, 11):
         return "Do a short role-play: you play a real person (barista, coworker, new friend) in a tiny dialogue using today's phrases; they answer; you correct kindly after each answer."
-    return "Keep teaching the next small piece (one phrase or one idea), have the student say it or use it in a sentence, correct kindly, praise real progress. Use THEIR life (job, hobbies, goals) in the examples."
+    return _lesson_step(ficha, n, level)
+
+
+def _lesson_step(ficha, n, level):
+    ui, (school, real) = _syllabus_unit(ficha, level)
+    cycle = [
+        f"STEP 1 - SCHOOL BASE: teach the grammar/topic '{school}' the way a good school teacher would: clear, simple, with the rule in Spanish and 1-2 clean examples. One small piece only.",
+        "STEP 2 - REAL LIFE: show how people REALLY say it. Take the textbook sentence you just taught and show the spoken version a native uses (contraction, reduction, slang or shorter form). Say clearly 'en el libro dice X, pero la gente dice Y'. Have the student say the real version.",
+        f"STEP 3 - UNDERSTAND THEM: tell the student that a foreigner will say it fast. Say the phrase the way it sounds in fast speech (e.g. {real}) and ask what they think it means; then reveal it. Train their EAR, not only their mouth.",
+        "STEP 4 - PRACTICE: ask them to build their own sentence about THEIR life with this topic, using the natural spoken form. Correct kindly and have them repeat the better version.",
+    ]
+    return (f"CURRICULUM UNIT {ui + 1} of {len(TEACHER_SYLLABUS)}: {school}. REAL-LIFE ANGLE: {real}.\n"
+            + cycle[(n - 6) % 4 if n >= 6 else (n % 4)]
+            + "\nAlways connect school English with real English: never teach only one of the two. If the student makes a mistake from this unit, fix it before moving on.")
 
 
 def _teacher_kw(uid, clase_n):
@@ -4621,7 +4678,8 @@ TEACHER_PROMPT = (
     "4. When they are lost, go slower and use more Spanish. When they do well, use a bit more English and raise the challenge.\n"
     "5. Mix teaching with tiny speaking practice: short mini-dialogues where you play one role.\n"
     "6. If they have no idea what to learn, propose a useful everyday situation (cafe, work, travel, small talk) and start with the first phrase.\n"
-    "7. End EVERY turn with one clear, easy question or task for the student.\n\n"
+    "7. YOUR METHOD COMBINES TWO WORLDS: (a) SCHOOL ENGLISH: a real structured course (pronouns, verb to be, present simple, questions, past, etc.) with a clear rule explained in Spanish; and (b) STREET ENGLISH: how people really say it (contractions, reductions like gonna/wanna/whaddya, slang, fast speech) and how to UNDERSTAND foreigners who talk fast. Every lesson shows both: 'en el libro dice X, pero la gente dice Y'. Follow the curriculum unit given below; use the student's interests only for the examples, not to replace the course.\n"
+    "8. End EVERY turn with one clear, easy question or task for the student.\n\n"
     "FORMAT: this is a spoken lesson. Reply in 2-4 short sentences, no lists, no markdown, no emojis, no parentheses. Sound like a kind human teacher."
 )
 
@@ -4650,7 +4708,7 @@ def build_tutor_system_prompt(level, prior_context, modo="", categoria="", ficha
     """Prompt de Palanqueta. Lo usan el chat del tutor y la llamada en vivo."""
     if modo == "maestro":
         lv = f"Estimated student level: {level}. Adapt how much English you use to it (A1-A2: almost all Spanish, tiny English pieces)." if level else "Student level unknown: assume beginner and check gently what they already know."
-        plan = _class_plan(ficha or {}, clases, clase_n)
+        plan = _class_plan(ficha or {}, clases, clase_n, level)
         extra = (f"\n\n{_ficha_text(ficha or {}, clases)}\n\nTHIS TURN OF THE CLASS (turn {clase_n}): {plan}\n"
                  "Act like a real human teacher: react to what the student actually said before moving on, remember their name and use it now and then, "
                  "be curious about them as a person, and never ask more than one question per turn.")
