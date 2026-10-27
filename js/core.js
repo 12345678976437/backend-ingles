@@ -1115,7 +1115,7 @@ function vadLoop(){
       callStartTalk().finally(()=>{vad.starting=false});
     }
   }else if(talking){
-    if(vad.rec&&now-vad.last>1400&&now-vad.started>900){vad.rec=false;vad.voice=0;vad.cool=now+1200;callStopTalk()}
+    if(vad.rec&&now-vad.last>((teacherOn()||examOn())?2100:1500)&&now-vad.started>900){vad.rec=false;vad.voice=0;vad.cool=now+1200;callStopTalk()}
   }else if(!vad.starting){vad.voice=0;vad.rec=false}
 }
 $('call-handsfree')?.addEventListener('click',()=>{if(vad.on)vadStop();else vadStart()});
