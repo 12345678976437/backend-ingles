@@ -158,7 +158,45 @@ const OFF={
 
 window.TalvoOffline=OFF;
 /* el service worker guarda la app para abrirla sin internet (el mismo sw.js de las notificaciones) */
-try{if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}catch(e){}
+OFF.ready=false;OFF.info={sw:'—',files:0,ctrl:false,err:''};
+OFF.register=async function(){
+  try{
+    if(!('serviceWorker' in navigator)){OFF.info.err='Este navegador no permite modo sin conexión.';return}
+    if(!(location.protocol==='https:'||location.hostname==='localhost')){OFF.info.err='Solo funciona con https.';return}
+    const reg=await navigator.serviceWorker.register('sw.js',{updateViaCache:'none'});
+    try{await reg.update()}catch(e){}
+    await navigator.serviceWorker.ready
+  }catch(e){OFF.info.err=String(e&&e.message||e)}
+  return OFF.check()
+};
+OFF.check=async function(){
+  try{
+    const reg=await navigator.serviceWorker.getRegistration();
+    const w=reg&&(reg.active||reg.waiting||reg.installing);
+    OFF.info.sw=w?w.state:'sin instalar';OFF.info.ctrl=!!navigator.serviceWorker.controller;
+    let n=0;const ks=await caches.keys();
+    for(const k of ks){if(k.startsWith('talvo-v')){n=Math.max(n,(await (await caches.open(k)).keys()).length)}}
+    OFF.info.files=n;
+    const had=OFF.ready;OFF.ready=!!(reg&&reg.active)&&n>=25;
+    if(OFF.ready&&!had){
+      let seen=false;try{seen=LS.getItem('talvo_off_ready')==='1';LS.setItem('talvo_off_ready','1')}catch(e){}
+      if(!seen&&window.TalvoCore&&window.TalvoCore.toast)window.TalvoCore.toast('App ready for offline use ✓')
+    }
+  }catch(e){OFF.info.err=String(e&&e.message||e)}
+  OFF.renderCard();return OFF.ready
+};
+OFF.renderCard=function(){
+  const c=document.getElementById('off-card');if(!c)return;
+  let es=true;try{es=(LS.getItem('talvo_lang')||'es')!=='en'}catch(e){}
+  const t=(a,b)=>es?a:b;
+  const lessons=jget(K.idx,[]).filter(k=>k.indexOf('/lesson/')>0).length;
+  c.innerHTML='<div class="vb-h"><b>'+t('Modo sin conexión','Offline mode')+'</b><span class="badge">'+(OFF.ready?t('Listo ✓','Ready ✓'):t('Todavía no está listo','Not ready yet'))+'</span></div>'
+    +'<p class="pl-note">'+(OFF.ready?t('La app está guardada en este dispositivo. Puedes abrirla y practicar las lecciones guardadas sin internet.','The app is saved on this device. You can open it and practice saved lessons without internet.'):t('Abre la app con internet y espera unos segundos para que se guarde en este dispositivo.','Open the app with internet and wait a few seconds so it can save itself on this device.'))+'</p>'
+    +'<small class="pl-note">'+t('Archivos guardados','Files saved')+': '+OFF.info.files+' · '+t('Lecciones guardadas','Lessons saved')+': '+lessons+' · Service worker: '+OFF.info.sw+(OFF.info.err?' · '+OFF.info.err:'')+'</small>'
+    +'<div style="margin-top:10px"><button type="button" class="btn" id="off-refresh">'+t('Revisar / preparar ahora','Check / prepare now')+'</button></div>';
+  const b=document.getElementById('off-refresh');if(b)b.onclick=async()=>{b.disabled=true;b.textContent=t('Revisando…','Checking…');await OFF.register();b.disabled=false;b.textContent=t('Revisar / preparar ahora','Check / prepare now')}
+};
+OFF.register();
 window.addEventListener('offline',()=>OFF.badge());
 window.addEventListener('online',()=>{OFF.badge();setTimeout(()=>OFF.flush(),1200)});
 document.addEventListener('DOMContentLoaded',()=>OFF.badge());

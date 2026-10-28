@@ -26,17 +26,24 @@ self.addEventListener('activate',e=>{
     await self.clients.claim();
   })());
 });
+/* Un navegador rechaza una respuesta "redirigida" para una navegación (sale el dinosaurio). Se re-envuelve limpia. */
+async function clean(r){
+  if(!r||!r.redirected)return r;
+  const body=await r.blob();
+  return new Response(body,{status:200,statusText:'OK',headers:r.headers});
+}
 function withTimeout(p,ms){return new Promise((res,rej)=>{const t=setTimeout(()=>rej(new Error('timeout')),ms);p.then(v=>{clearTimeout(t);res(v)},e=>{clearTimeout(t);rej(e)})})}
 async function networkFirst(req){
   const cache=await caches.open(VERSION);
   try{
-    const r=await withTimeout(fetch(req),req.mode==='navigate'?7000:9000);
+    const r0=await withTimeout(fetch(req),req.mode==='navigate'?7000:9000);
+    const r=req.mode==='navigate'?await clean(r0):r0;
     if(r&&r.ok&&r.type==='basic'){cache.put(req,r.clone()).catch(()=>{});if(req.mode==='navigate')cache.put('./',r.clone()).catch(()=>{})}
     return r;
   }catch(_){
     const hit=await cache.match(req,{ignoreSearch:true});
-    if(hit)return hit;
-    if(req.mode==='navigate'){const home=(await cache.match('./'))||(await cache.match('index.html'));if(home)return home}
+    if(hit)return clean(hit);
+    if(req.mode==='navigate'){const home=(await cache.match('./'))||(await cache.match('index.html'));if(home)return clean(home)}
     return Response.error();
   }
 }
