@@ -70,3 +70,9 @@ assert "going (41)" in m._pron_note(pr) and "do NOT say it was perfect" in m._pr
 m.assess_pronunciation=lambda w,t:{"transcript":"no entiendo","pronunciation_score":10,"completeness_score":0,"words":[]}
 assert m._pron_check("x","How's it going?") is None   # contestó otra cosa: no cuenta como intento
 print('pron OK')
+# comillas con español se leen en español; el inglés sigue en inglés
+sx=m._bilingual_ssml('Di conmigo: "How are you?" y luego "¿cómo dices cómo estás hoy?" ok', m._DEFAULT_VOICE)
+assert sx.count("xml:lang='en-US'")==1 and "How are you?" in sx.split("xml:lang='en-US'")[1][:60]
+assert not m._looks_spanish('"How are you doing today?"') and m._looks_spanish('"¿cómo estás hoy?"')
+assert 'CANNOT HEAR' in m.TEACHER_PROMPT and 'ONE task per turn' in m.TEACHER_PROMPT
+print('capturas OK')

@@ -1562,3 +1562,13 @@ body.is-offline .nav-needs-net{opacity:.45}
 .cp-pron .g{background:rgba(61,220,151,.14);border-color:rgba(61,220,151,.45);color:#7ff0bd}
 .cp-pron .m{background:rgba(255,200,87,.14);border-color:rgba(255,200,87,.5);color:#ffd98a}
 .cp-pron .b{background:rgba(255,92,92,.16);border-color:rgba(255,92,92,.55);color:#ff9d9d}
+
+/* Tutor en el celular: el campo y los botones no se aplastan y la mascota no tapa "Enviar" */
+@media(max-width:700px){
+  body:has(#sec-tutor.active) #mascot{display:none}
+  #sec-tutor .chatinput{flex-wrap:wrap}
+  #sec-tutor .chatinput .input{flex:1 1 100%}
+  #sec-tutor .chatinput .btn{flex:1 1 40%}
+  #sec-tutor{padding-bottom:120px}
+  #tutor-speak{white-space:normal}
+}

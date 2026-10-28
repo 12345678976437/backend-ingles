@@ -3366,13 +3366,22 @@ _DEFAULT_VOICE = "en-US-AvaMultilingualNeural"
 _QUOTED_EN = re.compile(r'("[^"\n]{1,160}"|“[^”\n]{1,160}”)')
 
 
+_ES_HINT = re.compile(r"[¿¡áéíóúñÁÉÍÓÚÑ]|\b(c[oó]mo|qu[eé]|est[aá]s?|hoy|para|con|por|una?|el|la|los|las|de|en|y|que|muy|bien|dices?)\b", re.I)
+
+
+def _looks_spanish(piece):
+    """Algo entre comillas que en realidad es español (una traducción) no debe leerse con acento inglés."""
+    inner = piece.strip('"“”')
+    return bool(re.search(r"[¿¡áéíóúñÁÉÍÓÚÑ]", inner)) or len(_ES_HINT.findall(inner)) >= 2
+
+
 def _bilingual_ssml(text, voice):
     """Maestra: español de México con las frases entre comillas dichas en inglés (misma voz multilingüe)."""
     parts = []
     for i, piece in enumerate(_QUOTED_EN.split(text)):
         if not piece.strip():
             continue
-        if i % 2:
+        if i % 2 and not _looks_spanish(piece):
             inner = _xml_escape(piece.strip('"“”'))
             parts.append(f"<lang xml:lang='en-US'><prosody rate='-8%'>{inner}</prosody></lang>")
         else:
@@ -4788,9 +4797,9 @@ def _class_plan(ficha, clases, n, level=None):
             return steps[n]
     else:
         steps = {
-            1: f"This is a RETURNING student{(' named ' + nombre) if nombre else ''}. Greet them by name, ask how they are in English (\"How are you doing today?\") and how the days since the last class went. React humanly to what they answer.",
-            2: "Quick warm-up: review 1-2 phrases from the 'para_repasar' or 'frases_aprendidas' list in their file, ask them to say them. Praise what they remember.",
-            3: "Tell them in one sentence what you will learn today: the current curriculum unit (see below), and mention that you will teach it twice: the way school teaches it AND the way people really say it.",
+            1: f"This is a RETURNING student{(' named ' + nombre) if nombre else ''}. The app ALREADY greeted them and asked how they are and how the days since the last class went, so do NOT greet again and do NOT ask their name. React humanly to what they just answered (one short sentence, use their name), then start a warm-up: pick 1 phrase from 'para_repasar' or 'frases_aprendidas' of their file (or the lesson in 'en_rutas') and ask them to say it.",
+            2: "Continue the warm-up: correct kindly what they said, praise what they remember, and if they struggle give one hint (not the full answer). Then move on.",
+            3: "Tell them in one sentence what you will learn today: the current curriculum unit (see below), and mention that you will teach it twice: the way school teaches it AND the way people really say it. Teach the first small piece.",
         }
         if n in steps:
             return steps[n]
@@ -4849,6 +4858,11 @@ TEACHER_PROMPT = (
     "If it differs, say so kindly, show exactly which word was off, and ask them to try again (up to 2 tries), and only then model it again. Do NOT reveal the full answer before they have tried. "
     "Never give the student the phrase they are supposed to produce on their own (translating from Spanish, filling in a gap, answering a question): let them try first. "
     "If a word looks like a recognition error (e.g. an odd name), say it back and ask 'lo entendí bien?' instead of assuming. Praise must be specific and earned.\n"
+    "10. YOU CANNOT HEAR THE STUDENT. You only get written text (typed, or speech-to-text). NEVER say how something sounded ('sonó bien', 'te salió cortito', 'se oyó el acento', 'dijiste aré') and never judge pronunciation from spelling. "
+    "The ONLY time you may comment on pronunciation is when a PRONUNCIATION CHECK block is provided below. Otherwise judge only spelling, grammar, word order and word choice. "
+    "If the student asks about pronunciation or you want to work on it, explain the sound in general and tell them to practice it in the Llamada (the call), where you can really hear and measure them.\n"
+    "11. ONE task per turn: never ask them to repeat AND translate in the same message, never put the answer inside the question, and never ask two questions. Do not reteach the same phrase twice in a row: move forward when they got it right.\n"
+    "12. Quotes are ONLY for English. Spanish meanings and translations go in plain Spanish with no quotation marks (e.g. Esto significa cómo estás hoy).\n"
     "FORMAT: this is a spoken lesson. Reply in 2-4 short sentences, no lists, no markdown, no emojis, no parentheses. Sound like a kind human teacher."
 )
 
