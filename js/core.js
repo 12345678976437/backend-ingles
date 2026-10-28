@@ -537,10 +537,23 @@ async function callStartTalk(){
   }catch(e){toast('Error de micrófono: '+e.message);callIdle()}
 }
 function callSendTyped(){const inp=$('call-type-input');if(!inp)return;const t=inp.value.trim();if(!t)return;if(state.callBusy){if(CALL.playing||CALL.abort){callSkip()}}inp.value='';callSendTurn(null,t)}
-function callPronChips(ev){const el=CALL.userEl;if(!el||!ev.words||!ev.words.length)return;
+function callPronChips(ev){(CALL.pronAll=CALL.pronAll||[]).push(ev);const el=CALL.userEl;if(!el||!ev.words||!ev.words.length)return;
   const c=document.createElement('div');c.className='cp-pron';
   c.innerHTML=`<div class="cp-t">Tu pronunciación de "${esc(ev.target)}": <b>${ev.score}</b>/100</div><div class="cp-w">${ev.words.map(w=>`<span class="${w.a>=80?'g':w.a>=60?'m':'b'}" data-i18n-skip>${esc(w.w)}<i>${w.a}</i></span>`).join('')}</div>`;
   el.appendChild(c);const wrap=$('call-messages');if(wrap)wrap.scrollTop=wrap.scrollHeight}
+/* palabras que Azure midió flojas durante la llamada, para oírlas bien y practicarlas */
+function callRenderPronSummary(){
+  const box=$('call-summary-pron');if(!box)return;
+  const best={};(CALL.pronAll||[]).forEach(ev=>(ev.words||[]).forEach(w=>{const k=String(w.w||'').toLowerCase();if(!/[a-z]/.test(k))return;if(!best[k]||w.a<best[k].a)best[k]={w:w.w,a:w.a}}));
+  const weak=Object.values(best).filter(x=>x.a<75).sort((a,b)=>a.a-b.a).slice(0,8);
+  const att=(CALL.pronAll||[]).length;
+  if(!att){box.style.display='none';CALL.pronAll=[];return}
+  const avg=Math.round(CALL.pronAll.reduce((n,e)=>n+(e.score||0),0)/att);
+  box.style.display='';
+  box.innerHTML=`<h3>Tu pronunciación medida</h3><div class="notice">${att} frase${att===1?'':'s'} medida${att===1?'':'s'} con Azure · promedio <b>${avg}</b>/100.${weak.length?' Las palabras más flojas quedaron guardadas para tu próxima clase.':' ¡Ninguna palabra floja esta vez!'}</div>${weak.length?`<div class="cp-w cp-sum">${weak.map(x=>`<button type="button" class="${x.a>=60?'m':'b'}" data-w="${esc(x.w)}" data-i18n-skip>🔊 ${esc(x.w)}<i>${x.a}</i></button>`).join('')}</div><small style="color:var(--muted)">Toca una palabra para escucharla bien dicha.</small>`:''}`;
+  box.querySelectorAll('button[data-w]').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.w,.8)));
+  CALL.pronAll=[]
+}
 function callStopTalk(){
   $('call-talk-btn').classList.remove('recording');
   if(state.callRecorder&&state.callRecorder.state!=='inactive')state.callRecorder.stop()
@@ -660,6 +673,7 @@ async function endCall(){
     $('call-summary-strengths').innerHTML=(d.fortalezas||[]).map(x=>`<li>${esc(x)}</li>`).join('');
     $('call-summary-errors').innerHTML=(d.errores_comunes||[]).map(x=>`<li>${esc(x)}</li>`).join('');
     $('call-summary-vocab').innerHTML=(d.vocabulario_recomendado||[]).map(v=>`<div class="vocab-item"><b>${esc(v.palabra||'')}</b><p>${esc(v.significado||'')}</p></div>`).join('');
+    callRenderPronSummary();
     $('call-summary-next').textContent=d.siguiente_paso||'';$('call-summary').style.display='block';
     state.callMessages=[];$('call-messages').innerHTML='<div class="msg ai">Hi! I\'m Palanqueta. Tap Start call and let\'s talk. I\'ll answer out loud.</div>';
     const t=callEl('call-timer');if(t)t.textContent='00:00';

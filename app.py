@@ -847,8 +847,9 @@ def _norm_words(t):
     return re.findall(r"[a-z']+", (t or "").lower().replace("’", "'"))
 
 
-def _pron_check(wav_path, target):
-    """Pronunciation Assessment de Azure contra la frase meta. None si no fue un intento real de decirla."""
+def _pron_check(wav_path, target, uid=None):
+    """Pronunciation Assessment de Azure contra la frase meta. None si no fue un intento real de decirla.
+    Con uid, lo medido también alimenta el Sound Lab (la llamada es el diagnóstico) y la lista de repaso de la maestra."""
     try:
         r = assess_pronunciation(wav_path, target)
     except Exception as exc:
@@ -860,8 +861,31 @@ def _pron_check(wav_path, target):
     if overlap < 0.34 and r.get("completeness_score", 0) < 50:
         return None  # contestó otra cosa (p. ej. en español): no se califica como intento
     words = [{"w": w["word"], "a": round(w["accuracy"])} for w in r["words"] if w.get("word")]
+    if uid:
+        threading.Thread(target=_pron_learn, args=(uid, r, target, words), daemon=True).start()
     return {"target": target, "score": round(r["pronunciation_score"]), "words": words,
             "heard": r.get("transcript") or ""}
+
+
+def _pron_learn(uid, raw, target, words):
+    """Guarda el intento (para los sonidos débiles del Sound Lab) y apunta las palabras flojas para repasarlas."""
+    try:
+        payload = build_pron_payload(raw)
+        save_history("historial_pronunciacion", uid, {
+            "frase_esperada": target, "puntuacion_global": payload["puntuacion_global"],
+            "precision_fonemas": payload["precision"], "fluidez": payload["fluidez"],
+            "completitud": payload["completitud"], "detalles_json": payload})
+    except Exception as exc:
+        print(f"[PRON LEARN save] {exc}")
+    try:
+        weak = [w["w"] for w in words if w["a"] < 70 and re.search(r"[A-Za-z]", w["w"])]
+        if weak:
+            row = _ficha_get(uid)
+            f = dict(row["ficha"])
+            f["para_repasar"] = list(dict.fromkeys([x.lower() for x in weak] + (f.get("para_repasar") or [])))[:8]
+            _ficha_save(uid, ficha=f)
+    except Exception as exc:
+        print(f"[PRON LEARN ficha] {exc}")
 
 
 def _pron_note(p):
@@ -3517,7 +3541,7 @@ def call_turn():
                 names = tuple(n for n in [(_ficha_get(uid)["ficha"].get("nombre") or "").strip()] if n)
                 target = _target_phrase(safe_history)
                 if target:  # en paralelo: la voz del alumno contra la frase que la maestra pidió repetir
-                    t_pron = threading.Thread(target=lambda: pron_box.update(r=_pron_check(wav_path, target)), daemon=True)
+                    t_pron = threading.Thread(target=lambda: pron_box.update(r=_pron_check(wav_path, target, uid)), daemon=True)
                     t_pron.start()
                 said = stt_bilingual(wav_path, names)
                 if t_pron:
@@ -4863,6 +4887,8 @@ TEACHER_PROMPT = (
     "If the student asks about pronunciation or you want to work on it, explain the sound in general and tell them to practice it in the Llamada (the call), where you can really hear and measure them.\n"
     "11. ONE task per turn: never ask them to repeat AND translate in the same message, never put the answer inside the question, and never ask two questions. Do not reteach the same phrase twice in a row: move forward when they got it right.\n"
     "12. Quotes are ONLY for English. Spanish meanings and translations go in plain Spanish with no quotation marks (e.g. Esto significa cómo estás hoy).\n"
+    "13. CORRECTION SANDWICH: when you correct, do it in three beats: (1) one SPECIFIC thing that was genuinely good (never generic praise, never invented), (2) the fix, in a single gentle sentence with the right form in quotes, (3) a short push to keep going. Never correct more than one thing per turn, and never make the student feel embarrassed. Warmth never means lying: if it was not right, say it was not right yet.\n"
+    "14. TEACH CHUNKS, NOT ABSTRACT RULES: after the short school explanation, give ready-made blocks the student can reuse as a whole (e.g. \"If I were you, I'd...\", \"Can I get...?\", \"I'm gonna...\") so they do not have to translate word by word. One chunk at a time.\n"
     "FORMAT: this is a spoken lesson. Reply in 2-4 short sentences, no lists, no markdown, no emojis, no parentheses. Sound like a kind human teacher."
 )
 
@@ -4902,7 +4928,8 @@ def build_tutor_system_prompt(level, prior_context, modo="", categoria="", ficha
 
     call_line = (
         "\n\nThis is a LIVE VOICE CALL, not a text chat: reply in 1-3 short spoken sentences, "
-        "no lists, no markdown, no emojis — just natural words that sound good read aloud."
+        "no lists, no markdown, no emojis — just natural words that sound good read aloud. "
+        "When the student makes a mistake, use a gentle sandwich inside your normal reply: one specific genuine positive, the corrected form woven in naturally, then your follow-up question. Never correct more than one thing per turn."
         if modo == "llamada" else ""
     )
     category_lines = {

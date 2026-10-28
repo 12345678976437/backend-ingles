@@ -76,3 +76,17 @@ assert sx.count("xml:lang='en-US'")==1 and "How are you?" in sx.split("xml:lang=
 assert not m._looks_spanish('"How are you doing today?"') and m._looks_spanish('"¿cómo estás hoy?"')
 assert 'CANNOT HEAR' in m.TEACHER_PROMPT and 'ONE task per turn' in m.TEACHER_PROMPT
 print('capturas OK')
+assert 'CORRECTION SANDWICH' in m.TEACHER_PROMPT and 'CHUNKS' in m.TEACHER_PROMPT
+assert 'sandwich' in m.build_tutor_system_prompt('B1','','llamada','')
+print('sandwich OK')
+# la llamada alimenta el Sound Lab y la lista de repaso
+saved_h=[];saved_f={}
+m.save_history=lambda t,u,p:saved_h.append((t,u))
+m.build_pron_payload=lambda raw:{"puntuacion_global":72,"precision":70,"fluidez":80,"completitud":100}
+m._ficha_get=lambda uid:{"ficha":{"para_repasar":["old"]},"clases":1}
+m._ficha_save=lambda uid,ficha=None,clases=None:saved_f.update(f=ficha)
+m.assess_pronunciation=lambda w,t:{"transcript":"How's it going","pronunciation_score":72.4,"completeness_score":100,"words":[{"word":"How's","accuracy":90},{"word":"it","accuracy":85},{"word":"going","accuracy":41}]}
+import time
+m._pron_check("x","How's it going?",uid="u9"); time.sleep(0.3)
+assert saved_h and saved_h[0][0]=="historial_pronunciacion" and saved_f["f"]["para_repasar"][0]=="going" and "old" in saved_f["f"]["para_repasar"]
+print('aprendizaje de llamada OK')

@@ -1572,3 +1572,7 @@ body.is-offline .nav-needs-net{opacity:.45}
   #sec-tutor{padding-bottom:120px}
   #tutor-speak{white-space:normal}
 }
+.cp-sum{margin:10px 0 6px}.cp-sum button{padding:6px 12px;border-radius:999px;font-weight:700;cursor:pointer;border:1px solid transparent;font-size:13px}
+.cp-sum button i{font-style:normal;font-size:11px;opacity:.8;margin-left:6px}
+.cp-sum .m{background:rgba(255,200,87,.14);border-color:rgba(255,200,87,.5);color:#ffd98a}
+.cp-sum .b{background:rgba(255,92,92,.16);border-color:rgba(255,92,92,.55);color:#ff9d9d}
