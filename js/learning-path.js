@@ -151,7 +151,7 @@ function renderTeach(){
   const d=P.d;clearFb();
   const hasWords=P.sound||(d.teach&&d.teach.length);
   let h='<div class="lp-card"><div class="lp-kicker">'+(P.sound?'New sound':(hasWords?'New words':'Personalized for you'))+'</div><h2 data-i18n-skip>'+esc(d.title)+'</h2>';
-  if(P.sound)h+='<div class="lp-ipa" data-i18n-skip>/'+esc(P.sound.ipa)+'/</div><p class="lp-tip" data-i18n-skip>'+esc(P.sound.tip)+'</p>';
+  if(P.sound)h+='<div class="lp-ipa" data-i18n-skip>/'+esc(P.sound.ipa)+'/</div><p class="lp-tip" data-i18n-skip>'+esc(P.sound.tip)+'</p>'+(window.mouthDiagram?window.mouthDiagram(P.sound.id):'');
   if(d.note&&!P.sound)h+='<p class="lp-tip" '+(d.mode==='exercises'?'':'data-i18n-skip')+'>💡 '+esc(d.note)+'</p>';
   const words=P.sound?P.sound.words.map(w=>({en:w,es:'',emoji:''})):d.teach;
   h+='<div class="lp-teach">'+words.map((w,i)=>'<button type="button" class="lp-word" data-w="'+i+'"><span class="e">'+(w.emoji||'🔊')+'</span><b data-i18n-skip>'+esc(w.en)+'</b><small data-i18n-skip>'+esc(w.es)+'</small></button>').join('')+'</div></div>';
@@ -320,7 +320,7 @@ function renderSpeak(ex){
 }
 function showSpeakResult(ex,d,sc,tries,best,isSound){
   const pass=sc>=60;const cls=sc>=80?'g':sc>=60?'m':'b';
-  let tips='';(d.weak_sounds||[]).forEach(s=>{tips+='<div class="lp-soundtip" data-i18n-skip><b>/'+esc(s.ipa)+'/ '+esc(s.name)+'</b> · '+esc(s.tip)+'</div>'});
+  let tips='';(d.weak_sounds||[]).forEach(s=>{tips+='<div class="lp-soundtip" data-i18n-skip><b>/'+esc(s.ipa)+'/ '+esc(s.name)+'</b> · '+esc(s.tip)+(window.mouthDiagram?window.mouthDiagram(s.id):'')+'</div>'});
   $('lp-sres').innerHTML='<div class="lp-score '+cls+'"><b>'+sc+'</b><small>'+(sc>=80?'Excellent':sc>=60?'Good — keep it up':'Keep trying')+'</small></div><div class="lp-words">'+wordChips(d)+'</div>'+tips;
   $('lp-recmsg').textContent='';const rb=$('lp-rec');
   rb.disabled=false;rb.dataset.on='0';rb.textContent='🎤';
