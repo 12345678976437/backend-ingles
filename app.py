@@ -4294,6 +4294,85 @@ def _recent_events_for(client, uid, per_table=12):
     return out[:40], warns
 
 
+_EVENTOS_OK = {"seccion", "llamada_fin", "leccion_fin", "clase_maestra", "examen_fin", "instalada"}
+
+
+@app.post("/api/evento")
+def track_event():
+    """Medición de uso mínima (sin costo, sin créditos): qué secciones se abren y qué hitos se completan."""
+    user, error = authenticated_user(require_subscription=False)
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    ev = _short(body.get("evento"), 30)
+    if ev not in _EVENTOS_OK:
+        return jsonify({"ok": True})
+    ok, _w = _rate_hit((user.id, "evento"), 400, 3600)
+    if not ok:
+        return jsonify({"ok": True})
+    meta = body.get("meta") if isinstance(body.get("meta"), dict) else None
+    if meta:
+        meta = {_short(k, 24): (v if isinstance(v, (int, float, bool)) else _short(v, 60)) for k, v in list(meta.items())[:6]}
+    try:
+        (supabase_admin or supabase).table("eventos_uso").insert(
+            {"user_id": user.id, "evento": ev, "seccion": _short(body.get("seccion"), 30) or None, "meta": meta}).execute()
+    except Exception as exc:
+        print(f"[EVENTO] {exc}")
+    return jsonify({"ok": True})
+
+
+@app.get("/api/admin/uso")
+def admin_uso():
+    """Resumen de uso real: usuarios activos por día, secciones más abiertas y hitos completados."""
+    _u, err = admin_guard()
+    if err:
+        return err
+    dias = max(1, min(30, int(request.args.get("dias") or 7)))
+    since = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    try:
+        rows = (supabase_admin or supabase).table("eventos_uso").select("user_id,evento,seccion,created_at") \
+            .gte("created_at", since).order("created_at", desc=True).limit(8000).execute().data or []
+    except Exception as exc:
+        print(f"[ADMIN uso] {exc}")
+        return json_error(_err_log("No se pudo leer el uso", exc), 500)
+    por_dia, secciones, hitos, usuarios = {}, {}, {}, set()
+    sec_users = {}
+    for r in rows:
+        d = str(r.get("created_at") or "")[:10]
+        por_dia.setdefault(d, set()).add(r["user_id"])
+        usuarios.add(r["user_id"])
+        if r["evento"] == "seccion" and r.get("seccion"):
+            secciones[r["seccion"]] = secciones.get(r["seccion"], 0) + 1
+            sec_users.setdefault(r["seccion"], set()).add(r["user_id"])
+        elif r["evento"] != "seccion":
+            hitos[r["evento"]] = hitos.get(r["evento"], 0) + 1
+    return jsonify({"ok": True, "dias": dias, "usuarios_activos": len(usuarios), "eventos": len(rows),
+                    "por_dia": [{"dia": d, "usuarios": len(u)} for d, u in sorted(por_dia.items())],
+                    "secciones": [{"seccion": s, "aperturas": n, "usuarios": len(sec_users.get(s, ()))}
+                                  for s, n in sorted(secciones.items(), key=lambda x: -x[1])],
+                    "hitos": hitos})
+
+
+@app.get("/api/repaso/hoy")
+def review_today():
+    """Qué repasar hoy en un solo lugar: frases flojas de la maestra, sonido más débil y unidad actual del temario."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    f = _ficha_get(user.id)["ficha"]
+    weak = None
+    try:
+        stats = phoneme_stats(user.id)
+        cand = [(v["avg"], k) for k, v in stats.items() if v["samples"] >= 3 and v["avg"] < 75 and k in SOUND_LAB]
+        if cand:
+            avg, sid = min(cand)
+            weak = {"id": sid, "ipa": SOUND_LAB[sid]["ipa"], "name": SOUND_LAB[sid]["name"], "avg": round(avg)}
+    except Exception as exc:
+        print(f"[REPASO sonido] {exc}")
+    return jsonify({"ok": True, "frases": (f.get("para_repasar") or [])[:6], "sonido": weak,
+                    "nombre": f.get("nombre") or ""})
+
+
 @app.get("/api/admin/resumen")
 def admin_resumen():
     _u, err = admin_guard()

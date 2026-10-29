@@ -55,6 +55,9 @@ function resetError(msg){$('reset-error').textContent=msg||'';$('reset-error').s
 async function forgotPassword(){const email=$('auth-email').value.trim();if(Date.now()-(forgotPassword.t||0)<60000)return authError('Wait a minute before requesting another email.');if(!email)return authError('Escribe tu correo arriba primero, luego dale a "¿Olvidaste tu contraseña?".');const cap=tsToken;if(!cap)return authError('Completa la verificación de seguridad antes de continuar.');forgotPassword.t=Date.now();busy('auth-forgot',true,'Enviando...');authError('');try{const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin,captchaToken:cap});if(r.error)throw r.error;toast('Te enviamos un correo para restablecer tu contraseña. Revisa spam si no lo ves.')}catch(e){authError(e.message||'No se pudo enviar el correo.')}finally{tsReset();busy('auth-forgot',false,'¿Olvidaste tu contraseña?')}}
 async function resetSubmit(){const pw=$('reset-password').value;if(!pw||!pwStrong(pw))return resetError('La contraseña debe tener al menos 8 caracteres, con letras y números.');busy('reset-submit',true,'Guardando...');resetError('');try{const r=await sb.auth.updateUser({password:pw});if(r.error)throw r.error;$('reset-modal').style.display='none';toast('Contraseña actualizada. Ya puedes usar tu cuenta.');await syncUser(r.data.user)}catch(e){resetError(e.message||'No se pudo guardar la contraseña.')}finally{busy('reset-submit',false,'Guardar nueva contraseña')}}
 async function getSession(){const r=await sb.auth.getSession();if(r.error)throw r.error;return r.data.session||null}
+/* Medición de uso mínima: no bloquea, no avisa y se ignora sin conexión */
+function track(evento,seccion,meta){try{if(OFL&&OFL.isOff&&OFL.isOff())return;authFetch('/api/evento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({evento,seccion:seccion||'',meta:meta||null})}).catch(()=>{})}catch(e){}}
+window.track=track;
 async function authFetch(path,options={}){let s=await getSession();if(!s){showAuth();throw new Error('Please sign in to continue.')}const headers=new Headers(options.headers||{});headers.set('Authorization','Bearer '+s.access_token);const wakeT=setTimeout(()=>{if(!state.wakeShown){state.wakeShown=true;toast('Waking up the server… this can take up to a minute the first time.')}},5000);let r;try{r=await fetch(API_URL+path,{...options,headers})}finally{clearTimeout(wakeT)}if(r.status===401){const refreshed=await sb.auth.refreshSession();if(refreshed.data.session){headers.set('Authorization','Bearer '+refreshed.data.session.access_token);r=await fetch(API_URL+path,{...options,headers})}}if(r.status===429){r.clone().json().then(d=>{if(d&&d.limite)showPlanModal(d.limite,d.error)}).catch(()=>{})}return r}
 /* ---------- Planes y uso (como Claude: cuota por 5 horas + tope diario) ---------- */
 const PLAN_FEATS={gratis:['Para probar la app','Cuota pequeña'],basico:['Práctica diaria tranquila','Todas las actividades'],pro:['Para practicar a diario','Más tutor y pronunciación'],max:['Sin preocuparte por límites','Para uso intensivo']};
@@ -105,7 +108,7 @@ function enterOffline(user){
   OFL.badge();try{loadDashboard()}catch(e){}return true}
 window.addEventListener('online',()=>{if(state.user&&$('side-status')&&$('side-status').textContent==='Offline mode'){setTimeout(()=>{try{syncUser(state.user)}catch(e){}},1500)}});
 async function syncUserInner(user){state.user=user;if(user){vfHide();setTimeout(()=>{PUSH.sync().catch(()=>{});pushAskMaybe()},2500)}const content=$('app-content'),locked=$('locked-view');if(!user){document.querySelector('.app').style.display='none';$('welcome-view').style.display='flex';closeAuth();return}document.querySelector('.app').style.display='';$('welcome-view').style.display='none';$('user-display').textContent=user.email||'Signed in';$('side-email').textContent=user.email||'Student';$('login-btn').style.display='none';$('logout-btn').style.display='inline-block';try{const d=await jsonFetch('/api/session');if(!d.authenticated)throw new Error('The session is not recognized by the server.');if(OFL)OFL.snapSave(user,d);state.subscribed=!!d.is_subscribed;renderAccountInfo(user,d);applyProfileIdentity(user,d);if(d.es_admin){$('nav-admin').style.display='flex'}if(d.en_prueba){$('side-status').textContent=`Free trial · ${d.trial_dias_restantes} day(s) left`}else{$('side-status').textContent=state.subscribed?'Practice access active':'Trial ended · subscribe to continue'}content.style.display=state.subscribed?'block':'none';locked.style.display=state.subscribed?'none':'block';if(state.subscribed){if(d.user&&!d.user.onboarded){content.style.display='none';initOnboarding()}else{closeAuth();loadDashboard();}}}catch(e){console.error('[SESSION]',e);if(OFL&&(OFL.isOff()||OFL.isNetErr(e))&&enterOffline(user))return;state.subscribed=false;content.style.display='none';locked.style.display='block';$('side-status').textContent='Access check failed';toast('We could not verify your access. Please sign in again.')}}
-function section(name,button){if(!state.user||!state.subscribed){showAuth();return}if(OFL&&OFL.isOff()&&!OFL.allowed(name)){toast('This section needs internet. Lessons in Learning Path work offline.');return}$$('.section').forEach(s=>s.classList.toggle('active',s.id==='sec-'+name));$$('#main-nav button,[data-section-jump]').forEach(b=>b.classList.remove('active'));if(button)button.classList.add('active');const nav=document.querySelector(`#main-nav button[data-section="${name}"]`);if(nav)nav.classList.add('active');if(name==='escritura')loadWritingChallenge();if(name==='lectura')loadReadingLibrary().catch(e=>toast(e.message));if(name==='escucha')loadListeningLibrary().catch(e=>toast(e.message));if(name==='historial')loadProgress().catch(e=>toast(e.message));if(name==='admin')loadAdminActivity();if(name==='home')loadDashboard();if(name==='logros')loadAchievements();if(name==='shop')loadShop();if(name==='notificaciones')loadNotifications();if(name==='vocabulario'){loadVocabDaily()}
+function section(name,button){if(!state.user||!state.subscribed){showAuth();return}if(OFL&&OFL.isOff()&&!OFL.allowed(name)){toast('This section needs internet. Lessons in Learning Path work offline.');return}$$('.section').forEach(s=>s.classList.toggle('active',s.id==='sec-'+name));$$('#main-nav button,[data-section-jump]').forEach(b=>b.classList.remove('active'));if(button)button.classList.add('active');const nav=document.querySelector(`#main-nav button[data-section="${name}"]`);if(nav)nav.classList.add('active');try{track('seccion',name)}catch(e){}if(name==='escritura')loadWritingChallenge();if(name==='lectura')loadReadingLibrary().catch(e=>toast(e.message));if(name==='escucha')loadListeningLibrary().catch(e=>toast(e.message));if(name==='historial')loadProgress().catch(e=>toast(e.message));if(name==='admin')loadAdminActivity();if(name==='home')loadDashboard();if(name==='logros')loadAchievements();if(name==='shop')loadShop();if(name==='notificaciones')loadNotifications();if(name==='vocabulario'){loadVocabDaily()}
   if(name==='pronunciacion')pronAutoload();if(name==='cuenta'){loadPlanCard();pushUI();if(OFL){OFL.check()}}if(window.TalvoStudio)window.TalvoStudio.onSection(name);if(window.TalvoVoice)window.TalvoVoice.onSection(name);if(window.TalvoClips)window.TalvoClips.onSection(name);if(name!=='llamada')callLeave();if(name==='learning-path')(window.loadLearningPath&&window.loadLearningPath());setTimeout(showCardPeek,600)}
 let writingLevel='intermediate';
 const WRITING_TARGETS={easy:80,intermediate:150,advanced:220};
@@ -677,7 +680,7 @@ function callTeardown(){
   callReleaseMic();clearInterval(CALL.timer);CALL.live=false;CALL.muted=false;state.callBusy=false;
   callRenderLive(false);callSetState('idle');callStatus('Tap Start call and just talk.');callCaption('','');
 }
-async function examFinish(){
+async function examFinish(){try{track('examen_fin','llamada')}catch(e){}
   if(!examOn()||CALL.examBusy)return;CALL.examBusy=true;
   const hist=state.callMessages.slice();callTeardown();callStatus('Calificando tu examen…');callSetState('thinking');
   try{
@@ -692,7 +695,7 @@ async function examFinish(){
 }
 async function endCall(){
   if(examOn()&&(CALL.examN||0)>=3){return examFinish()}
-  const dur=CALL.live?callFmt(Date.now()-CALL.t0):'';
+  const dur=CALL.live?callFmt(Date.now()-CALL.t0):'';try{track(examOn()?'examen_fin':teacherOn()?'clase_maestra':'llamada_fin','llamada',{turnos:state.callMessages.filter(m=>m.role==='user').length})}catch(e){}
   callTeardown();
   if(!state.callMessages||!state.callMessages.length)return toast('Todavía no has hablado con Palanqueta.');
   callStatus('Generando resumen...');callSetState('thinking');
@@ -719,7 +722,25 @@ async function homeReto(){
   box.innerHTML='<button type="button" class="home-reto" id="home-reto-b"><span class="hr-pq"><img src="palanqueta-asoma.webp" alt="" draggable="false"></span><span class="hr-t"><small>🔥 21-day challenge</small><b>'+(reto?'Day '+day+' of 21 · keep your streak':'Speak real English in 3 weeks')+'</b><em>'+(reto?'Your plan adapts to your level and mistakes.':'A fixed plan built around your goal. It adapts to you.')+'</em>'+(reto?'<i class="hr-bar"><u style="width:'+pc+'%"></u></i>':'')+'</span><span class="hr-go">'+(reto?'Continue':'Start')+' →</span></button>';
   $('home-reto-b').onclick=()=>{if(window.TalvoStudio&&TalvoStudio.goTab)TalvoStudio.goTab('reto');else section('rutas')};
 }
-async function loadDashboard(){(window.loadNextStep&&window.loadNextStep());try{homeReto()}catch(e){}try{const email=(state.user&&state.user.email)||'';const name=state.username||email.split('@')[0]||'there';const hour=new Date().getHours();const greet=hour<12?'Good morning':hour<19?'Good afternoon':'Good evening';$('home-greeting').textContent=`${greet}, ${esc(name)}! 👋`;const _pa=jsonFetch('/api/achievements').catch(()=>null);const d=await jsonFetch('/api/dashboard');$('home-streak').textContent=`🔥 ${d.streak_days} day streak`;$('home-xp').textContent=`⭐ ${d.xp} XP · Level ${d.level}`;$('home-goal-pct').textContent=d.daily_goal_pct+'%';$('home-goal-fill').style.width=d.daily_goal_pct+'%';$('home-week').innerHTML=(d.week||[]).map(w=>`<div class="day-chip${w.active?' active':''}${w.is_today?' today':''}"><div class="dot">${w.active?'🔥':''}</div><small>${esc(w.weekday)}</small></div>`).join('');const labels={speaking:'🗣️ Speaking',listening:'🎧 Listening',reading:'📖 Reading',writing:'✍️ Writing'};$('home-skills').innerHTML=Object.entries(d.skills||{}).map(([k,v])=>`<div class="report" style="--v:${v}%"><b>${v}%</b><small>${labels[k]||k}</small></div>`).join('');try{const a=await _pa;if(!a)throw 0;$('home-achievements').innerHTML=a.achievements.slice(0,4).map(x=>`<div class="report ach-card${x.unlocked?' unlocked':''}"><div class="ach-icon">${x.icon}</div><small style="display:block;margin-top:4px">${esc(x.title)}</small></div>`).join('')}catch(e){}
+/* Repaso de hoy: todo lo que conviene repasar, en un solo lugar */
+async function homeReview(){
+  const box=$('home-review');if(!box)return;
+  try{
+    const [r,v]=await Promise.all([jsonFetch('/api/repaso/hoy'),jsonFetch('/api/vocabulario').catch(()=>({palabras:[]}))]);
+    srsWords=vocUnique(v.palabras||[]);const due=srsBuild().length;
+    const items=[];
+    if(due)items.push(`<button type="button" class="hr-i" data-hr="vocab"><b>🗂️ ${due} palabra${due===1?'':'s'} por repasar</b><small>Tarjetas de repaso espaciado</small></button>`);
+    if(r.frases&&r.frases.length)items.push(`<button type="button" class="hr-i" data-hr="maestra"><b>🎓 ${r.frases.length} frase${r.frases.length===1?'':'s'} para repasar con tu maestra</b><small data-i18n-skip>${esc(r.frases.slice(0,2).join(' · '))}</small></button>`);
+    if(r.sonido)items.push(`<button type="button" class="hr-i" data-hr="sonido"><b>🎙️ Tu sonido más débil: /${esc(r.sonido.ipa)}/</b><small data-i18n-skip>${esc(r.sonido.name)} · ${r.sonido.avg}/100</small></button>`);
+    if(!items.length){box.style.display='none';return}
+    box.style.display='';box.innerHTML='<div class="eyebrow">Repaso de hoy</div>'+items.join('');
+    box.querySelectorAll('[data-hr]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.hr;
+      if(k==='vocab'){section('vocabulario')}
+      else if(k==='maestra'){try{localStorage.setItem('talvo_callmode','teacher')}catch(e){}section('llamada');try{teacherRender()}catch(e){}}
+      else if(k==='sonido'&&window.lpOpenSounds){window.lpOpenSounds()}}));
+  }catch(e){box.style.display='none'}
+}
+async function loadDashboard(){(window.loadNextStep&&window.loadNextStep());try{homeReview()}catch(e){}try{homeReto()}catch(e){}try{const email=(state.user&&state.user.email)||'';const name=state.username||email.split('@')[0]||'there';const hour=new Date().getHours();const greet=hour<12?'Good morning':hour<19?'Good afternoon':'Good evening';$('home-greeting').textContent=`${greet}, ${esc(name)}! 👋`;const _pa=jsonFetch('/api/achievements').catch(()=>null);const d=await jsonFetch('/api/dashboard');$('home-streak').textContent=`🔥 ${d.streak_days} day streak`;$('home-xp').textContent=`⭐ ${d.xp} XP · Level ${d.level}`;$('home-goal-pct').textContent=d.daily_goal_pct+'%';$('home-goal-fill').style.width=d.daily_goal_pct+'%';$('home-week').innerHTML=(d.week||[]).map(w=>`<div class="day-chip${w.active?' active':''}${w.is_today?' today':''}"><div class="dot">${w.active?'🔥':''}</div><small>${esc(w.weekday)}</small></div>`).join('');const labels={speaking:'🗣️ Speaking',listening:'🎧 Listening',reading:'📖 Reading',writing:'✍️ Writing'};$('home-skills').innerHTML=Object.entries(d.skills||{}).map(([k,v])=>`<div class="report" style="--v:${v}%"><b>${v}%</b><small>${labels[k]||k}</small></div>`).join('');try{const a=await _pa;if(!a)throw 0;$('home-achievements').innerHTML=a.achievements.slice(0,4).map(x=>`<div class="report ach-card${x.unlocked?' unlocked':''}"><div class="ach-icon">${x.icon}</div><small style="display:block;margin-top:4px">${esc(x.title)}</small></div>`).join('')}catch(e){}
 try{const vd=await jsonFetch('/api/vocabulario/diario');const w=(vd.palabras||[])[0];$('home-vocab-word').innerHTML=w?`<b style="font-size:16px">${esc(w.palabra)}</b><p style="margin:4px 0;color:var(--muted);font-size:12px">${esc(w.significado||'')}</p>${w.ejemplo?`<p style="font-style:italic;font-size:12px">"${esc(w.ejemplo)}"</p>`:''}`:'<div class="empty">No words yet.</div>'}catch(e){$('home-vocab-word').innerHTML='<div class="empty">Could not load today\'s word.</div>'}
 try{const vl=await jsonFetch('/api/vocabulario');const pct=vl.total?Math.round(vl.aprendidas/vl.total*100):0;$('home-vocab-stats').innerHTML=`<small style="color:var(--muted)">Your vocabulary</small><div style="font-weight:700;font-size:15px;margin:2px 0">${vl.aprendidas} / ${vl.total} learned</div><div class="bar" style="margin-top:6px"><div class="fill" style="width:${pct}%"></div></div><button type="button" class="btn" id="home-vocab-review-btn" style="margin-top:8px">Review words →</button>`;$('home-vocab-review-btn')?.addEventListener('click',()=>{section('vocabulario');closeSidebar()})}catch(e){}}catch(e){console.error('[DASHBOARD]',e)}}
 async function loadAchievements(){try{const d=await jsonFetch('/api/achievements');$('ach-count').textContent=`🏆 ${d.unlocked_count} / ${d.achievements.length} unlocked`;$('ach-list').innerHTML=d.achievements.map(a=>`<div class="report ach-card${a.unlocked?' unlocked':''}"><div class="ach-icon">${a.icon}</div><b style="display:block;margin-top:6px;font-size:13px">${esc(a.title)}</b>${a.unlocked?'<small style="color:var(--success)">✓ Completed</small>':`<div class="bar"><div class="fill" style="width:${a.progress}%"></div></div><small>${a.progress}%</small>`}</div>`).join('')}catch(e){toast(e.message)}}
@@ -1611,15 +1632,28 @@ async function admPlanesSave(restore){
 
 function admLoadTab(tab,fresh){
   if(tab==='planes')return admPlanes(fresh);
+  if(tab==='uso')return admUso();
   if(tab==='resumen')return admResumen(fresh);
   if(tab==='usuarios')return admUsuarios(true,fresh);
   if(tab==='actividad')return admActividad(fresh);
   return admSistema(fresh);
 }
+async function admUso(){
+  const box=$('adm-uso');if(!box)return;
+  try{
+    const d=await jsonFetch('/api/admin/uso?dias=7');adm.loaded.uso=Date.now();
+    const max=Math.max(1,...d.por_dia.map(x=>x.usuarios));
+    const hitos={llamada_fin:'Llamadas terminadas',leccion_fin:'Lecciones terminadas',clase_maestra:'Clases con la maestra',examen_fin:'Exámenes de nivel',instalada:'Instalaciones'};
+    box.innerHTML=`<h3>Uso de los últimos ${d.dias} días</h3><div class="notice">${d.usuarios_activos} persona${d.usuarios_activos===1?'':'s'} activa${d.usuarios_activos===1?'':'s'} · ${d.eventos} eventos.</div>
+    <h4>Personas activas por día</h4>${d.por_dia.map(x=>`<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><small style="width:78px">${esc(x.dia.slice(5))}</small><div class="bar" style="flex:1"><div class="fill" style="width:${Math.round(x.usuarios/max*100)}%"></div></div><b>${x.usuarios}</b></div>`).join('')||'<div class="empty">Aún sin datos. Aparecerán cuando la gente use la app.</div>'}
+    <h4>Secciones más abiertas</h4>${d.secciones.map(x=>`<div style="display:flex;justify-content:space-between;margin:4px 0"><span>${esc(x.seccion)}</span><span><b>${x.aperturas}</b> aperturas · ${x.usuarios} persona${x.usuarios===1?'':'s'}</span></div>`).join('')||'<div class="empty">Sin datos.</div>'}
+    <h4>Hitos</h4>${Object.entries(d.hitos).map(([k,n])=>`<div style="display:flex;justify-content:space-between;margin:4px 0"><span>${esc(hitos[k]||k)}</span><b>${n}</b></div>`).join('')||'<div class="empty">Sin datos.</div>'}`;
+  }catch(e){box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
 function admTab(tab){
   adm.tab=tab;
   $$('#admin-tabs .mode').forEach(b=>b.classList.toggle('active',b.dataset.atab===tab));
-  ['resumen','usuarios','actividad','sistema','planes'].forEach(t=>$('atab-'+t).classList.toggle('active',t===tab));
+  ['resumen','usuarios','actividad','sistema','planes','uso'].forEach(t=>$('atab-'+t).classList.toggle('active',t===tab));
   if(!adm.loaded[tab]||Date.now()-adm.loaded[tab]>60000)admLoadTab(tab,false);
 }
 function admBoot(){

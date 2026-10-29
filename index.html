@@ -118,7 +118,7 @@ window.TalvoTheme.apply(window.TalvoTheme.current());</script>
 <h1 class="page-title" id="home-greeting">Good day! 👋</h1>
 <p class="page-desc">Ready to improve your English today?</p><button type="button" class="btn" data-tour="1" style="margin-top:6px">🎓 Tutorial with Palanqueta</button>
 </div>
-<button type="button" class="next-step" id="home-next"><span class="ns-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span><span class="ns-text"><small id="home-next-label">Next step</small><b id="home-next-title"><span data-pq="sm" style="display:block"></span></b></span><span class="ns-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+<button type="button" class="next-step" id="home-next"><span class="ns-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span><span class="ns-text"><small id="home-next-label">Next step</small><b id="home-next-title"><span data-pq="sm" style="display:block"></span></b></span><span class="ns-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><div class="card home-review" id="home-review" style="display:none"></div>
 <div class="card home-console">
   <div class="console-stats">
     <div class="badges">
@@ -200,7 +200,7 @@ window.TalvoTheme.apply(window.TalvoTheme.current());</script>
 <section class="section" id="sec-admin" data-i18n-skip><div class="eyebrow">Admin</div><h1 class="page-title">Panel de administración</h1><p class="page-desc">Datos reales de tu app: usuarios, pagos, actividad y salud del servidor. Solo tú puedes ver esto.</p>
 <div class="admin-bar"><span class="admin-updated" id="admin-updated"></span><button type="button" class="btn" id="admin-refresh">↻ Actualizar</button></div>
 <div class="notice" id="admin-warn" style="display:none"></div>
-<div class="modebar" id="admin-tabs"><button type="button" class="mode active" data-atab="resumen">Resumen</button><button type="button" class="mode" data-atab="usuarios">Usuarios</button><button type="button" class="mode" data-atab="actividad">Actividad</button><button type="button" class="mode" data-atab="sistema">Sistema</button><button type="button" class="mode" data-atab="planes">Planes</button></div>
+<div class="modebar" id="admin-tabs"><button type="button" class="mode active" data-atab="resumen">Resumen</button><button type="button" class="mode" data-atab="usuarios">Usuarios</button><button type="button" class="mode" data-atab="actividad">Actividad</button><button type="button" class="mode" data-atab="sistema">Sistema</button><button type="button" class="mode" data-atab="planes">Planes</button><button type="button" class="mode" data-atab="uso">Uso</button></div>
 <div class="panel active" id="atab-resumen"><div id="admin-resumen"><div class="empty"><div data-pq="sm"></div></div></div></div>
 <div class="panel" id="atab-usuarios">
   <div class="adm-tools"><input class="input" id="admin-q" type="search" placeholder="Buscar por correo o nombre" autocomplete="off"><select class="input" id="admin-sort"><option value="reciente">Más reciente</option><option value="actividad">Más activos (7 d)</option><option value="registro">Registro nuevo</option><option value="vence">Prueba por vencer</option></select><button type="button" class="btn" id="admin-export">⬇ Exportar CSV</button></div>
@@ -215,6 +215,7 @@ window.TalvoTheme.apply(window.TalvoTheme.current());</script>
   <h2 class="sec-h">Mensajes de soporte</h2>
   <div id="admin-soporte"><div class="empty"><div data-pq="sm"></div></div></div>
 </div>
+<div class="panel" id="atab-uso"><div class="card" id="adm-uso"><div class="empty">Cargando…</div></div></div>
 <div class="panel" id="atab-planes"><div id="admin-planes"><div class="empty"><div data-pq="sm"></div></div></div></div>
 <div class="panel" id="atab-sistema"><div id="admin-sistema"><div class="empty"><div data-pq="sm"></div></div></div></div>
 </section>

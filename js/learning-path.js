@@ -379,7 +379,7 @@ function renderResults(r,pct,secs){
   else if(!r.passed&&P.kind==='lesson'){b.textContent='Try again';b.className='btn primary';P.resultAction=()=>{closePlayer();lpStart(P.d.unit_code,P.d.lesson_id)}}
   else if(P.origin){b.textContent='Back';b.className='btn primary';P.resultAction=()=>{const o=P.origin;closePlayer();section(o);try{loadDashboard()}catch(e){}}}
   else{b.textContent='Back to path';b.className='btn primary';P.resultAction=()=>{closePlayer();loadLearningPath()}}
-  P.finished=true;
+  P.finished=true;try{window.track&&window.track('leccion_fin','learning-path',{tipo:P.kind||'',ok:!!r.passed})}catch(e){}
   $('lp-fb').className='lp-fb show '+(r.passed?'good':'bad');$('lp-fb').innerHTML='<button type="button" class="lp-linkbtn" id="lp-back">'+(P.kind==='route'?'Back to my route':'Back to path')+'</button>';
   $('lp-back').addEventListener('click',()=>{closePlayer();if(P.origin){section(P.origin)}else loadLearningPath();try{loadDashboard()}catch(e){}});
   try{setMascotState(r.passed?'feliz':'triste',4000)}catch(e){}
