@@ -9,7 +9,13 @@ let tsId=null,tsToken='';
 function tsEnsure(){if(tsId!==null)return;if(window.turnstile){tsId=turnstile.render('#turnstile-box',{sitekey:TURNSTILE_SITE_KEY,theme:'auto',callback:t=>{tsToken=t},'expired-callback':()=>{tsToken=''},'error-callback':()=>{tsToken=''}})}else{setTimeout(tsEnsure,300)}}
 function tsReset(){tsToken='';if(tsId!==null&&window.turnstile){try{turnstile.reset(tsId)}catch(e){}}}
 let recoveryMode=false;
-sb.auth.onAuthStateChange((_event,session)=>{if(_event==='PASSWORD_RECOVERY'){recoveryMode=true;closeAuth();$('reset-modal').style.display='flex';return}if(!recoveryMode)syncUser(session?.user||null)});
+/* Enlace del correo: si trae type=recovery lo tratamos como recuperación; si trae un error (expirado/usado) lo explicamos */
+try{const h=location.hash||'';
+  if(/type=recovery/.test(h)){recoveryMode=true}
+  else if(/error_code=|error_description=/.test(h)){const p=new URLSearchParams(h.slice(1));const code=p.get('error_code');history.replaceState(null,'',location.pathname);
+    setTimeout(()=>{try{toast(code==='otp_expired'?'Ese enlace ya expiró o ya se usó. Pide uno nuevo con "¿Olvidaste tu contraseña?".':(p.get('error_description')||'El enlace no es válido.').replace(/\+/g,' '));showAuth()}catch(e){}},1200)}
+}catch(e){}
+sb.auth.onAuthStateChange((_event,session)=>{if(_event==='PASSWORD_RECOVERY'){recoveryMode=true;if(window.hideBoot)window.hideBoot();closeAuth();$('reset-modal').style.display='flex';return}if(!recoveryMode)syncUser(session?.user||null)});
 const $=id=>document.getElementById(id);const $$=sel=>Array.from(document.querySelectorAll(sel));
 const state={user:null,subscribed:false,authRegister:false,pron:'lectura',recording:false,recorder:null,chunks:[],timer:null,seconds:0,dictation:'',reading:null,callMessages:[],callRecorder:null,callChunks:[],callBusy:false};
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
@@ -53,7 +59,7 @@ function closeAuth(){ $('auth-modal').style.display='none' }
 function authError(msg){$('auth-error').textContent=msg||'';$('auth-error').style.display=msg?'block':'none'}
 function resetError(msg){$('reset-error').textContent=msg||'';$('reset-error').style.display=msg?'block':'none'}
 async function forgotPassword(){const email=$('auth-email').value.trim();if(Date.now()-(forgotPassword.t||0)<60000)return authError('Wait a minute before requesting another email.');if(!email)return authError('Escribe tu correo arriba primero, luego dale a "¿Olvidaste tu contraseña?".');const cap=tsToken;if(!cap)return authError('Completa la verificación de seguridad antes de continuar.');forgotPassword.t=Date.now();busy('auth-forgot',true,'Enviando...');authError('');try{const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin,captchaToken:cap});if(r.error)throw r.error;toast('Te enviamos un correo para restablecer tu contraseña. Revisa spam si no lo ves.')}catch(e){authError(e.message||'No se pudo enviar el correo.')}finally{tsReset();busy('auth-forgot',false,'¿Olvidaste tu contraseña?')}}
-async function resetSubmit(){const pw=$('reset-password').value;if(!pw||!pwStrong(pw))return resetError('La contraseña debe tener al menos 8 caracteres, con letras y números.');busy('reset-submit',true,'Guardando...');resetError('');try{const r=await sb.auth.updateUser({password:pw});if(r.error)throw r.error;$('reset-modal').style.display='none';toast('Contraseña actualizada. Ya puedes usar tu cuenta.');await syncUser(r.data.user)}catch(e){resetError(e.message||'No se pudo guardar la contraseña.')}finally{busy('reset-submit',false,'Guardar nueva contraseña')}}
+async function resetSubmit(){const pw=$('reset-password').value;if(!pw||!pwStrong(pw))return resetError('La contraseña debe tener al menos 8 caracteres, con letras y números.');busy('reset-submit',true,'Guardando...');resetError('');try{const r=await sb.auth.updateUser({password:pw});if(r.error)throw r.error;$('reset-modal').style.display='none';recoveryMode=false;try{history.replaceState(null,'',location.pathname)}catch(e){}toast('Contraseña actualizada. Ya puedes usar tu cuenta.');await syncUser(r.data.user)}catch(e){resetError(e.message||'No se pudo guardar la contraseña.')}finally{busy('reset-submit',false,'Guardar nueva contraseña')}}
 async function getSession(){const r=await sb.auth.getSession();if(r.error)throw r.error;return r.data.session||null}
 /* Medición de uso mínima: no bloquea, no avisa y se ignora sin conexión */
 function track(evento,seccion,meta){try{if(OFL&&OFL.isOff&&OFL.isOff())return;authFetch('/api/evento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({evento,seccion:seccion||'',meta:meta||null})}).catch(()=>{})}catch(e){}}
@@ -1682,7 +1688,7 @@ function admBoot(){
 }
 
 Object.assign(window,{cambiarPestana:(n,b)=>section(n,b),cambiarModoPronunciacion:pronMode,obtenerNuevaFrase:newPhrase,obtenerNuevoTemaHablaLibre:newTopic,obtenerNuevoTrabalenguas:newTwister,alternarGrabacion:toggleRecording,evaluarEscritura:analyzeWriting,cargarLectura:loadReading,evaluarLectura:evaluateReading,cargarDictado:loadDictation,evaluarDictado:evaluateDictation,cargarHistorial:loadProgress,procesarAuth:authSubmit,abrirModalAuth:showAuth,cerrarModalAuth:closeAuth,cerrarSesion:signOut,hablarNativo:t=>speak(t),hablarTrabalenguasNativo:t=>speak(t,.85)});
-document.addEventListener('DOMContentLoaded',async()=>{bind();try{const s=await getSession();if(!recoveryMode)await syncUser(s?.user||null)}catch(e){console.error('[INIT]',e);if(!recoveryMode){if(OFL&&OFL.isOff()&&enterOffline(null)){if(window.hideBoot)window.hideBoot()}else syncUser(null)}}if(OFL&&!OFL.isOff())setTimeout(()=>OFL.flush(),3000)});
+document.addEventListener('DOMContentLoaded',async()=>{bind();try{const s=await getSession();if(recoveryMode){if(window.hideBoot)window.hideBoot();if(s&&s.user){closeAuth();$('reset-modal').style.display='flex'}else{recoveryMode=false;await syncUser(null)}}else await syncUser(s?.user||null)}catch(e){console.error('[INIT]',e);if(!recoveryMode){if(OFL&&OFL.isOff()&&enterOffline(null)){if(window.hideBoot)window.hideBoot()}else syncUser(null)}}if(OFL&&!OFL.isOff())setTimeout(()=>OFL.flush(),3000)});
 Object.assign(window,{playGuideAudio,speak});
 document.querySelectorAll('#home-maestra .hm-card').forEach(b=>b.addEventListener('click',()=>{callModeSet(b.dataset.m);section('llamada')}));
 window.TalvoCore={$,$$,jsonFetch,authFetch,state,toast,section,speak,esc,teacherSpeak,setMascotState,reactToScore,loadDashboard};
