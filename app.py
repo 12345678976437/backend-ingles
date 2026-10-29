@@ -197,6 +197,7 @@ RATE_RULES = {
     "/api/reto21/crear": (4, 3600),
     "/api/reto21/dia": (30, 3600),
     "/api/escenario/nuevo": (10, 3600),
+    "/api/llamada/pistas": (40, 3600),
     "/api/escenario/turno": (90, 3600),
     "/api/escenario/feedback": (12, 3600),
     "/api/diccionario": (120, 3600),
@@ -257,7 +258,7 @@ CREDIT_COST = {
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
     "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
-    "/api/escenario/turno": 1, "/api/escenario/feedback": 3,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
@@ -3788,13 +3789,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -6384,6 +6385,41 @@ def scenario_custom_create():
     return jsonify({"ok": True, "escenario": sc})
 
 
+_MOODS = {
+    "rushed": "Your mood: you are in a hurry, speak fast and in short clipped sentences, and you may interrupt politely ('Sorry, I have to be quick'). Do not slow down or simplify unless the student asks you to repeat.\n",
+    "upset": "Your mood: you are annoyed or frustrated about something in the scene (e.g. a mistake that is your side's fault). Stay realistic and not abusive: the student must stay polite but firm to calm you down and get what they need.\n",
+}
+
+
+@app.post("/api/llamada/pistas")
+def call_hints():
+    """Botón '¿No sé qué decir?': 3 frases en inglés (con su significado) para seguir la conversación de la llamada."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    hist = _clean_history(body.get("history"), 6)
+    if not hist:
+        hist = [{"role": "assistant", "content": "Hi! Tell me a little about yourself."}]
+    convo = "\n".join(("Student: " if m["role"] == "user" else "Tutor: ") + m["content"] for m in hist)
+    try:
+        d = ai_json(
+            "A Spanish-speaking English learner froze during a spoken call and does not know what to say next. Read the conversation and give THREE short, natural, "
+            "different things they could say next to answer the tutor's last message (real spoken English with contractions, max 12 words each, simple enough to say out loud). "
+            'Return JSON only: {"pistas":[{"en":"...","es":"short Spanish meaning"},{"en":"...","es":"..."},{"en":"...","es":"..."}]}.',
+            convo, temperature=0.7)
+    except Exception as exc:
+        print(f"[CALL HINTS] {exc}")
+        return json_error("No pude generar pistas ahora. Inténtalo de nuevo.", 500)
+    out = []
+    for p in (d.get("pistas") or [])[:3]:
+        if isinstance(p, dict) and _short(p.get("en"), 140):
+            out.append({"en": _short(p.get("en"), 140), "es": _short(p.get("es"), 140)})
+    if not out:
+        return json_error("No pude generar pistas ahora. Inténtalo de nuevo.", 500)
+    return jsonify({"ok": True, "pistas": out})
+
+
 @app.post("/api/escenario/turno")
 def scenario_turn():
     user, error = authenticated_user()
@@ -6403,6 +6439,7 @@ def scenario_turn():
         "You are role-playing a spoken English scenario to help a Spanish-speaking student practice. " + _SAFE_SCENE + "\n"
         f"Scene: {sc['setup']}\nYou play: {sc['ai_role']}.\nThe student plays: {sc['user_role']}.\nStudent's goal: {sc['goal']}\n"
         f"Student level: {lvl_line}. Match your vocabulary to it.\n"
+        + _MOODS.get(_short(body.get("mood"), 12), "") +
         "Stay in character. Reply in 1-3 short, natural spoken sentences (no markdown, no emojis). Keep the scene moving with realistic details or a small challenge; do not solve the task for the student. "
         "Return JSON only with keys: reply (your in-character line), "
         "correction (null, or {said, better, why_es} when the student's LAST message has a real grammar/word-choice mistake or sounds unnatural; 'why_es' is a short reason in Spanish <=110 chars; do not correct tiny typos or punctuation), "

@@ -1201,6 +1201,17 @@ function vadLoop(){
   }else if(!vad.starting){vad.voice=0;vad.rec=false}
 }
 $('call-type-send')?.addEventListener('click',callSendTyped);$('call-type-input')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();callSendTyped()}});
+/* Botón "No sé qué decir": 3 frases para seguir la conversación */
+$('call-hint-btn')?.addEventListener('click',async()=>{
+  const btn=$('call-hint-btn'),box=$('call-hint-list');if(!btn||!box||btn.disabled)return;
+  btn.disabled=true;const old=btn.textContent;btn.textContent='Pensando…';
+  try{
+    const d=await jsonFetch('/api/llamada/pistas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({history:state.callMessages.slice(-6)})});
+    box.innerHTML=(d.pistas||[]).map((p,i)=>`<div class="ch-item"><div><b data-i18n-skip>${esc(p.en)}</b><small data-i18n-skip>${esc(p.es||'')}</small></div><button type="button" class="btn" data-i="${i}" aria-label="Escuchar">🔊</button></div>`).join('')+'<small class="ch-note">Escucha una, y dila tú en voz alta.</small>';
+    box.querySelectorAll('button[data-i]').forEach(b=>b.addEventListener('click',()=>speak(d.pistas[+b.dataset.i].en,.9)));
+  }catch(e){toast(e.message||'No pude generar pistas.')}
+  finally{btn.disabled=false;btn.textContent=old}
+});
 $('call-handsfree')?.addEventListener('click',()=>{if(vad.on)vadStop();else vadStart()});
 $('call-start')?.addEventListener('click',callStart);
 $('call-mute')?.addEventListener('click',callToggleMute);

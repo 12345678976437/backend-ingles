@@ -110,7 +110,7 @@ async function chatSend(text){
 }
 
 /* ===================== ESCENARIOS ===================== */
-const S={list:null,libre:false,cat:'all',sc:null,hist:[],turns:0,busy:false,rec:null,hint:null,ruta:null,done:false};
+const S={mood:'calm',list:null,libre:false,cat:'all',sc:null,hist:[],turns:0,busy:false,rec:null,hint:null,ruta:null,done:false};
 const MAXT=10;
 const CATS=[['all','All'],['work','Work'],['travel','Travel'],['life','Daily life']];
 async function scHome(){
@@ -150,10 +150,11 @@ function scCustomForm(){
 function scStart(sc){
   S.sc=sc;S.hist=[{role:'assistant',content:sc.opening}];S.turns=0;S.busy=false;S.hint=null;S.done=false;
   $('sc-root').innerHTML='<div class="card"><div class="sc-top"><button type="button" class="rt-back" id="sc-exit">←</button><span class="ic">'+esc(sc.icon||'🎭')+'</span><div><b data-i18n-skip>'+esc(sc.es||'Role-play')+'</b><small style="color:var(--muted)" data-i18n-skip>You: '+esc(sc.user_role||'')+'</small></div></div>'
-   +'<p class="sc-goal" data-i18n-skip>🎯 '+esc(sc.goal||'')+'</p><div class="sc-chat" id="sc-chat"></div><div id="sc-hint"></div>'
+   +'<p class="sc-goal" data-i18n-skip>🎯 '+esc(sc.goal||'')+'</p><div class="sc-mood" id="sc-mood">'+[['calm','😊 Friendly'],['rushed','⏱️ In a hurry'],['upset','😠 Upset']].map(m=>'<button type="button" class="mode'+(S.mood===m[0]?' active':'')+'" data-mood="'+m[0]+'">'+m[1]+'</button>').join('')+'</div><div class="sc-chat" id="sc-chat"></div><div id="sc-hint"></div>'
    +'<div class="sc-bar"><button type="button" class="st-ic" id="sc-mic" aria-label="Speak">🎤</button><input id="sc-in" class="input" placeholder="Reply in English…" aria-label="Your reply" autocomplete="off"><button type="button" class="btn primary" id="sc-send">Send</button></div>'
    +'<div class="sc-meta"><span id="sc-count"></span><span class="st-row"><button type="button" class="btn" id="sc-hintb">💡 Hint</button><button type="button" class="btn" id="sc-end" disabled>Finish & get feedback</button></span></div></div>';
   if(!SR)$('sc-mic').style.display='none';
+  document.querySelectorAll('#sc-mood [data-mood]').forEach(b=>b.onclick=()=>{S.mood=b.dataset.mood;document.querySelectorAll('#sc-mood [data-mood]').forEach(x=>x.classList.toggle('active',x===b))});
   addAi(sc.opening,true);scCount();
   $('sc-exit').onclick=()=>{if(S.turns>0&&!confirm(window.TalvoI18n?TalvoI18n.tr('Leave this conversation? You will lose it.'):'Leave this conversation? You will lose it.'))return;try{speechSynthesis.cancel()}catch(e){}scList()};
   $('sc-send').onclick=()=>{const v=$('sc-in').value.trim();if(v){$('sc-in').value='';scSend(v)}};
@@ -162,7 +163,7 @@ function scStart(sc){
   $('sc-hintb').onclick=()=>{if(!S.hint)return toast('Send a message first to get a hint.');scHint()};
   $('sc-end').onclick=scFinish;
 }
-function scBody(){const o={history:S.hist};if(S.sc.id&&S.sc.id!=='custom'&&!S.ruta)o.escenario_id=S.sc.id;if(S.ruta)o.ruta_id=S.ruta;if(S.sc.custom)o.custom=S.sc.custom;return o}
+function scBody(){const o={history:S.hist};if(S.sc.id&&S.sc.id!=='custom'&&!S.ruta)o.escenario_id=S.sc.id;if(S.ruta)o.ruta_id=S.ruta;if(S.mood&&S.mood!=='calm')o.mood=S.mood;if(S.sc.custom)o.custom=S.sc.custom;return o}
 function chatEl(){return $('sc-chat')}
 function addAi(text,speakIt){
   const c=chatEl();c.insertAdjacentHTML('beforeend','<div class="sc-m ai"><span data-i18n-skip>'+esc(text)+'</span><button type="button" class="st-ic sm" aria-label="Listen">🔊</button><button type="button" class="st-ic sm" aria-label="Native speed" title="Native speed">⚡</button></div>');

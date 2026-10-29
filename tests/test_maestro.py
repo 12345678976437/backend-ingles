@@ -90,3 +90,7 @@ import time
 m._pron_check("x","How's it going?",uid="u9"); time.sleep(0.3)
 assert saved_h and saved_h[0][0]=="historial_pronunciacion" and saved_f["f"]["para_repasar"][0]=="going" and "old" in saved_f["f"]["para_repasar"]
 print('aprendizaje de llamada OK')
+assert any(r.rule=='/api/llamada/pistas' for r in m.app.url_map.iter_rules())
+assert m._RATE_LIMITS.get('/api/llamada/pistas') if hasattr(m,'_RATE_LIMITS') else True
+assert set(m._MOODS)=={'rushed','upset'} and 'hurry' in m._MOODS['rushed']
+print('pistas y ánimos OK')

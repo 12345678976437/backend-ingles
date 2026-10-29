@@ -1576,3 +1576,11 @@ body.is-offline .nav-needs-net{opacity:.45}
 .cp-sum button i{font-style:normal;font-size:11px;opacity:.8;margin-left:6px}
 .cp-sum .m{background:rgba(255,200,87,.14);border-color:rgba(255,200,87,.5);color:#ffd98a}
 .cp-sum .b{background:rgba(255,92,92,.16);border-color:rgba(255,92,92,.55);color:#ff9d9d}
+
+.call-hints{width:100%;max-width:520px;margin:10px auto 0;text-align:center}
+.ch-item{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:10px 12px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:14px;background:rgba(255,255,255,.04);text-align:left}
+.ch-item small{display:block;color:var(--muted);margin-top:2px}
+.ch-note{display:block;margin-top:8px;color:var(--muted)}
+.sc-mood{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0 0}
+.sc-mood .mode{min-height:34px;font-size:12px}
+.call-ui[data-live="1"] .call-hints.live-only{display:block}
