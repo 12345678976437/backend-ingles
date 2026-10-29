@@ -470,7 +470,7 @@ const CALL_HELLO="Hi! It's Palanqueta. I'm so happy you called. What would you l
 const EXAM_HELLO="Hi! I'm Palanqueta, and today I'll check your English level. I'll ask you eight questions, from easy to harder. Just answer naturally, there are no wrong answers. Ready? Let's start. What's your name, and where are you from?";
 const TEACHER_HELLO='¡Hola! Soy la maestra Palanqueta. Hoy vamos a aprender inglés juntas, paso a paso, y yo te explico todo en español. Para empezar, dime: ¿para qué quieres el inglés, trabajo, viajes o platicar con gente? Puedes contestarme en español.';
 function callMode(){try{return localStorage.getItem('talvo_callmode')||(localStorage.getItem('talvo_maestro')==='1'?'teacher':'talk')}catch(e){return 'talk'}}
-async function teacherHello(){try{const d=await jsonFetch('/api/maestro/ficha');if(d.nombre&&d.clases>0){return `¡Hola, ${d.nombre}! Qué gusto escucharte otra vez. ¿Cómo estás hoy? En inglés se dice "How are you doing today?". Cuéntame, ¿cómo te fue desde la última clase?`}}catch(e){}return '¡Hola! Qué gusto conocerte, soy tu maestra Palanqueta. Aquí vamos a aprender inglés juntas, poquito a poquito, y yo te explico todo en español. Antes de empezar quiero conocerte. ¿Cómo te llamas?'}
+async function teacherHello(){try{const d=await jsonFetch('/api/maestro/ficha');if(d.nombre&&d.clases>0){return `¡Hola, ${d.nombre}! Qué gusto escucharte otra vez. ¿Cómo estás hoy? En inglés se dice "How are you doing today?". Cuéntame, ${d.ultimo_tema?'la última vez hablamos de '+d.ultimo_tema+', ¿cómo te fue con eso?':'¿cómo te fue desde la última clase?'}`}}catch(e){}return '¡Hola! Qué gusto conocerte, soy tu maestra Palanqueta. Aquí vamos a aprender inglés juntas, poquito a poquito, y yo te explico todo en español. Antes de empezar quiero conocerte. ¿Cómo te llamas?'}
 function teacherOn(){return callMode()==='teacher'}
 function examOn(){return callMode()==='exam'}
 function callModeSet(m){if(m===callMode())return;try{localStorage.setItem('talvo_callmode',m)}catch(e){}state.callMessages=[];CALL.examN=0;const w=$('call-messages');if(w)w.innerHTML='';teacherRender()}
@@ -532,7 +532,7 @@ async function callStartTalk(){
     if(MediaRecorder.isTypeSupported&&!MediaRecorder.isTypeSupported(mime)){mime=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(x=>MediaRecorder.isTypeSupported(x))||''}
     state.callChunks=[];state.callRecorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
     state.callRecorder.ondataavailable=e=>{if(e.data.size)state.callChunks.push(e.data)};
-    state.callRecorder.onstop=callSendTurn;state.callRecorder.start();
+    state.callRecorder.onstop=callSendTurn;state.callRecorder.start();CALL.tTalk=performance.now();
     $('call-talk-btn').classList.add('recording');callSetState('hearing');callStatus('Listening… let go when you are done.')
   }catch(e){toast('Error de micrófono: '+e.message);callIdle()}
 }
@@ -554,7 +554,34 @@ function callRenderPronSummary(){
   box.querySelectorAll('button[data-w]').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.w,.8)));
   CALL.pronAll=[]
 }
+
+/* Espejo de fluidez: velocidad al hablar inglés y muletillas, calculado en tu navegador (sin costo) */
+const MIRROR_ES=new Set('el la los las un una unos unas que de del en es y o no si yo me mi tu su se lo le les como por para con pero muy está estoy soy eres somos son hay más mas ya sí bien hola gracias porque cuando donde qué cómo quién dos tres hoy ayer también tambien aquí aqui eso esto esta este'.split(' '));
+const MIRROR_FILL=[['you know',/\byou know\b/g],['I mean',/\bi mean\b/g],['like',/\blike\b/g],['basically',/\bbasically\b/g],['actually',/\bactually\b/g],['literally',/\bliterally\b/g],['um / uh',/\b(?:um+|uh+|erm|ehh?|hmm+)\b/g]];
+function callMirrorAdd(text){
+  try{
+    const m=CALL.mirror=CALL.mirror||{words:0,secs:0,turns:0,fill:{}};
+    const low=String(text||'').toLowerCase();
+    const toks=low.match(/[a-záéíóúñ']+/g)||[];
+    const en=toks.filter(w=>/^[a-z']+$/.test(w)&&!MIRROR_ES.has(w));
+    if(en.length<toks.length*0.6||en.length<3){CALL.talkSecs=0;return}
+    if(!CALL.talkSecs)return;
+    m.words+=en.length;m.turns++;m.secs+=Math.max(1,CALL.talkSecs-1.2);
+    MIRROR_FILL.forEach(([k,re])=>{const n=(low.match(re)||[]).length;if(n)m.fill[k]=(m.fill[k]||0)+n});
+    CALL.talkSecs=0;
+  }catch(e){}
+}
+function callRenderMirror(){
+  const box=$('call-summary-mirror');if(!box)return;const m=CALL.mirror;CALL.mirror=null;
+  if(!m||m.turns<2||m.secs<6){box.style.display='none';return}
+  const wpm=Math.round(m.words/(m.secs/60));
+  const lvl=wpm<80?'Vas despacio y seguro: lo siguiente es soltarte un poco más.':wpm<120?'Buen ritmo para conversar. Un nativo promedio habla cerca de 130–150.':'¡Ritmo natural, como el de un nativo!';
+  const fills=Object.entries(m.fill).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  box.style.display='';
+  box.innerHTML=`<h3>Tu espejo de fluidez</h3><div class="notice">Hablaste inglés a unas <b>${wpm}</b> palabras por minuto (${m.words} palabras en ${m.turns} turnos). ${lvl}${fills.length?`<br>Muletillas que más usaste: ${fills.map(([k,n])=>`<b>${esc(k)}</b> ×${n}`).join(', ')}. Son normales; solo cuida que no llenen todo.`:''}<br><small>Estimación a partir de tu transcripción y de cuánto tiempo grabaste.</small></div>`;
+}
 function callStopTalk(){
+  if(CALL.tTalk){CALL.talkSecs=(performance.now()-CALL.tTalk)/1000;CALL.tTalk=0}
   $('call-talk-btn').classList.remove('recording');
   if(state.callRecorder&&state.callRecorder.state!=='inactive')state.callRecorder.stop()
 }
@@ -586,7 +613,7 @@ async function callSendTurn(ev,typed){
 async function callReadStream(r){
   CALL.aiPushed=false;
   const handle=ev=>{
-    if(ev.type==='user'){CALL.userEl=addCallMessage(ev.text,'user');state.callMessages.push({role:'user',content:ev.text});callCaption('user',ev.text);callStatus('Palanqueta is thinking…')}
+    if(ev.type==='user'){callMirrorAdd(ev.text);CALL.userEl=addCallMessage(ev.text,'user');state.callMessages.push({role:'user',content:ev.text});callCaption('user',ev.text);callStatus('Palanqueta is thinking…')}
     else if(ev.type==='ai'){if(!CALL.aiEl)CALL.aiEl=addCallMessage('','ai');CALL.aiEl.textContent=(CALL.aiEl.textContent+' '+ev.text).trim();callCaption('ai',CALL.aiEl.textContent);callEnqueue(ev.text,ev.audio)}
     else if(ev.type==='pron'){callPronChips(ev)}
     else if(ev.type==='empty'){callStatus('I did not catch that, try again.')}
@@ -673,7 +700,7 @@ async function endCall(){
     $('call-summary-strengths').innerHTML=(d.fortalezas||[]).map(x=>`<li>${esc(x)}</li>`).join('');
     $('call-summary-errors').innerHTML=(d.errores_comunes||[]).map(x=>`<li>${esc(x)}</li>`).join('');
     $('call-summary-vocab').innerHTML=(d.vocabulario_recomendado||[]).map(v=>`<div class="vocab-item"><b>${esc(v.palabra||'')}</b><p>${esc(v.significado||'')}</p></div>`).join('');
-    callRenderPronSummary();
+    callRenderPronSummary();callRenderMirror();
     $('call-summary-next').textContent=d.siguiente_paso||'';$('call-summary').style.display='block';
     state.callMessages=[];$('call-messages').innerHTML='<div class="msg ai">Hi! I\'m Palanqueta. Tap Start call and let\'s talk. I\'ll answer out loud.</div>';
     const t=callEl('call-timer');if(t)t.textContent='00:00';
