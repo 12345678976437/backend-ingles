@@ -198,6 +198,7 @@ RATE_RULES = {
     "/api/reto21/dia": (30, 3600),
     "/api/escenario/nuevo": (10, 3600),
     "/api/llamada/pistas": (40, 3600),
+    "/api/vocabulario/lote": (20, 3600),
     "/api/escenario/turno": (90, 3600),
     "/api/escenario/feedback": (12, 3600),
     "/api/diccionario": (120, 3600),
@@ -258,7 +259,7 @@ CREDIT_COST = {
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
     "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
-    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
@@ -3789,13 +3790,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -5189,6 +5190,47 @@ def vocab_save():
         "origen": body.get("origen") or "manual",
     })
     return jsonify({"ok": True})
+
+
+@app.post("/api/vocabulario/lote")
+def vocab_save_batch():
+    """Guarda varias palabras de golpe (p. ej. las que sonaron flojas en la llamada) con significado y ejemplo."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    words = []
+    for w in (body.get("palabras") or [])[:8]:
+        w = _short(w, 40).strip()
+        if w and re.search(r"[A-Za-z]", w) and w.lower() not in [x.lower() for x in words]:
+            words.append(w)
+    if not words:
+        return json_error("No hay palabras para guardar.")
+    try:
+        d = ai_json(
+            "For each English word give a short Spanish meaning and one short natural example sentence in real spoken English. "
+            'Return JSON only: {"items":[{"palabra":"...","significado":"...","ejemplo":"..."}]} using exactly the given words.',
+            ", ".join(words), temperature=0.3)
+    except Exception as exc:
+        print(f"[VOCAB LOTE] {exc}")
+        return json_error("No pude preparar las palabras ahora. Inténtalo de nuevo.", 500)
+    info = {str(i.get("palabra", "")).lower(): i for i in (d.get("items") or []) if isinstance(i, dict)}
+    _c = supabase_admin or supabase
+    saved = 0
+    for w in words:
+        try:
+            dup = (_c.table("vocabulario_usuario").select("id").eq("user_id", user.id)
+                   .ilike("palabra", re.sub(r"([%_\\])", r"\\\1", w)).limit(1).execute()).data or []
+            if dup:
+                continue
+            it = info.get(w.lower(), {})
+            save_history("vocabulario_usuario", user.id, {
+                "palabra": w, "significado": _short(it.get("significado"), 160),
+                "ejemplo": _short(it.get("ejemplo"), 200), "origen": "llamada"})
+            saved += 1
+        except Exception as exc:
+            print(f"[VOCAB LOTE save] {exc}")
+    return jsonify({"ok": True, "guardadas": saved, "ya_estaban": len(words) - saved})
 
 
 @app.post("/api/vocabulario/marcar")

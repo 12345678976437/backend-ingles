@@ -552,6 +552,8 @@ function callRenderPronSummary(){
   box.style.display='';
   box.innerHTML=`<h3>Tu pronunciación medida</h3><div class="notice">${att} frase${att===1?'':'s'} medida${att===1?'':'s'} con Azure · promedio <b>${avg}</b>/100.${weak.length?' Las palabras más flojas quedaron guardadas para tu próxima clase.':' ¡Ninguna palabra floja esta vez!'}</div>${weak.length?`<div class="cp-w cp-sum">${weak.map(x=>`<button type="button" class="${x.a>=60?'m':'b'}" data-w="${esc(x.w)}" data-i18n-skip>🔊 ${esc(x.w)}<i>${x.a}</i></button>`).join('')}</div><small style="color:var(--muted)">Toca una palabra para escucharla bien dicha.</small>`:''}`;
   box.querySelectorAll('button[data-w]').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.w,.8)));
+  if(weak.length){const sv=document.createElement('button');sv.type='button';sv.className='btn';sv.style.marginTop='10px';sv.textContent='＋ Guardar estas palabras en mi Vocabulario';box.appendChild(sv);
+    sv.addEventListener('click',async()=>{sv.disabled=true;sv.textContent='Guardando…';try{const r=await jsonFetch('/api/vocabulario/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({palabras:weak.map(x=>x.w)})});sv.textContent=r.guardadas?`✓ ${r.guardadas} palabra${r.guardadas===1?'':'s'} guardada${r.guardadas===1?'':'s'}`:'✓ Ya estaban en tu Vocabulario';try{loadVocabList()}catch(e){}}catch(e){sv.disabled=false;sv.textContent='＋ Guardar estas palabras en mi Vocabulario';toast(e.message)}})}
   CALL.pronAll=[]
 }
 

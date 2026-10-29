@@ -94,3 +94,4 @@ assert any(r.rule=='/api/llamada/pistas' for r in m.app.url_map.iter_rules())
 assert m._RATE_LIMITS.get('/api/llamada/pistas') if hasattr(m,'_RATE_LIMITS') else True
 assert set(m._MOODS)=={'rushed','upset'} and 'hurry' in m._MOODS['rushed']
 print('pistas y ánimos OK')
+assert any(r.rule=='/api/vocabulario/lote' for r in m.app.url_map.iter_rules()); print('lote OK')
