@@ -554,6 +554,7 @@ function callRenderPronSummary(){
   box.querySelectorAll('button[data-w]').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.w,.8)));
   if(weak.length){const sv=document.createElement('button');sv.type='button';sv.className='btn';sv.style.marginTop='10px';sv.textContent='＋ Guardar estas palabras en mi Vocabulario';box.appendChild(sv);
     sv.addEventListener('click',async()=>{sv.disabled=true;sv.textContent='Guardando…';try{const r=await jsonFetch('/api/vocabulario/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({palabras:weak.map(x=>x.w)})});sv.textContent=r.guardadas?`✓ ${r.guardadas} palabra${r.guardadas===1?'':'s'} guardada${r.guardadas===1?'':'s'}`:'✓ Ya estaban en tu Vocabulario';try{loadVocabList()}catch(e){}}catch(e){sv.disabled=false;sv.textContent='＋ Guardar estas palabras en mi Vocabulario';toast(e.message)}})}
+  if(window.lpOpenSounds){const sl=document.createElement('button');sl.type='button';sl.className='btn';sl.style.cssText='margin:10px 0 0 8px';sl.textContent='🎙️ Practicar mis sonidos más débiles';sl.addEventListener('click',()=>window.lpOpenSounds());box.appendChild(sl)}
   CALL.pronAll=[]
 }
 
