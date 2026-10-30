@@ -1621,3 +1621,14 @@ body.is-offline .nav-needs-net{opacity:.45}
 .ch-rvsum{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0}.ch-rvsum div{text-align:center;padding:8px 2px;border-radius:12px;background:rgba(255,255,255,.04);border-bottom:3px solid var(--c)}.ch-rvsum b{display:block;font-size:20px}.ch-rvsum small{font-size:10px;color:var(--muted)}
 .ch-rvitem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;margin-top:6px;border-radius:12px;background:rgba(255,255,255,.04);border-left:4px solid var(--c)}.ch-rvitem small{display:block;color:var(--muted)}.ch-rvitem em{font-style:normal;color:var(--c)}
 .ch-coachcard{margin-top:12px}.ch-coachcard ul{margin:8px 0 8px 18px;padding:0}
+
+/* ===== Selector de cursos ===== */
+#main-nav [hidden],[data-section-jump][hidden],#home-next[hidden]{display:none!important}
+.course-pill{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 12px 0 6px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:inherit;font:inherit;cursor:pointer}
+.course-pill b{font-size:14px;font-family:var(--display)}.course-pill i{font-style:normal;opacity:.6;font-size:11px}
+.cp-b{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;color:#06101c;font-weight:800;font-size:12px;flex:none}
+.cp-b.big{width:46px;height:46px;font-size:17px}
+.course-card{max-width:420px;width:100%}.cc-sub{color:var(--muted);font-size:12.5px;margin:4px 0 12px}
+.cc-item{display:flex;align-items:center;gap:12px;width:100%;margin-top:8px;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.cc-item.on{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset}.cc-item.soon{opacity:.6}
+.cc-t{flex:1;display:flex;flex-direction:column}.cc-t small{color:var(--muted)}.cc-item em{font-style:normal;color:var(--cyan);font-weight:700}.cc-item em.sn{font-size:11px;color:var(--muted);border:1px solid rgba(255,255,255,.2);padding:2px 8px;border-radius:999px}

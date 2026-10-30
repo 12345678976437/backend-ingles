@@ -5,7 +5,7 @@ const VERSION='talvo-v1';
 const SUPA='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4';
 const SHELL=[
   './','index.html','manifest.webmanifest','css/app.css',
-  'js/offline.js','js/core.js','js/extras.js','js/mouth.js','js/vendor/chess.js','js/chess-engine.js','js/chess-lessons.js','js/chess-puzzles.js','js/chess.js','js/learning-path.js','js/phrases.js','js/studio.js','js/voice-lab.js','js/tutorial.js','js/clips-presentations.js','js/i18n.js',
+  'js/offline.js','js/core.js','js/extras.js','js/courses.js','js/mouth.js','js/vendor/chess.js','js/chess-engine.js','js/chess-lessons.js','js/chess-puzzles.js','js/chess.js','js/learning-path.js','js/phrases.js','js/studio.js','js/voice-lab.js','js/tutorial.js','js/clips-presentations.js','js/i18n.js',
   'img/3be2953dd7.png','img/573023fda0.webp','img/5ef4891258.webp','img/616c0afe99.webp','img/69dc6ead34.webp','img/6f23951225.webp','img/8e1f1641d1.png','img/9abc8766f9.webp','img/afcfde06be.webp','img/d7b8a9c181.webp',
   'palanqueta-a.webp','palanqueta-asoma.webp','palanqueta-mascota.webp','logo-bienvenida.png',
   'icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','icons/pq-icon.png','icons/pq-badge.png'
