@@ -33,3 +33,27 @@ const rr=e.analyze(4,3000);console.log('torre: se come la dama?',rr.best);
 // el rival de nivel 1..7 siempre juega algo legal
 for(let lv=1;lv<=7;lv++){e.setFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');const t=Date.now();const r=e.chooseMove(lv);assert(r&&e.legalMoves(0).includes(r.m));console.log('nivel',lv,e.uci(r.m),(Date.now()-t)+'ms')}
 console.log('motor OK');
+// los problemas guardados: mate en 1 con una única solución; mate en 2 con una única primera jugada (verificado con chess.js, independiente del motor)
+global.window={};eval(require('fs').readFileSync(__dirname+'/../js/vendor/chess.js','utf8'));
+eval(require('fs').readFileSync(__dirname+'/../js/chess-puzzles.js','utf8'));
+const PZ=window.CHESS_PUZZLES;assert(PZ.m1.length>=30&&PZ.m2.length>=30);
+for(const f of PZ.m1){const c=new window.Chess(f);const mates=c.moves().filter(s=>s.endsWith('#'));assert.strictEqual(mates.length,1,'m1 '+f)}
+for(const f of PZ.m2){const c=new window.Chess(f);let good=0;
+  for(const m of c.moves()){c.move(m);const replies=c.moves();let all=replies.length>0&&!c.isCheckmate()&&!c.isDraw();
+    if(c.isCheckmate())good++;
+    else if(replies.length){let ok=true;for(const r of replies){c.move(r);ok=ok&&c.moves().some(x=>x.endsWith('#'));c.undo();if(!ok)break}if(ok)good++}
+    c.undo()}
+  assert.strictEqual(good,1,'m2 '+f+' soluciones '+good)}
+console.log('problemas OK',PZ.m1.length,PZ.m2.length);
+// lecciones: la FEN carga, las respuestas son legales y las tácticas son realmente la mejor jugada
+eval(require('fs').readFileSync(__dirname+'/../js/chess-lessons.js','utf8'));
+for(const L of window.CHESS_LESSONS){
+  const c=new window.Chess(L.fen);const legal=c.moves({verbose:true}).map(m=>m.from+m.to+(m.promotion||''));
+  assert(legal.length>0,L.id+' sin jugadas');
+  if(L.ans==='any'){assert(c.inCheck(),L.id+' debería estar en jaque');continue}
+  for(const a of L.ans)assert(legal.includes(a),L.id+' jugada ilegal '+a);
+  if(['mate_back','mate_queen','mate_ladder'].includes(L.id)){const m=c.move({from:L.ans[0].slice(0,2),to:L.ans[0].slice(2,4)});assert(c.isCheckmate(),L.id+' no es mate')}
+  if(L.cat==='tactics'){e.setFen(L.fen);const r=e.analyze(5,3000);assert(L.ans.includes(r.best),L.id+': el motor prefiere '+r.best+' (puntaje '+r.score+')')}
+  assert(L.t.length===2&&L.x.length===2&&L.ok.length===2,L.id+' faltan textos');
+}
+console.log('lecciones OK',window.CHESS_LESSONS.length);

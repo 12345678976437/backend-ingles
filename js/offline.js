@@ -153,7 +153,7 @@ const OFF={
     b.textContent=on?(n?'Offline · '+n+' lesson'+(n===1?'':'s')+' will sync when you reconnect':'Offline mode: you can practice lessons. Calls and AI tools need internet.'):'Syncing your progress…'
   },
   /* secciones que funcionan sin internet */
-  allowed(name){return ['home','learning-path','vocabulario','vocabulary','tutorial','cuenta'].includes(name)}
+  allowed(name){return ['home','learning-path','vocabulario','vocabulary','tutorial','cuenta','ajedrez'].includes(name)}
 };
 
 window.TalvoOffline=OFF;

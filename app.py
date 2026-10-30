@@ -199,6 +199,7 @@ RATE_RULES = {
     "/api/escenario/nuevo": (10, 3600),
     "/api/llamada/pistas": (40, 3600),
     "/api/vocabulario/lote": (20, 3600),
+    "/api/ajedrez/entrenador": (12, 3600),
     "/api/escenario/turno": (90, 3600),
     "/api/escenario/feedback": (12, 3600),
     "/api/diccionario": (120, 3600),
@@ -259,7 +260,7 @@ CREDIT_COST = {
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
     "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
-    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
@@ -3790,13 +3791,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -4294,7 +4295,7 @@ def _recent_events_for(client, uid, per_table=12):
     return out[:40], warns
 
 
-_EVENTOS_OK = {"seccion", "llamada_fin", "leccion_fin", "clase_maestra", "examen_fin", "instalada"}
+_EVENTOS_OK = {"seccion", "llamada_fin", "leccion_fin", "clase_maestra", "examen_fin", "instalada", "ajedrez_fin"}
 
 
 @app.post("/api/evento")
@@ -4351,6 +4352,41 @@ def admin_uso():
                     "secciones": [{"seccion": s, "aperturas": n, "usuarios": len(sec_users.get(s, ()))}
                                   for s, n in sorted(secciones.items(), key=lambda x: -x[1])],
                     "hitos": hitos})
+
+
+@app.post("/api/ajedrez/entrenador")
+def chess_coach():
+    """Entrenador de ajedrez con IA: explica los errores que YA detectó el motor del navegador (no inventa variantes)."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    moves = _short(body.get("moves"), 1800)
+    if len(moves) < 6:
+        return json_error("Juega algunas jugadas más para poder revisarlas.")
+    lang = "Spanish" if body.get("lang") == "es" else "English"
+    lvl = max(1, min(7, int(body.get("level") or 3)))
+    mist = []
+    for m in (body.get("mistakes") or [])[:6]:
+        if isinstance(m, dict):
+            mist.append(f"move {int(m.get('n') or 0)}: played {_short(m.get('played'), 12)}"
+                        + (f", engine preferred {_short(m.get('better'), 12)}" if m.get("better") else "")
+                        + f" ({_short(m.get('kind'), 12)}, about {int(m.get('loss') or 0) / 100:.1f} pawns lost)")
+    try:
+        d = ai_json(
+            "You are a warm, honest chess coach for a beginner or improving player. You get the moves of a game they just played against a computer, "
+            "the result, and the biggest mistakes that a chess engine already found. ONLY comment on facts given; never invent variations or evaluations. "
+            "If no mistakes are listed, praise what they did and suggest what to study next. Be encouraging but truthful: do not call a lost game good. "
+            f"Write everything in {lang}. Return JSON only: "
+            '{"resumen": "2-3 sentences about how the game went", "consejos": ["3 short, concrete lessons tied to the mistakes or the moves played"], '
+            '"ejercicio": "one short thing to practice next (a drill or habit), 1 sentence"}.',
+            f"Computer level: {lvl}/7. Student color: {'white' if body.get('color') != 'b' else 'black'}. Result: {_short(body.get('result'), 80)}.\n"
+            f"Moves (SAN): {moves}\nEngine-found mistakes by the student: {'; '.join(mist) or 'none found'}.", temperature=0.5)
+    except Exception as exc:
+        print(f"[CHESS COACH] {exc}")
+        return json_error("El entrenador no pudo responder ahora. Inténtalo de nuevo.", 500)
+    tips = [_short(x, 220) for x in (d.get("consejos") or []) if isinstance(x, str)][:4]
+    return jsonify({"ok": True, "resumen": _short(d.get("resumen"), 500), "consejos": tips, "ejercicio": _short(d.get("ejercicio"), 240)})
 
 
 @app.get("/api/repaso/hoy")

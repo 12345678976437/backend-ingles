@@ -295,7 +295,8 @@ var PAIRS=[
 ['Easy','Fácil'],['Practice 10 more','Practicar 10 más'],['My words','Mis palabras'],['Search your words','Busca entre tus palabras'],
 ['Learning','En aprendizaje'],['Learned','Aprendidas'],['Show more','Ver más'],['Loading','Cargando'],
 ["That's plenty for today — review these first!",'¡Ya son suficientes por hoy! Primero repasa estas.'],
-['No se pudo reproducir el audio. Revisa el volumen de tu teléfono.','Could not play the audio. Check your phone volume.']
+['No se pudo reproducir el audio. Revisa el volumen de tu teléfono.','Could not play the audio. Check your phone volume.'],
+['Chess','Ajedrez'],['Learn, play and think ahead.','Aprende, juega y piensa a futuro.'],['Lessons from zero, games against the computer, mate puzzles and a review of your mistakes. It works without internet.','Lecciones desde cero, partidas contra la computadora, problemas de mate y un repaso de tus errores. Funciona sin internet.']
 ];
 var en2es={},es2en={};
 PAIRS.forEach(function(p){ var a=p[0].trim(),b=p[1].trim(); if(!(a in en2es))en2es[a]=b; if(!(b in es2en))es2en[b]=a; });
