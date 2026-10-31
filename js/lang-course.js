@@ -46,6 +46,7 @@ function make(cfg){
      +'<div class="lc-stats"><div><b>'+done+'/'+cfg.units.length+'</b><small>'+T('units','unidades')+'</small></div><div><b>'+learned+'</b><small>'+T('phrases learned','frases aprendidas')+'</small></div></div>'
      +'<div class="lc-prog"><i style="width:'+Math.round(done/cfg.units.length*100)+'%"></i></div>'
      +'<button type="button" class="lc-next" data-lc-unit="'+next.id+'"><span class="lc-ic">'+next.icon+'</span><span class="lc-ut"><small>'+(done?T('Continue','Continuar'):T('Start here','Empieza aquí'))+'</small><b>'+esc(L2(next.name))+'</b></span><span>→</span></button>'
+     +(()=>{const c=vcounts();return c.due?'<button type="button" class="lc-next" data-lc-go="vocab" style="background:#ffd166"><span class="lc-ic">🧠</span><span class="lc-ut"><small>'+T('Review','Repaso')+'</small><b>'+c.due+' '+T('cards due today','tarjetas para hoy')+'</b></span><span>→</span></button>':''})()
      +'<div class="lc-acts"><button type="button" data-lc-go="learn">📚<span>'+T('Lessons','Lecciones')+'</span></button><button type="button" data-lc-go="speak">🎤<span>'+T('Speak','Hablar')+'</span></button><button type="button" data-lc-go="tutor">💬<span>'+T('Tutor','Tutor')+'</span></button></div>'
      +'<div class="lc-card"><small class="lc-muted">'+T('Phrase of the day','Frase del día')+'</small><div class="lc-day"><button type="button" class="lc-play" data-lc-dsay>🔊</button><div>'+itemBig(dp)+'</div></div></div>';
   }
@@ -54,6 +55,42 @@ function make(cfg){
     let h=head(T('Lessons','Lecciones'),T('Pick a unit','Elige una unidad'))+'<div class="lc-units">';
     cfg.units.forEach(u=>{const s=p[u.id]||0;h+='<button type="button" class="lc-unit'+(s?' done':'')+'" data-lc-unit="'+u.id+'"><span class="lc-ic">'+u.icon+'</span><span class="lc-ut"><b>'+esc(L2(u.name))+'</b><small>'+u.items.length+' '+T('phrases','frases')+'</small></span><span class="lc-st">'+(s?'★'.repeat(s)+'☆'.repeat(3-s):'')+'</span></button>'});
     return h+'</div>';
+  }
+
+  /* ---------- vocabulario con repaso espaciado (cajas 0-5; intervalos en días) ---------- */
+  const VK='talvo_lcv_'+cfg.id,GAP=[0,1,3,7,14,30];
+  const vget=()=>lsGet(VK,{}),vset=d=>lsSet(VK,d);
+  let vs=null;
+  function vcounts(){const d=vget(),now=Date.now(),all=allItems();
+    const due=all.filter(i=>d[i[0]]&&d[i[0]].due<=now).length,seen=all.filter(i=>d[i[0]]).length,fresh=all.length-seen;
+    return {due,seen,fresh,total:all.length,mastered:all.filter(i=>d[i[0]]&&d[i[0]].box>=4).length}}
+  function vstart(){
+    const d=vget(),now=Date.now(),all=allItems(),p=prog();
+    const due=shuffle(all.filter(i=>d[i[0]]&&d[i[0]].due<=now)).slice(0,12);
+    /* palabras nuevas: primero las de unidades ya completadas, luego las de la siguiente */
+    const order=cfg.units.slice().sort((a,b)=>(p[b.id]?1:0)-(p[a.id]?1:0)).flatMap(u=>u.items);
+    const fresh=order.filter(i=>!d[i[0]]).slice(0,Math.max(0,6-Math.min(due.length,4)));
+    vs={q:due.concat(fresh),i:0,flip:false,done:0,again:0};
+  }
+  function vocabView(){
+    const c=vcounts();
+    if(!vs)return head(T('Vocabulary','Vocabulario'),T('Spaced review','Repaso espaciado'),T('Cards come back right before you forget them.','Las tarjetas vuelven justo antes de olvidarlas.'))
+      +'<div class="lc-stats"><div><b>'+c.due+'</b><small>'+T('due today','para hoy')+'</small></div><div><b>'+c.seen+'/'+c.total+'</b><small>'+T('seen','vistas')+'</small></div><div><b>'+c.mastered+'</b><small>'+T('mastered','dominadas')+'</small></div></div>'
+      +'<button type="button" class="btn primary" data-lc-vstart style="width:100%;margin-top:14px"'+((c.due+c.fresh)?'':' disabled')+'>'+(c.due?T('Review '+c.due+' cards','Repasar '+c.due+' tarjetas'):T('Learn new words','Aprender palabras nuevas'))+'</button>';
+    if(vs.i>=vs.q.length){const n=vs.q.length;vs=null;return head(T('Vocabulary','Vocabulario'),T('Session complete!','¡Sesión completa!'))+'<div class="lc-end"><div class="lc-big">✓</div><h2>'+n+' '+T('cards','tarjetas')+'</h2><button type="button" class="btn primary" data-lc-vexit style="width:100%">'+T('Done','Listo')+'</button></div>'}
+    const it=vs.q[vs.i];
+    return '<div class="lc-prog"><i style="width:'+Math.round(vs.i/vs.q.length*100)+'%"></i></div>'
+      +'<div class="lc-card lc-sp"><div class="lc-day" style="justify-content:center"><button type="button" class="lc-play" data-lc-vsay>🔊</button><button type="button" class="lc-slow" data-lc-vslow>🐢</button></div>'
+      +(vs.flip?itemBig(it):'<div class="lc-t'+(cfg.pinyin?' zh':'')+'" style="margin:18px 0">'+esc(it[0])+'</div><div class="lc-muted">'+T('Do you remember what it means?','¿Recuerdas qué significa?')+'</div>')+'</div>'
+      +(vs.flip?'<div class="lc-grade"><button type="button" data-lc-vg="0">'+T('Again','Otra vez')+'</button><button type="button" data-lc-vg="1">'+T('Good','Bien')+'</button><button type="button" data-lc-vg="2">'+T('Easy','Fácil')+'</button></div>':'<button type="button" class="btn primary" data-lc-vflip style="width:100%;margin-top:12px">'+T('Show answer','Ver respuesta')+'</button>');
+  }
+  function vgrade(g){
+    const it=vs.q[vs.i],d=vget(),e=d[it[0]]||{box:0};
+    e.box=g===0?0:Math.min(5,e.box+(g===2?2:1));
+    e.due=g===0?Date.now():Date.now()+GAP[e.box]*864e5;d[it[0]]=e;vset(d);
+    if(g===0){vs.q.push(it)}
+    vs.i++;vs.flip=false;const n=vs.q[vs.i];render();
+    if(n)say(n[0]);
   }
   let sp=null;
   function pickSpeak(){const p=prog(),pool=cfg.units.filter(u=>p[u.id]).flatMap(u=>u.items),src=pool.length?pool:allItems();let it;do{it=src[Math.floor(Math.random()*src.length)]}while(src.length>1&&sp&&sp.it===it);sp={it}}
@@ -66,7 +103,7 @@ function make(cfg){
   function render(){const r=root();if(!r)return;
     if(quiz)r.innerHTML=quizHtml();
     else if(unit)r.innerHTML=unitHtml();
-    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
+    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='vocab'?vocabView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
     r.dataset.i18nSkip='1';
     try{window.TalvoCourses&&TalvoCourses.setView(cfg.id,quiz||unit?'learn':view)}catch(e){}
   }
@@ -166,6 +203,12 @@ function make(cfg){
     r.addEventListener('click',e=>{
       const g=s=>e.target.closest(s);let x;
       if(x=g('[data-lc-go]')){api.view(x.dataset.lcGo);return}
+      if(g('[data-lc-vstart]')){vstart();render();say(vs.q[0][0]);return}
+      if(g('[data-lc-vflip]')){vs.flip=true;render();return}
+      if(x=g('[data-lc-vg]')){vgrade(+x.dataset.lcVg);return}
+      if(g('[data-lc-vexit]')){vs=null;render();return}
+      if(g('[data-lc-vsay]')){say(vs.q[vs.i][0]);return}
+      if(g('[data-lc-vslow]')){say(vs.q[vs.i][0],-35);return}
       if(g('[data-lc-dsay]')){say(dayPhrase()[0]);return}
       if(g('[data-lc-spsay]')){say(sp.it[0]);return}
       if(g('[data-lc-spslow]')){say(sp.it[0],-35);return}
@@ -185,7 +228,7 @@ function make(cfg){
     });
     r.addEventListener('submit',e=>{if(e.target.id!=='lc-form')return;e.preventDefault();const i=root().querySelector('#lc-in'),v=i.value.trim();if(v){i.value='';send(v)}});
   }
-  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;render()},get(){return view}};
+  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;if(v!=='vocab')vs=null;render()},get(){return view}};
   return api;
 }
 
@@ -201,7 +244,7 @@ css.textContent='.lc-intro{color:var(--muted,#9aa3b2);margin:0 0 12px}.lc-tabs{d
 +'.lc-q{font-weight:600;margin:10px 0}.lc-prompt{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}.lc-opts{display:grid;gap:8px;margin-top:14px}.lc-opt{min-height:50px;padding:8px 12px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center}.lc-opt.right{border-color:#5ee6a8;background:rgba(94,230,168,.15)}.lc-opt.wrong{border-color:#ff5c5c;background:rgba(255,92,92,.15)}'
 +'.lc-qf{margin-top:12px;padding:10px;border-radius:6px}.lc-qf.ok{background:rgba(94,230,168,.12)}.lc-qf.no{background:rgba(255,92,92,.12)}.lc-end{text-align:center;padding:20px 0}.lc-big{font-size:40px;color:#ffd166;letter-spacing:6px}'
 +'.lc-chat{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0}.lc-b{max-width:88%;padding:10px 12px;border-radius:10px}.lc-b.me{align-self:flex-end;background:rgba(56,225,255,.15)}.lc-b.tu{align-self:flex-start;background:rgba(255,255,255,.07)}.lc-corr{margin-top:6px;font-size:13px;color:#ffd166}.lc-form{display:flex;gap:8px;margin-top:10px}.lc-form input{flex:1;min-height:44px;padding:0 12px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.7);color:inherit;font-size:16px}';
-css.textContent+='.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;font-size:22px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
+css.textContent+='.lc-grade{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.lc-grade button{min-height:48px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.6);color:inherit;font-weight:600}.lc-grade button:nth-child(1){border-color:#ff5c5c}.lc-grade button:nth-child(2){border-color:#ffd166}.lc-grade button:nth-child(3){border-color:#5ee6a8}.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;font-size:22px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
 
 const courses={};
 function init(){

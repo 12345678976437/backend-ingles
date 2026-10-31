@@ -31,6 +31,7 @@ let cur=get();
 /* ---------- interfaz propia de cada curso: barra inferior y menú lateral ---------- */
 const IC={
  home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+ cards:'<rect x="3" y="6" width="14" height="11" rx="2"/><path d="M7 3h14v11"/>',
  learn:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h5"/>',
  mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
  chat:'<path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M8 10h8M8 13h5"/>',
@@ -40,6 +41,7 @@ const IC={
 };
 const LC_VIEWS=[['home','home',['Home','Inicio']],['learn','learn',['Lessons','Lecciones']],['speak','mic',['Speak','Hablar'],true],['tutor','chat',['Tutor','Tutor']]];
 const VIEWS={es:LC_VIEWS,zh:LC_VIEWS,chess:[['play','play',['Play','Jugar']],['learn','learn',['Learn','Aprender']],['puzzles','puzzle',['Puzzles','Problemas']]]};
+const SIDE={es:LC_VIEWS.concat([['vocab','cards',['Vocabulary','Vocabulario']]]),zh:LC_VIEWS.concat([['vocab','cards',['Vocabulary','Vocabulario']]])};
 let curView='home',tabOrig=null;
 const svg=p=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';
 function applyTabbar(){
@@ -56,12 +58,12 @@ function applyTabbar(){
 function markTabs(){
   const tb=document.getElementById('tabbar');if(!tb||!VIEWS[cur])return;
   const sec=document.querySelector('.section.active'),inCourse=sec&&sec.id==='sec-'+byId(cur).landing;
-  tb.querySelectorAll('button').forEach(b=>b.classList.toggle('active',inCourse?b.dataset.view===curView:b.dataset.tab==='menu'));
+  tb.querySelectorAll('button').forEach(b=>b.classList.toggle('active',inCourse?(b.dataset.view===curView||(curView==='vocab'&&b.dataset.view==='learn')):b.dataset.tab==='menu'));
 }
 function applySide(){
   const nav=document.getElementById('main-nav');if(!nav)return;
   nav.querySelectorAll('[data-cnav]').forEach(e=>e.remove());
-  const v=VIEWS[cur];if(!v)return;
+  const v=SIDE[cur]||VIEWS[cur];if(!v)return;
   const lab=document.createElement('div');lab.className='label';lab.dataset.cnav='1';lab.setAttribute('data-i18n-skip','1');lab.textContent=L2(byId(cur).name);
   const n=document.createElement('nav');n.className='nav';n.dataset.cnav='1';n.setAttribute('data-i18n-skip','1');
   n.innerHTML=v.map(x=>'<button type="button" data-cview="'+x[0]+'">'+svg(IC[x[1]])+'<span>'+esc(L2(x[2]))+'</span></button>').join('');
