@@ -41,7 +41,7 @@ const IC={
 };
 const LC_VIEWS=[['home','home',['Home','Inicio']],['learn','learn',['Lessons','Lecciones']],['speak','mic',['Speak','Hablar'],true],['tutor','chat',['Tutor','Tutor']]];
 const VIEWS={es:LC_VIEWS,zh:LC_VIEWS,chess:[['play','play',['Play','Jugar']],['learn','learn',['Learn','Aprender']],['puzzles','puzzle',['Puzzles','Problemas']]]};
-const SIDE={es:LC_VIEWS.concat([['vocab','cards',['Vocabulary','Vocabulario']]]),zh:LC_VIEWS.concat([['vocab','cards',['Vocabulary','Vocabulario']]])};
+const SIDE={es:LC_VIEWS.concat([['vocab','cards',['Vocabulary','Vocabulario']],['roles','chat',['Role-play','Juego de roles']]]),zh:LC_VIEWS.concat([['vocab','cards',['Vocabulary','Vocabulario']],['roles','chat',['Role-play','Juego de roles']]])};
 let curView='home',tabOrig=null;
 const svg=p=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';
 function applyTabbar(){

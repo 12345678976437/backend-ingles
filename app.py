@@ -203,6 +203,7 @@ RATE_RULES = {
     "/api/idioma/voz": (150, 3600),
     "/api/idioma/pronunciacion": (80, 3600),
     "/api/idioma/tutor": (60, 3600),
+    "/api/idioma/escuchar": (80, 3600),
     "/api/escenario/turno": (90, 3600),
     "/api/escenario/feedback": (12, 3600),
     "/api/diccionario": (120, 3600),
@@ -263,7 +264,7 @@ CREDIT_COST = {
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
     "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
-    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3, "/api/idioma/voz": 0.1, "/api/idioma/pronunciacion": 1, "/api/idioma/tutor": 1,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3, "/api/idioma/voz": 0.1, "/api/idioma/pronunciacion": 1, "/api/idioma/tutor": 1, "/api/idioma/escuchar": 0.5,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
@@ -3794,13 +3795,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/idioma/voz": "idioma_voz", "/api/idioma/pronunciacion": "idioma_pron", "/api/idioma/tutor": "idioma_tutor", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/idioma/voz": "idioma_voz", "/api/idioma/pronunciacion": "idioma_pron", "/api/idioma/tutor": "idioma_tutor", "/api/idioma/escuchar": "idioma_stt", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/idioma/voz": "Idiomas (voz)", "/api/idioma/pronunciacion": "Idiomas (pronunciación)", "/api/idioma/tutor": "Idiomas (tutor)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/idioma/voz": "Idiomas (voz)", "/api/idioma/pronunciacion": "Idiomas (pronunciación)", "/api/idioma/tutor": "Idiomas (tutor)", "/api/idioma/escuchar": "Idiomas (micrófono)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -4490,6 +4491,28 @@ def idioma_pronunciacion():
             os.remove(wav)
 
 
+@app.post("/api/idioma/escuchar")
+def idioma_escuchar():
+    """Voz a texto en español o chino, para hablar con el tutor sin escribir."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    cfg = _IDIOMAS.get(request.form.get("curso"))
+    upload = request.files.get("audio")
+    if not cfg or not upload:
+        return json_error("Falta el audio o el curso.")
+    wav = None
+    try:
+        wav = convert_audio_to_wav(upload)
+        text, conf = _stt_once(wav, cfg["locale"])
+        return jsonify({"ok": True, "texto": text, "confianza": round(conf, 2)})
+    except Exception as exc:
+        return json_error(_err_log("No se pudo transcribir el audio", exc), 500)
+    finally:
+        if wav and os.path.exists(wav):
+            os.remove(wav)
+
+
 @app.post("/api/idioma/tutor")
 def idioma_tutor():
     """Conversación de práctica con un tutor de español/chino. El estudiante escribe en el idioma que aprende (o en inglés/español)."""
@@ -4507,9 +4530,11 @@ def idioma_tutor():
         if isinstance(h, dict) and h.get("rol") in ("yo", "tutor"):
             hist.append(f"{'Student' if h['rol'] == 'yo' else 'Tutor'}: {_short(h.get('texto'), 300)}")
     zh = body.get("curso") == "zh"
+    rol = _short(body.get("escenario"), 200)
     try:
         d = ai_json(
-            f"You are a kind, patient {cfg['nombre']} tutor for a beginner. The student writes in {cfg['nombre']} or in {ui}. "
+            (f"ROLE-PLAY: stay in character. Scenario: {rol}. Keep the scene going naturally. " if rol else "")
+            + f"You are a kind, patient {cfg['nombre']} tutor for a beginner. The student writes in {cfg['nombre']} or in {ui}. "
             f"Reply ONLY in simple {cfg['nombre']} (1-2 short sentences, A1-A2 level) and end with one easy question to keep talking. "
             f"If the student's {cfg['nombre']} has mistakes, give the corrected sentence and a one-sentence explanation in {ui}. "
             + ("Always give pinyin with tone marks for the reply. " if zh else "")

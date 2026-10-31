@@ -4,6 +4,15 @@ window.TALVO_COURSE_ES={
  title:['Spanish for English speakers','Español para angloparlantes'],
  voices:['es-MX-DaliaNeural','es-MX-JorgeNeural'],
  intro:['Learn real, spoken Mexican-neutral Spanish: listen, repeat and get scored on your pronunciation.','Aprende español hablado real: escucha, repite y recibe una nota de pronunciación.'],
+
+ roles:[
+  {id:'cafe',icon:'☕',name:['Order at a café','Pedir en un café'],ai:'You are a friendly waiter at a café in Mexico City. The student orders food and drinks.',open:['Buenas tardes, bienvenido. ¿Qué le gustaría tomar?','Good afternoon, welcome. What would you like to drink?']},
+  {id:'hotel',icon:'🏨',name:['Hotel check-in','Registro en el hotel'],ai:'You are a hotel receptionist. The student arrives and wants to check in.',open:['Hola, buenas noches. ¿Tiene una reservación?','Hello, good evening. Do you have a reservation?']},
+  {id:'taxi',icon:'🚕',name:['Taxi and directions','Taxi y direcciones'],ai:'You are a taxi driver. The student asks to go somewhere and asks how long it takes.',open:['Buenas. ¿A dónde va?','Hi. Where are you going?']},
+  {id:'market',icon:'🛒',name:['At the market','En el mercado'],ai:'You are a fruit seller at a market. The student asks for prices and buys things.',open:['¡Pase, pase! ¿Qué se le ofrece hoy?','Come in! What can I get you today?']},
+  {id:'pharmacy',icon:'💊',name:['At the pharmacy','En la farmacia'],ai:'You are a pharmacist. The student says they have a headache or a cold and asks for help.',open:['Buenos días. ¿En qué le puedo ayudar?','Good morning. How can I help you?']},
+  {id:'friend',icon:'🤝',name:['Meet a new friend','Conocer a alguien'],ai:'You are a friendly local meeting the student at a party for the first time.',open:['¡Hola! Me llamo Carlos. ¿Y tú, cómo te llamas?',"Hi! I'm Carlos. And you, what's your name?"]}
+ ],
  units:[
   {id:'es1',icon:'👋',name:['Hello!','¡Hola!'],tip:['In Spanish the letter H is always silent: “hola” sounds like “ola”.','En español la H nunca suena.'],
    items:[['Hola','Hello'],['Buenos días','Good morning'],['Buenas tardes','Good afternoon'],['Buenas noches','Good evening / Good night'],['¿Cómo estás?','How are you?'],['Estoy bien, gracias.',"I'm fine, thank you."],['Mucho gusto.','Nice to meet you.'],['Adiós.','Goodbye.']]},

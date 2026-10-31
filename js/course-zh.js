@@ -4,6 +4,15 @@ window.TALVO_COURSE_ZH={
  title:['Chinese (Mandarin)','Chino (mandarín)'],
  voices:['zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural'],
  intro:['Mandarin from zero: characters, pinyin and the four tones, with audio and a pronunciation score.','Mandarín desde cero: caracteres, pinyin y los cuatro tonos, con audio y nota de pronunciación.'],
+
+ roles:[
+  {id:'cafe',icon:'☕',name:['Order at a café','Pedir en una cafetería'],ai:'You are a friendly waiter at a café in Beijing. The student orders drinks and food.',open:['你好，欢迎光临！你想喝什么？','nǐ hǎo, huānyíng guānglín! nǐ xiǎng hē shénme?','Hello, welcome! What would you like to drink?']},
+  {id:'hotel',icon:'🏨',name:['Hotel check-in','Registro en el hotel'],ai:'You are a hotel receptionist in China. The student arrives and wants to check in.',open:['你好！你有预订吗？','nǐ hǎo! nǐ yǒu yùdìng ma?','Hello! Do you have a reservation?']},
+  {id:'taxi',icon:'🚕',name:['Taxi and directions','Taxi y direcciones'],ai:'You are a taxi driver in China. The student asks to go somewhere.',open:['你好，你去哪里？','nǐ hǎo, nǐ qù nǎlǐ?','Hello, where are you going?']},
+  {id:'market',icon:'🛒',name:['At the market','En el mercado'],ai:'You are a fruit seller at a market in China. The student asks for prices and buys things.',open:['欢迎！你想买什么？','huānyíng! nǐ xiǎng mǎi shénme?','Welcome! What would you like to buy?']},
+  {id:'restaurant',icon:'🍜',name:['At a restaurant','En un restaurante'],ai:'You are a waiter at a noodle restaurant in China. The student orders a meal.',open:['你好，请坐。你想吃什么？','nǐ hǎo, qǐng zuò. nǐ xiǎng chī shénme?','Hello, please sit. What would you like to eat?']},
+  {id:'friend',icon:'🤝',name:['Meet a new friend','Conocer a alguien'],ai:'You are a friendly Chinese student meeting the student for the first time.',open:['你好！我叫小王。你叫什么名字？',"nǐ hǎo! wǒ jiào Xiǎo Wáng. nǐ jiào shénme míngzi?","Hi! I'm Xiao Wang. What's your name?"]}
+ ],
  units:[
   {id:'zh0',icon:'🎵',name:['The 4 tones','Los 4 tonos'],tip:['Tone 1 high and flat (mā), tone 2 rises (má), tone 3 dips down and up (mǎ), tone 4 falls sharply (mà). The tone changes the word!','Tono 1 alto y plano, 2 sube, 3 baja y sube, 4 cae de golpe. ¡El tono cambia la palabra!'],
    items:[['妈','mā','mom','mamá'],['麻','má','hemp','cáñamo'],['马','mǎ','horse','caballo'],['骂','mà','to scold','regañar'],['你好','nǐ hǎo','hello (3rd + 3rd tone: the first becomes 2nd)','hola (3.º + 3.º: el primero sube)']]},

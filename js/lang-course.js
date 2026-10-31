@@ -19,7 +19,7 @@ function make(cfg){
   const prog=()=>lsGet(key,{});
   const meaning=it=>cfg.pinyin?(lang()==='es'?it[3]:it[2]):it[1];
   const py=it=>cfg.pinyin?it[1]:'';
-  let view='home',unit=null,quiz=null,chat=[],audioCache=new Map(),cur=null;
+  let view='home',unit=null,quiz=null,chats={},role=null,audioCache=new Map(),cur=null;
 
   async function fetchAudio(text,ritmo,voz){
     const k=text+'|'+(ritmo||0)+'|'+(voz||'');
@@ -103,7 +103,7 @@ function make(cfg){
   function render(){const r=root();if(!r)return;
     if(quiz)r.innerHTML=quizHtml();
     else if(unit)r.innerHTML=unitHtml();
-    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='vocab'?vocabView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
+    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='vocab'?vocabView():view==='roles'?rolesView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
     r.dataset.i18nSkip='1';
     try{window.TalvoCourses&&TalvoCourses.setView(cfg.id,quiz||unit?'learn':view)}catch(e){}
   }
@@ -182,20 +182,53 @@ function make(cfg){
   }
 
   /* ---------- tutor ---------- */
+  const curChat=()=>chats[role?role.id:'free']||(chats[role?role.id:'free']=[]);
   function tutorHtml(){
+    const chat=curChat();
     return '<div class="lc-chat" id="lc-chat">'+(chat.length?chat.map(m=>m.rol==='yo'?'<div class="lc-b me">'+esc(m.texto)+'</div>':'<div class="lc-b tu"><div class="'+(cfg.pinyin?'zh ':'')+'lc-t">'+esc(m.texto)+'</div>'+(m.pinyin?'<div class="lc-py">'+pyHtml(m.pinyin)+'</div>':'')+(m.sig?'<div class="lc-m">'+esc(m.sig)+'</div>':'')
       +(m.corr?'<div class="lc-corr">✏️ '+esc(m.corr)+(m.exp?' — '+esc(m.exp):'')+'</div>':'')+'<button type="button" class="lc-play" data-lc-tsay="'+esc(m.texto)+'">🔊</button></div>').join(''):'<div class="lc-muted" style="padding:14px 0">'+T('Say hello to your tutor in '+(cfg.id==='es'?'Spanish':'Chinese')+' — or in English, they will help you.','Saluda a tu tutor en '+(cfg.id==='es'?'español':'chino')+' o en tu idioma; te ayudará.')+'</div>')
-      +'</div><form class="lc-form" id="lc-form"><input id="lc-in" autocomplete="off" maxlength="300" placeholder="'+T('Type your message…','Escribe tu mensaje…')+'"><button class="btn primary" type="submit">'+T('Send','Enviar')+'</button></form>';
+      +'</div><form class="lc-form" id="lc-form"><input id="lc-in" autocomplete="off" maxlength="300" placeholder="'+T('Type your message…','Escribe tu mensaje…')+'"><button type="button" class="lc-mic" data-lc-chatmic aria-label="Mic">🎤</button><button class="btn primary" type="submit">'+T('Send','Enviar')+'</button></form>';
   }
   async function send(text){
-    chat.push({rol:'yo',texto:text});render();scrollChat();
-    try{const d=await C.jsonFetch('/api/idioma/tutor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({curso:cfg.id,mensaje:text,ui:lang(),historial:chat.slice(-7,-1)})});
+    const chat=curChat();chat.push({rol:'yo',texto:text});render();scrollChat();
+    try{const d=await C.jsonFetch('/api/idioma/tutor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({curso:cfg.id,mensaje:text,ui:lang(),historial:chat.slice(-7,-1),escenario:role?role.ai:''})});
       chat.push({rol:'tutor',texto:d.respuesta,pinyin:d.pinyin,sig:d.significado,corr:d.correccion,exp:d.explicacion});track('tutor');
     }catch(e){chat.push({rol:'tutor',texto:'…',sig:e.message||T('The tutor is busy. Try again.','El tutor está ocupado. Inténtalo otra vez.')})}
     render();scrollChat();
     const last=chat[chat.length-1];if(last&&last.texto&&last.texto!=='…')say(last.texto);
   }
   const scrollChat=()=>{const c=root().querySelector('#lc-chat');if(c)c.scrollTop=c.scrollHeight;const f=root().querySelector('#lc-in');if(f)f.focus()};
+
+
+  /* ---------- juego de roles ---------- */
+  function rolesView(){
+    if(!role){
+      return head(T('Role-play','Juego de roles'),T('Practice real situations','Practica situaciones reales'),T('The tutor plays a character. Type or speak with 🎤 — you get corrections as you go.','El tutor hace un personaje. Escribe o habla con 🎤 y recibes correcciones.'))
+       +'<div class="lc-units">'+cfg.roles.map(r=>'<button type="button" class="lc-unit" data-lc-role="'+r.id+'"><span class="lc-ic">'+r.icon+'</span><span class="lc-ut"><b>'+esc(L2(r.name))+'</b></span><span class="lc-st">→</span></button>').join('')+'</div>';
+    }
+    return '<button type="button" class="btn" data-lc-rback>← '+T('All situations','Todas las situaciones')+'</button><h2 class="lc-h">'+role.icon+' '+esc(L2(role.name))+'</h2>'+tutorHtml();
+  }
+  function startRole(r){
+    role=r;const c=curChat();
+    if(!c.length){const o=r.open;c.push(cfg.pinyin?{rol:'tutor',texto:o[0],pinyin:o[1],sig:o[2]}:{rol:'tutor',texto:o[0],sig:o[1]})}
+    render();scrollChat();say(c[0].texto);
+  }
+  let crec=null;
+  async function chatMic(btn){
+    if(crec){crec.stop();return}
+    if(!navigator.mediaDevices||!window.MediaRecorder){C.toast&&C.toast(T('Your browser cannot record audio.','Tu navegador no puede grabar audio.'));return}
+    let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){C.toast&&C.toast(T('Allow the microphone to practice speaking.','Permite el micrófono para practicar.'));return}
+    const chunks=[],mr=new MediaRecorder(stream);crec=mr;btn.classList.add('rec');
+    mr.ondataavailable=e=>chunks.push(e.data);const timer=setTimeout(()=>{if(crec===mr)mr.stop()},9000);
+    mr.onstop=async()=>{clearTimeout(timer);crec=null;stream.getTracks().forEach(t=>t.stop());btn.classList.remove('rec');
+      try{const fd=new FormData();fd.append('audio',new Blob(chunks,{type:mr.mimeType||'audio/webm'}),'a.webm');fd.append('curso',cfg.id);
+        const r=await C.authFetch('/api/idioma/escuchar',{method:'POST',body:fd});const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.error||'Error');
+        if(!d.texto){C.toast&&C.toast(T('I could not hear you. Try again.','No te oí. Inténtalo otra vez.'));return}
+        send(d.texto);
+      }catch(e){C.toast&&C.toast(e.message||T('Could not understand the audio.','No se entendió el audio.'))}};
+    mr.start();
+  }
 
   /* ---------- eventos ---------- */
   function bind(){
@@ -209,6 +242,9 @@ function make(cfg){
       if(g('[data-lc-vexit]')){vs=null;render();return}
       if(g('[data-lc-vsay]')){say(vs.q[vs.i][0]);return}
       if(g('[data-lc-vslow]')){say(vs.q[vs.i][0],-35);return}
+      if(x=g('[data-lc-role]')){startRole(cfg.roles.find(r=>r.id===x.dataset.lcRole));return}
+      if(g('[data-lc-rback]')){role=null;render();return}
+      if(x=g('[data-lc-chatmic]')){chatMic(x);return}
       if(g('[data-lc-dsay]')){say(dayPhrase()[0]);return}
       if(g('[data-lc-spsay]')){say(sp.it[0]);return}
       if(g('[data-lc-spslow]')){say(sp.it[0],-35);return}
@@ -228,7 +264,7 @@ function make(cfg){
     });
     r.addEventListener('submit',e=>{if(e.target.id!=='lc-form')return;e.preventDefault();const i=root().querySelector('#lc-in'),v=i.value.trim();if(v){i.value='';send(v)}});
   }
-  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;if(v!=='vocab')vs=null;render()},get(){return view}};
+  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;if(v!=='roles')role=null;if(v!=='vocab')vs=null;render()},get(){return view}};
   return api;
 }
 
