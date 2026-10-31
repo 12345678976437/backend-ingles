@@ -1062,9 +1062,9 @@ function bind(){
 $$('#main-nav button').forEach(b=>b.addEventListener('click',()=>{section(b.dataset.section,b);closeSidebar()}));
 $$('[data-section-jump]').forEach(b=>b.addEventListener('click',()=>{section(b.dataset.sectionJump);closeSidebar()}));
 $('nav-toggle')?.addEventListener('click',openSidebar);
-$$('#tabbar button').forEach(b=>b.addEventListener('click',()=>{const t=b.dataset.tab;if(t==='menu')openSidebar();else section(t)}));
+$('tabbar')?.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const t=b.dataset.tab;if(t==='menu')openSidebar();else if(b.dataset.view&&window.TalvoCourses)TalvoCourses.go(b.dataset.view);else section(t)});
 let lastSec='';const TAB_IDS=['home','learning-path','pronunciacion','tutor'];
-const syncTabs=()=>{const a=document.querySelector('.section.active');const id=a?a.id.replace('sec-',''):'home';$$('#tabbar button').forEach(b=>b.classList.toggle('active',TAB_IDS.includes(id)?b.dataset.tab===id:b.dataset.tab==='menu'));if(id!==lastSec){lastSec=id;const pg=$('app-content');if(pg)pg.scrollTop=0;window.scrollTo(0,0)}};
+const syncTabs=()=>{const a=document.querySelector('.section.active');const id=a?a.id.replace('sec-',''):'home';if(window.TalvoCourses&&TalvoCourses.get()!=='en')TalvoCourses.syncTabs(id);else $$('#tabbar button').forEach(b=>b.classList.toggle('active',TAB_IDS.includes(id)?b.dataset.tab===id:b.dataset.tab==='menu'));if(id!==lastSec){lastSec=id;const pg=$('app-content');if(pg)pg.scrollTop=0;window.scrollTo(0,0)}};
 const secObs=new MutationObserver(syncTabs);$$('.section').forEach(sc=>secObs.observe(sc,{attributes:true,attributeFilter:['class']}));syncTabs();
 $('sidebar-close')?.addEventListener('click',closeSidebar);
 $('sidebar-overlay')?.addEventListener('click',closeSidebar);

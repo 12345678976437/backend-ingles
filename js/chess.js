@@ -92,6 +92,7 @@ function tabs(){
 }
 function render(){
   const root=$('chess-root');if(!root)return;
+  try{window.TalvoCourses&&TalvoCourses.setView('chess',S.tab)}catch(e){}
   root.innerHTML=tabs()+'<div id="ch-body"></div>';
   root.querySelectorAll('[data-ch-tab]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.chTab;if(S.tab!=='play'&&S.g&&!S.over){/* la partida sigue guardada en memoria */}render()});
   if(S.tab==='play')S.g&&!S.reviewing?playView():(S.reviewing?reviewView():playSetup());
@@ -409,5 +410,5 @@ async function pzHint(){
   say(T('Look at this '+(pc?PIECE_NAME[pc.type][0]:'piece')+'.','Mira esta pieza: '+(pc?PIECE_NAME[pc.type][1]:'pieza')+'.'),'info');
 }
 
-window.TalvoChess={open,onSection(name){if(name==='ajedrez')open()}};
+window.TalvoChess={open,onSection(name){if(name==='ajedrez')open()},tab(t){S.tab=t;render()}};
 })();

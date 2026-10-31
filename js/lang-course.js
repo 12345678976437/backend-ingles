@@ -19,7 +19,7 @@ function make(cfg){
   const prog=()=>lsGet(key,{});
   const meaning=it=>cfg.pinyin?(lang()==='es'?it[3]:it[2]):it[1];
   const py=it=>cfg.pinyin?it[1]:'';
-  let tab='learn',unit=null,quiz=null,chat=[],audioCache=new Map(),cur=null;
+  let view='home',unit=null,quiz=null,chat=[],audioCache=new Map(),cur=null;
 
   async function fetchAudio(text,ritmo,voz){
     const k=text+'|'+(ritmo||0)+'|'+(voz||'');
@@ -34,20 +34,41 @@ function make(cfg){
   }
   const track=(n,m)=>{try{window.track&&window.track(n,'curso_'+cfg.id,m)}catch(e){}};
 
-  /* ---------- pantalla principal ---------- */
-  function home(){
-    const p=prog(),done=cfg.units.filter(u=>p[u.id]).length;
-    let h='<p class="lc-intro">'+esc(L2(cfg.intro))+'</p>'
-      +'<div class="lc-tabs"><button type="button" class="'+(tab==='learn'?'on':'')+'" data-lc-tab="learn">'+T('Lessons','Lecciones')+'</button><button type="button" class="'+(tab==='tutor'?'on':'')+'" data-lc-tab="tutor">'+T('Talk to the tutor','Habla con el tutor')+'</button></div>';
-    if(tab==='tutor')return h+tutorHtml();
-    h+='<div class="lc-prog"><i style="width:'+Math.round(done/cfg.units.length*100)+'%"></i></div><small class="lc-muted">'+done+'/'+cfg.units.length+' '+T('units completed','unidades completadas')+'</small><div class="lc-units">';
+  /* ---------- pantallas del curso: Inicio, Lecciones, Hablar, Tutor (cada curso tiene su propia interfaz) ---------- */
+  const head=(eb,title,desc)=>'<div class="eyebrow">'+esc(eb)+'</div><h1 class="page-title">'+esc(title)+'</h1>'+(desc?'<p class="page-desc">'+esc(desc)+'</p>':'');
+  const allItems=()=>cfg.units.flatMap(u=>u.items);
+  function dayPhrase(){const a=allItems(),d=new Date();return a[(d.getFullYear()*372+d.getMonth()*31+d.getDate())%a.length]}
+  function itemBig(it){return '<div class="lc-t'+(cfg.pinyin?' zh':'')+'">'+esc(it[0])+'</div>'+(cfg.pinyin?'<div class="lc-py">'+pyHtml(it[1])+'</div>':'')+'<div class="lc-m">'+esc(meaning(it))+'</div>'}
+  function homeView(){
+    const p=prog(),done=cfg.units.filter(u=>p[u.id]).length,learned=cfg.units.filter(u=>p[u.id]).reduce((n,u)=>n+u.items.length,0);
+    const next=cfg.units.find(u=>!p[u.id])||cfg.units[0],dp=dayPhrase();
+    return head(T('Today','Hoy'),L2(cfg.title),L2(cfg.intro))
+     +'<div class="lc-stats"><div><b>'+done+'/'+cfg.units.length+'</b><small>'+T('units','unidades')+'</small></div><div><b>'+learned+'</b><small>'+T('phrases learned','frases aprendidas')+'</small></div></div>'
+     +'<div class="lc-prog"><i style="width:'+Math.round(done/cfg.units.length*100)+'%"></i></div>'
+     +'<button type="button" class="lc-next" data-lc-unit="'+next.id+'"><span class="lc-ic">'+next.icon+'</span><span class="lc-ut"><small>'+(done?T('Continue','Continuar'):T('Start here','Empieza aquí'))+'</small><b>'+esc(L2(next.name))+'</b></span><span>→</span></button>'
+     +'<div class="lc-acts"><button type="button" data-lc-go="learn">📚<span>'+T('Lessons','Lecciones')+'</span></button><button type="button" data-lc-go="speak">🎤<span>'+T('Speak','Hablar')+'</span></button><button type="button" data-lc-go="tutor">💬<span>'+T('Tutor','Tutor')+'</span></button></div>'
+     +'<div class="lc-card"><small class="lc-muted">'+T('Phrase of the day','Frase del día')+'</small><div class="lc-day"><button type="button" class="lc-play" data-lc-dsay>🔊</button><div>'+itemBig(dp)+'</div></div></div>';
+  }
+  function learnView(){
+    const p=prog();
+    let h=head(T('Lessons','Lecciones'),T('Pick a unit','Elige una unidad'))+'<div class="lc-units">';
     cfg.units.forEach(u=>{const s=p[u.id]||0;h+='<button type="button" class="lc-unit'+(s?' done':'')+'" data-lc-unit="'+u.id+'"><span class="lc-ic">'+u.icon+'</span><span class="lc-ut"><b>'+esc(L2(u.name))+'</b><small>'+u.items.length+' '+T('phrases','frases')+'</small></span><span class="lc-st">'+(s?'★'.repeat(s)+'☆'.repeat(3-s):'')+'</span></button>'});
     return h+'</div>';
   }
+  let sp=null;
+  function pickSpeak(){const p=prog(),pool=cfg.units.filter(u=>p[u.id]).flatMap(u=>u.items),src=pool.length?pool:allItems();let it;do{it=src[Math.floor(Math.random()*src.length)]}while(src.length>1&&sp&&sp.it===it);sp={it}}
+  function speakView(){
+    if(!sp)pickSpeak();
+    return head(T('Speak','Hablar'),T('Say it out loud','Dilo en voz alta'),T('Listen, repeat and get a score. Tip: tap 🐢 to hear it slower.','Escucha, repite y recibe una nota. Consejo: toca 🐢 para oírla más lenta.'))
+     +'<div class="lc-card lc-sp">'+itemBig(sp.it)+'<div class="lc-row"><button type="button" class="lc-play" data-lc-spsay>🔊</button><button type="button" class="lc-slow" data-lc-spslow>🐢</button><button type="button" class="lc-mic big" data-lc-spmic>🎤</button></div><div class="lc-fb" id="lc-fb-sp"></div></div>'
+     +'<button type="button" class="btn" data-lc-spnext style="width:100%;margin-top:12px">'+T('Next phrase','Siguiente frase')+' →</button>';
+  }
   function render(){const r=root();if(!r)return;
-    r.innerHTML=unit?unitHtml():(quiz?'':home());
     if(quiz)r.innerHTML=quizHtml();
+    else if(unit)r.innerHTML=unitHtml();
+    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
     r.dataset.i18nSkip='1';
+    try{window.TalvoCourses&&TalvoCourses.setView(cfg.id,quiz||unit?'learn':view)}catch(e){}
   }
 
   /* ---------- unidad: aprender ---------- */
@@ -101,13 +122,12 @@ function make(cfg){
 
   /* ---------- hablar con nota ---------- */
   let rec=null;
-  async function speak(i){
-    const it=unit.items[i],fb=root().querySelector('#lc-fb-'+i);
+  async function speakItem(it,fb,btn){
     if(rec){rec.stop();return}
     if(!navigator.mediaDevices||!window.MediaRecorder){C.toast&&C.toast(T('Your browser cannot record audio.','Tu navegador no puede grabar audio.'));return}
     let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){C.toast&&C.toast(T('Allow the microphone to practice speaking.','Permite el micrófono para practicar.'));return}
     const chunks=[],mr=new MediaRecorder(stream);rec=mr;
-    const btn=root().querySelector('[data-lc-speak="'+i+'"]');btn.classList.add('rec');fb.textContent=T('Listening… tap 🎤 to stop','Escuchando… toca 🎤 para parar');
+    btn.classList.add('rec');fb.textContent=T('Listening… tap 🎤 to stop','Escuchando… toca 🎤 para parar');
     mr.ondataavailable=e=>chunks.push(e.data);
     const timer=setTimeout(()=>{if(rec===mr)mr.stop()},7000);
     mr.onstop=async()=>{clearTimeout(timer);rec=null;stream.getTracks().forEach(t=>t.stop());btn.classList.remove('rec');
@@ -145,12 +165,17 @@ function make(cfg){
     const r=root();if(!r||r.dataset.bound)return;r.dataset.bound='1';
     r.addEventListener('click',e=>{
       const g=s=>e.target.closest(s);let x;
-      if(x=g('[data-lc-tab]')){tab=x.dataset.lcTab;render();return}
-      if(x=g('[data-lc-unit]')){unit=cfg.units.find(u=>u.id===x.dataset.lcUnit);quiz=null;render();return}
+      if(x=g('[data-lc-go]')){api.view(x.dataset.lcGo);return}
+      if(g('[data-lc-dsay]')){say(dayPhrase()[0]);return}
+      if(g('[data-lc-spsay]')){say(sp.it[0]);return}
+      if(g('[data-lc-spslow]')){say(sp.it[0],-35);return}
+      if(g('[data-lc-spmic]')){speakItem(sp.it,root().querySelector('#lc-fb-sp'),g('[data-lc-spmic]'));return}
+      if(g('[data-lc-spnext]')){pickSpeak();render();return}
+      if(x=g('[data-lc-unit]')){view='learn';unit=cfg.units.find(u=>u.id===x.dataset.lcUnit);quiz=null;render();return}
       if(g('[data-lc-back]')){unit=null;quiz=null;render();return}
       if(x=g('[data-lc-say]')){say(unit.items[+x.dataset.lcSay][0]);return}
       if(x=g('[data-lc-slow]')){say(unit.items[+x.dataset.lcSlow][0],-35);return}
-      if(x=g('[data-lc-speak]')){speak(+x.dataset.lcSpeak);return}
+      if(x=g('[data-lc-speak]')){speakItem(unit.items[+x.dataset.lcSpeak],root().querySelector('#lc-fb-'+x.dataset.lcSpeak),x);return}
       if(g('[data-lc-quiz]')){quiz=buildQuiz(unit);render();const q=quiz.qs[0];if(q.type==='listen')say(q.it[0]);return}
       if(g('[data-lc-qsay]')){say(quiz.qs[quiz.i].it[0]);return}
       if(g('[data-lc-qslow]')){say(quiz.qs[quiz.i].it[0],-35);return}
@@ -160,7 +185,8 @@ function make(cfg){
     });
     r.addEventListener('submit',e=>{if(e.target.id!=='lc-form')return;e.preventDefault();const i=root().querySelector('#lc-in'),v=i.value.trim();if(v){i.value='';send(v)}});
   }
-  return {open(){bind();unit=null;quiz=null;render()}};
+  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;render()},get(){return view}};
+  return api;
 }
 
 const css=document.createElement('style');
@@ -175,7 +201,7 @@ css.textContent='.lc-intro{color:var(--muted,#9aa3b2);margin:0 0 12px}.lc-tabs{d
 +'.lc-q{font-weight:600;margin:10px 0}.lc-prompt{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}.lc-opts{display:grid;gap:8px;margin-top:14px}.lc-opt{min-height:50px;padding:8px 12px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center}.lc-opt.right{border-color:#5ee6a8;background:rgba(94,230,168,.15)}.lc-opt.wrong{border-color:#ff5c5c;background:rgba(255,92,92,.15)}'
 +'.lc-qf{margin-top:12px;padding:10px;border-radius:6px}.lc-qf.ok{background:rgba(94,230,168,.12)}.lc-qf.no{background:rgba(255,92,92,.12)}.lc-end{text-align:center;padding:20px 0}.lc-big{font-size:40px;color:#ffd166;letter-spacing:6px}'
 +'.lc-chat{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0}.lc-b{max-width:88%;padding:10px 12px;border-radius:10px}.lc-b.me{align-self:flex-end;background:rgba(56,225,255,.15)}.lc-b.tu{align-self:flex-start;background:rgba(255,255,255,.07)}.lc-corr{margin-top:6px;font-size:13px;color:#ffd166}.lc-form{display:flex;gap:8px;margin-top:10px}.lc-form input{flex:1;min-height:44px;padding:0 12px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.7);color:inherit;font-size:16px}';
-document.head.appendChild(css);
+css.textContent+='.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;font-size:22px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
 
 const courses={};
 function init(){
@@ -185,5 +211,5 @@ init();
 window.TalvoLang={onSection(name){
   if(name==='espanol'&&courses.es)courses.es.open();
   if(name==='chino'&&courses.zh)courses.zh.open();
-}};
+},view(id,v){if(courses[id])courses[id].view(v)}};
 })();
