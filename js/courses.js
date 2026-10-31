@@ -8,8 +8,8 @@ const L2=a=>lang()==='es'?a[1]:a[0];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const COURSES=[
  {id:'en',badge:'EN',grad:'linear-gradient(135deg,#38e1ff,#6a7bff)',name:['English','Inglés'],sub:['For Spanish speakers','Para hispanohablantes'],ready:true,landing:'home'},
- {id:'es',badge:'ES',grad:'linear-gradient(135deg,#ff9f43,#ff5c7a)',name:['Spanish','Español'],sub:['For English speakers','Para angloparlantes'],ready:false,landing:'espanol'},
- {id:'zh',badge:'中',grad:'linear-gradient(135deg,#ff5c5c,#ffd166)',name:['Chinese','Chino'],sub:['Mandarin · pinyin and tones','Mandarín · pinyin y tonos'],ready:false,landing:'chino'},
+ {id:'es',badge:'ES',grad:'linear-gradient(135deg,#ff9f43,#ff5c7a)',name:['Spanish','Español'],sub:['For English speakers','Para angloparlantes'],ready:true,landing:'espanol'},
+ {id:'zh',badge:'中',grad:'linear-gradient(135deg,#ff5c5c,#ffd166)',name:['Chinese','Chino'],sub:['Mandarin · pinyin and tones','Mandarín · pinyin y tonos'],ready:true,landing:'chino'},
  {id:'chess',badge:'♟',grad:'linear-gradient(135deg,#5ee6a8,#6a7bff)',name:['Chess','Ajedrez'],sub:['Lessons, games and puzzles','Lecciones, partidas y problemas'],ready:true,landing:'ajedrez'}
 ];
 /* secciones comunes a todos los cursos (progreso, cuenta, ajustes) */

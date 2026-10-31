@@ -200,6 +200,9 @@ RATE_RULES = {
     "/api/llamada/pistas": (40, 3600),
     "/api/vocabulario/lote": (20, 3600),
     "/api/ajedrez/entrenador": (12, 3600),
+    "/api/idioma/voz": (150, 3600),
+    "/api/idioma/pronunciacion": (80, 3600),
+    "/api/idioma/tutor": (60, 3600),
     "/api/escenario/turno": (90, 3600),
     "/api/escenario/feedback": (12, 3600),
     "/api/diccionario": (120, 3600),
@@ -260,7 +263,7 @@ CREDIT_COST = {
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
     "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
-    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3, "/api/idioma/voz": 0.1, "/api/idioma/pronunciacion": 1, "/api/idioma/tutor": 1,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
@@ -3791,13 +3794,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/idioma/voz": "idioma_voz", "/api/idioma/pronunciacion": "idioma_pron", "/api/idioma/tutor": "idioma_tutor", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/idioma/voz": "Idiomas (voz)", "/api/idioma/pronunciacion": "Idiomas (pronunciación)", "/api/idioma/tutor": "Idiomas (tutor)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -4387,6 +4390,142 @@ def chess_coach():
         return json_error("El entrenador no pudo responder ahora. Inténtalo de nuevo.", 500)
     tips = [_short(x, 220) for x in (d.get("consejos") or []) if isinstance(x, str)][:4]
     return jsonify({"ok": True, "resumen": _short(d.get("resumen"), 500), "consejos": tips, "ejercicio": _short(d.get("ejercicio"), 240)})
+
+
+# ---------------------------------------------------------------------------
+# Cursos de idiomas (español para extranjeros, chino mandarín). Rutas aparte: el inglés no se toca.
+# ---------------------------------------------------------------------------
+_IDIOMAS = {
+    "es": {"locale": "es-MX", "voces": ("es-MX-DaliaNeural", "es-MX-JorgeNeural"), "nombre": "Spanish (Mexico)"},
+    "zh": {"locale": "zh-CN", "voces": ("zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural"), "nombre": "Mandarin Chinese (simplified characters)"},
+}
+
+
+@app.post("/api/idioma/voz")
+def idioma_voz():
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
+        return json_error("El servicio de voz no está configurado en el servidor.", 500)
+    body = request.get_json(silent=True) or {}
+    cfg = _IDIOMAS.get(body.get("curso"))
+    text = (body.get("texto") or "").strip()[:400]
+    if not cfg or not text:
+        return json_error("Falta el texto o el curso.")
+    voice = body.get("voz") if body.get("voz") in cfg["voces"] else cfg["voces"][0]
+    try:
+        rate = max(-40, min(10, int(body.get("ritmo") or 0)))
+    except (TypeError, ValueError):
+        rate = 0
+    key = hashlib.sha256(f"L|{voice}|{rate}|{text}".encode("utf-8")).hexdigest()
+    with _tts_lock:
+        cached = _tts_cache.get(key)
+        if cached is not None:
+            _tts_cache.move_to_end(key)
+    if cached is not None:
+        return Response(cached, mimetype="audio/mpeg")
+    ssml = (f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{cfg['locale']}'>"
+            f"<voice name='{voice}'><prosody rate='{rate:+d}%'>{_xml_escape(text)}</prosody></voice></speak>")
+    try:
+        r = _tts_http.post(
+            f"https://{AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1",
+            headers={"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY, "Content-Type": "application/ssml+xml",
+                     "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3", "User-Agent": "talvo"},
+            data=ssml.encode("utf-8"), timeout=15)
+    except Exception as exc:
+        print(f"[IDIOMA TTS] {exc}")
+        return json_error("No se pudo generar el audio. Inténtalo de nuevo.", 500)
+    if r.status_code != 200 or not r.content:
+        print(f"[IDIOMA TTS] {r.status_code}")
+        return json_error("No se pudo generar el audio. Inténtalo de nuevo.", 500)
+    with _tts_lock:
+        _tts_cache[key] = r.content
+        while len(_tts_cache) > 80:
+            _tts_cache.popitem(last=False)
+    return Response(r.content, mimetype="audio/mpeg")
+
+
+@app.post("/api/idioma/pronunciacion")
+def idioma_pronunciacion():
+    """Evalúa la pronunciación de una frase en español o chino contra el texto de referencia."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    cfg = _IDIOMAS.get(request.form.get("curso"))
+    upload = request.files.get("audio")
+    ref = (request.form.get("frase") or "").strip()[:300]
+    if not cfg or not upload or not ref:
+        return json_error("Falta el audio, la frase o el curso.")
+    wav = None
+    try:
+        wav = convert_audio_to_wav(upload)
+        config = speech_config()
+        config.speech_recognition_language = cfg["locale"]
+        pa = speechsdk.PronunciationAssessmentConfig(
+            reference_text=ref, grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+            granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme, enable_miscue=True)
+        rec = speechsdk.SpeechRecognizer(speech_config=config, audio_config=speechsdk.audio.AudioConfig(filename=wav))
+        pa.apply_to(rec)
+        res = rec.recognize_once()
+        if res.reason != speechsdk.ResultReason.RecognizedSpeech:
+            return jsonify({"ok": True, "heard": False, "score": 0, "words": []})
+        nbest = (json.loads(res.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult, "{}")).get("NBest") or [{}])[0]
+        a = nbest.get("PronunciationAssessment") or {}
+        words = []
+        for w in nbest.get("Words") or []:
+            wa = w.get("PronunciationAssessment") or {}
+            words.append({"word": w.get("Word", ""), "accuracy": round(float(wa.get("AccuracyScore", 0) or 0)),
+                          "error": wa.get("ErrorType", "None")})
+        score = round(float(a.get("PronScore", 0) or 0))
+        award_xp(user.id, 5)
+        return jsonify({"ok": True, "heard": True, "score": score, "accuracy": round(float(a.get("AccuracyScore", 0) or 0)),
+                        "fluency": round(float(a.get("FluencyScore", 0) or 0)),
+                        "completeness": round(float(a.get("CompletenessScore", 0) or 0)),
+                        "transcript": nbest.get("Display", ""), "words": words[:40]})
+    except Exception as exc:
+        return json_error(_err_log("No se pudo analizar el audio", exc), 500)
+    finally:
+        if wav and os.path.exists(wav):
+            os.remove(wav)
+
+
+@app.post("/api/idioma/tutor")
+def idioma_tutor():
+    """Conversación de práctica con un tutor de español/chino. El estudiante escribe en el idioma que aprende (o en inglés/español)."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    body = request.get_json(silent=True) or {}
+    cfg = _IDIOMAS.get(body.get("curso"))
+    msg = _short(body.get("mensaje"), 400)
+    if not cfg or not msg:
+        return json_error("Escribe un mensaje.")
+    ui = "Spanish" if body.get("ui") == "es" else "English"
+    hist = []
+    for h in (body.get("historial") or [])[-6:]:
+        if isinstance(h, dict) and h.get("rol") in ("yo", "tutor"):
+            hist.append(f"{'Student' if h['rol'] == 'yo' else 'Tutor'}: {_short(h.get('texto'), 300)}")
+    zh = body.get("curso") == "zh"
+    try:
+        d = ai_json(
+            f"You are a kind, patient {cfg['nombre']} tutor for a beginner. The student writes in {cfg['nombre']} or in {ui}. "
+            f"Reply ONLY in simple {cfg['nombre']} (1-2 short sentences, A1-A2 level) and end with one easy question to keep talking. "
+            f"If the student's {cfg['nombre']} has mistakes, give the corrected sentence and a one-sentence explanation in {ui}. "
+            + ("Always give pinyin with tone marks for the reply. " if zh else "")
+            + "Return JSON only: "
+            '{"respuesta": "your reply in the target language' + (' (Chinese characters only)' if zh else '') + '", '
+            + ('"pinyin": "pinyin with tone marks for the reply", ' if zh else '')
+            + f'"significado": "translation of your reply in {ui}", '
+            f'"correccion": "corrected version of the student sentence, or empty string if it was fine", '
+            f'"explicacion": "short explanation in {ui}, or empty string"' + '}.',
+            ("Conversation so far:\n" + "\n".join(hist) + "\n" if hist else "") + f"Student: {msg}", temperature=0.6)
+    except Exception as exc:
+        print(f"[IDIOMA TUTOR] {exc}")
+        return json_error("El tutor no pudo responder ahora. Inténtalo de nuevo.", 500)
+    out = {k: _short(d.get(k), 400) for k in ("respuesta", "pinyin", "significado", "correccion", "explicacion")}
+    award_xp(user.id, 3)
+    return jsonify({"ok": True, **out})
 
 
 @app.get("/api/repaso/hoy")
