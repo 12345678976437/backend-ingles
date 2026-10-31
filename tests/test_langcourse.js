@@ -18,6 +18,8 @@ for(const [sec,root] of [['espanol','lc-es-root'],['chino','lc-zh-root']]){
  await p.evaluate(i=>TalvoLang.view(i,'vocab'),id);await p.click('#'+root+' [data-lc-vstart]');let nc=0;
  while(await p.locator('#'+root+' [data-lc-vflip]').count()){await p.click('#'+root+' [data-lc-vflip]');await p.click('#'+root+' [data-lc-vg="1"]');nc++;if(nc>30)break}
  console.log("vocab cards",nc,'done',await p.locator('#'+root+' [data-lc-vexit]').count());await p.click('#'+root+' [data-lc-vexit]');
+ await p.evaluate(i=>TalvoLang.view(i,'sounds'),id);await p.click('#'+root+' [data-lc-snd]');console.log('sound words',await p.locator('#'+root+' .lc-item').count());
+ await p.evaluate(i=>TalvoLang.view(i,'dictado'),id);const ans=await p.evaluate(i=>0,id);await p.fill('#'+root+' #lc-din','zzz');await p.press('#'+root+' #lc-din','Enter');console.log('dict',await p.locator('#'+root+' [data-lc-dnext]').count());
  await p.evaluate(i=>TalvoLang.view(i,'roles'),id);await p.click('#'+root+' [data-lc-role]');console.log('role open',await p.locator('#'+root+' .lc-b.tu').count());await p.fill('#'+root+' #lc-in','hola');await p.press('#'+root+' #lc-in','Enter');await p.waitForSelector('#'+root+' .lc-b.me');console.log('role bubbles',await p.locator('#'+root+' .lc-b').count());
  await p.evaluate(i=>TalvoLang.view(i,'tutor'),id);await p.fill('#'+root+' #lc-in','hola');await p.press('#'+root+' #lc-in','Enter');
  await p.waitForSelector('#'+root+' .lc-b.tu',{timeout:3000}).catch(()=>{console.log('ERRS',errs)});console.log('tutor ok',await p.locator('#'+root+' .lc-b').count());

@@ -13,6 +13,16 @@ window.TALVO_COURSE_ES={
   {id:'pharmacy',icon:'💊',name:['At the pharmacy','En la farmacia'],ai:'You are a pharmacist. The student says they have a headache or a cold and asks for help.',open:['Buenos días. ¿En qué le puedo ayudar?','Good morning. How can I help you?']},
   {id:'friend',icon:'🤝',name:['Meet a new friend','Conocer a alguien'],ai:'You are a friendly local meeting the student at a party for the first time.',open:['¡Hola! Me llamo Carlos. ¿Y tú, cómo te llamas?',"Hi! I'm Carlos. And you, what's your name?"]}
  ],
+
+ sounds:[
+  {id:'n',sym:'ñ',name:['The Ñ sound','El sonido Ñ'],how:['Like “ny” in “canyon”. Press the middle of your tongue against the roof of your mouth.','Como “ny” en “canyon”. Apoya el centro de la lengua en el paladar.'],words:[['año','year'],['español','Spanish'],['mañana','tomorrow'],['niño','boy']]},
+  {id:'rr',sym:'rr',name:['The rolled R','La R vibrante'],how:['Let the tip of your tongue vibrate against the ridge behind your top teeth. Start with “butter” said fast: “budda”, then add air.','Deja vibrar la punta de la lengua detrás de los dientes de arriba.'],words:[['perro','dog'],['carro','car'],['rico','tasty'],['arroz','rice']]},
+  {id:'j',sym:'j',name:['The J sound','El sonido J'],how:['A strong, scratchy H from the back of the throat, like clearing your throat softly.','Una H fuerte desde el fondo de la garganta.'],words:[['jugo','juice'],['rojo','red'],['viaje','trip'],['hijo','son']]},
+  {id:'ll',sym:'ll',name:['LL and Y','LL y Y'],how:['In Mexico, “ll” sounds like the “y” in “yes”.','En México, “ll” suena como la “y” de “yes”.'],words:[['calle','street'],['llamo','I call'],['pollo','chicken'],['yo','I']]},
+  {id:'h',sym:'h',name:['Silent H','La H muda'],how:['The letter H is never pronounced: “hola” sounds like “ola”.','La H nunca se pronuncia.'],words:[['hola','hello'],['hotel','hotel'],['hablo','I speak'],['hermano','brother']]},
+  {id:'v',sym:'a e i o u',name:['Pure vowels','Vocales puras'],how:['Five short, clean vowels. Don’t glide: “no” is not “now”, “me” is not “may”.','Cinco vocales cortas y limpias; no las alargues.'],words:[['casa','house'],['pero','but'],['sino','but rather'],['todo','everything'],['uno','one']]},
+  {id:'d',sym:'d',name:['Soft D','La D suave'],how:['Between vowels, D is soft, almost like the “th” in “this”.','Entre vocales, la D es suave, casi como la “th” de “this”.'],words:[['nada','nothing'],['todo','everything'],['dedo','finger'],['adiós','goodbye']]}
+ ],
  units:[
   {id:'es1',icon:'👋',name:['Hello!','¡Hola!'],tip:['In Spanish the letter H is always silent: “hola” sounds like “ola”.','En español la H nunca suena.'],
    items:[['Hola','Hello'],['Buenos días','Good morning'],['Buenas tardes','Good afternoon'],['Buenas noches','Good evening / Good night'],['¿Cómo estás?','How are you?'],['Estoy bien, gracias.',"I'm fine, thank you."],['Mucho gusto.','Nice to meet you.'],['Adiós.','Goodbye.']]},

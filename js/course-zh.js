@@ -13,6 +13,16 @@ window.TALVO_COURSE_ZH={
   {id:'restaurant',icon:'🍜',name:['At a restaurant','En un restaurante'],ai:'You are a waiter at a noodle restaurant in China. The student orders a meal.',open:['你好，请坐。你想吃什么？','nǐ hǎo, qǐng zuò. nǐ xiǎng chī shénme?','Hello, please sit. What would you like to eat?']},
   {id:'friend',icon:'🤝',name:['Meet a new friend','Conocer a alguien'],ai:'You are a friendly Chinese student meeting the student for the first time.',open:['你好！我叫小王。你叫什么名字？',"nǐ hǎo! wǒ jiào Xiǎo Wáng. nǐ jiào shénme míngzi?","Hi! I'm Xiao Wang. What's your name?"]}
  ],
+
+ sounds:[
+  {id:'t1',sym:'ˉ',name:['Tone 1 · high flat','Tono 1 · alto y plano'],how:['Hold your voice high and steady, like singing one note.','Mantén la voz alta y estable, como una nota.'],words:[['妈','mā','mom','mamá'],['书','shū','book','libro'],['天','tiān','sky / day','cielo / día'],['鸡','jī','chicken','pollo']]},
+  {id:'t2',sym:'ˊ',name:['Tone 2 · rising','Tono 2 · ascendente'],how:['Rise from middle to high, like asking “what?”.','Sube de medio a alto, como al preguntar “¿qué?”.'],words:[['麻','má','hemp','cáñamo'],['人','rén','person','persona'],['茶','chá','tea','té'],['来','lái','to come','venir']]},
+  {id:'t3',sym:'ˇ',name:['Tone 3 · dip','Tono 3 · bajo'],how:['Fall low, then rise a little. Think of a “hmm, really?” voice.','Baja y sube un poco.'],words:[['马','mǎ','horse','caballo'],['你','nǐ','you','tú'],['好','hǎo','good','bueno'],['水','shuǐ','water','agua']]},
+  {id:'t4',sym:'ˋ',name:['Tone 4 · falling','Tono 4 · descendente'],how:['Drop sharply from high to low, like saying “No!” firmly.','Cae de golpe de alto a bajo, como un “¡No!” firme.'],words:[['骂','mà','to scold','regañar'],['大','dà','big','grande'],['不','bù','no / not','no'],['是','shì','to be','ser']]},
+  {id:'x',sym:'x q j',name:['x, q, j','x, q, j'],how:['Smile and say “sh/ch/j” with the tongue tip behind your lower teeth: xiè (sye), qī (chee), jī (jee).','Sonríe y di “sh/ch/j” con la punta de la lengua detrás de los dientes de abajo.'],words:[['谢谢','xièxie','thank you','gracias'],['七','qī','seven','siete'],['鸡','jī','chicken','pollo'],['西瓜','xīguā','watermelon','sandía']]},
+  {id:'zh',sym:'zh ch sh r',name:['zh, ch, sh, r','zh, ch, sh, r'],how:['Curl the tongue tip back toward the roof of the mouth. “r” is like a soft English “r” mixed with “zh”.','Curva la punta de la lengua hacia atrás.'],words:[['是','shì','to be','ser'],['吃','chī','to eat','comer'],['中国','Zhōngguó','China','China'],['热','rè','hot','caliente']]},
+  {id:'u',sym:'ü',name:['The ü sound','El sonido ü'],how:['Say “ee” and round your lips like for “oo”. Same as French “u”.','Di “i” y redondea los labios como para “u”.'],words:[['女','nǚ','female','mujer'],['绿','lǜ','green','verde'],['去','qù','to go','ir'],['鱼','yú','fish','pez']]}
+ ],
  units:[
   {id:'zh0',icon:'🎵',name:['The 4 tones','Los 4 tonos'],tip:['Tone 1 high and flat (mā), tone 2 rises (má), tone 3 dips down and up (mǎ), tone 4 falls sharply (mà). The tone changes the word!','Tono 1 alto y plano, 2 sube, 3 baja y sube, 4 cae de golpe. ¡El tono cambia la palabra!'],
    items:[['妈','mā','mom','mamá'],['麻','má','hemp','cáñamo'],['马','mǎ','horse','caballo'],['骂','mà','to scold','regañar'],['你好','nǐ hǎo','hello (3rd + 3rd tone: the first becomes 2nd)','hola (3.º + 3.º: el primero sube)']]},

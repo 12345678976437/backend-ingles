@@ -103,7 +103,7 @@ function make(cfg){
   function render(){const r=root();if(!r)return;
     if(quiz)r.innerHTML=quizHtml();
     else if(unit)r.innerHTML=unitHtml();
-    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='vocab'?vocabView():view==='roles'?rolesView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
+    else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='vocab'?vocabView():view==='roles'?rolesView():view==='sounds'?soundsView():view==='dictado'?dictView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
     r.dataset.i18nSkip='1';
     try{window.TalvoCourses&&TalvoCourses.setView(cfg.id,quiz||unit?'learn':view)}catch(e){}
   }
@@ -200,6 +200,36 @@ function make(cfg){
   const scrollChat=()=>{const c=root().querySelector('#lc-chat');if(c)c.scrollTop=c.scrollHeight;const f=root().querySelector('#lc-in');if(f)f.focus()};
 
 
+
+  /* ---------- laboratorio de sonidos ---------- */
+  let snd=null;
+  function soundsView(){
+    if(!snd)return head(T('Sound Lab','Laboratorio de sonidos'),cfg.pinyin?T('Tones and tricky sounds','Tonos y sonidos difíciles'):T('Tricky Spanish sounds','Sonidos difíciles del español'),T('Learn how to make each sound, then say the words and get a score.','Aprende a producir cada sonido y luego di las palabras para recibir una nota.'))
+      +'<div class="lc-units">'+cfg.sounds.map(x=>'<button type="button" class="lc-unit" data-lc-snd="'+x.id+'"><span class="lc-ic lc-sym">'+esc(x.sym)+'</span><span class="lc-ut"><b>'+esc(L2(x.name))+'</b><small>'+x.words.length+' '+T('words','palabras')+'</small></span><span class="lc-st">→</span></button>').join('')+'</div>';
+    const x=snd;
+    return '<button type="button" class="btn" data-lc-sback>← '+T('All sounds','Todos los sonidos')+'</button><h2 class="lc-h">'+esc(L2(x.name))+'</h2><div class="lc-tip">👄 '+esc(L2(x.how))+'</div><div class="lc-list">'+x.words.map((w,i)=>sitem(w,i)).join('')+'</div>';
+  }
+  function sitem(it,i){return '<div class="lc-item"><button type="button" class="lc-play" data-lc-ssay="'+i+'">🔊</button><div class="lc-tx">'+itemBig(it)+'</div><button type="button" class="lc-slow" data-lc-sslow="'+i+'">🐢</button><button type="button" class="lc-mic" data-lc-smic="'+i+'">🎤</button><div class="lc-fb" id="lc-fb-s'+i+'"></div></div>'}
+
+  /* ---------- dictado ---------- */
+  let dic=null;
+  const norm=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}]/gu,'');
+  function sim(a,b){const m=a.length,n=b.length;if(!m||!n)return 0;let p=Array(n+1).fill(0);for(let i=1;i<=m;i++){const c=[0];for(let j=1;j<=n;j++)c[j]=a[i-1]===b[j-1]?p[j-1]+1:Math.max(p[j],c[j-1]);p=c}return p[n]/Math.max(m,n)}
+  function pickDic(){const p=prog(),pool=cfg.units.filter(u=>p[u.id]).flatMap(u=>u.items),src=(pool.length?pool:allItems()).filter(i=>i[0].length>=4||cfg.pinyin);let it;do{it=src[Math.floor(Math.random()*src.length)]}while(src.length>1&&dic&&dic.it===it);dic={it,res:null}}
+  function dictView(){
+    if(!dic)pickDic();
+    let h=head(T('Dictation','Dictado'),T('Write what you hear','Escribe lo que oyes'),T('Listen, then type it'+(cfg.pinyin?' in Chinese characters (or pinyin).':'. Accents count as a small mistake.'),'Escucha y escríbelo'+(cfg.pinyin?' en caracteres (o pinyin).':'. Los acentos cuentan como error pequeño.')))
+     +'<div class="lc-card lc-sp"><div class="lc-row"><button type="button" class="lc-play big" data-lc-dsay2>🔊</button><button type="button" class="lc-slow" data-lc-dslow>🐢</button></div>'
+     +'<form class="lc-form" id="lc-dform"><input id="lc-din" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="'+T('Type here…','Escribe aquí…')+'"'+(dic.res?' disabled':'')+'><button class="btn primary" type="submit"'+(dic.res?' disabled':'')+'>'+T('Check','Revisar')+'</button></form>';
+    if(dic.res){const r=dic.res;h+='<div class="lc-qf '+(r.score>=0.9?'ok':'no')+'" style="text-align:left"><b>'+Math.round(r.score*100)+'%</b> · '+(r.score>=0.9?T('Great listening!','¡Muy buen oído!'):T('Almost. Listen again.','Casi. Escucha otra vez.'))+'<div style="margin-top:6px">'+itemBig(dic.it)+'</div></div><button type="button" class="btn primary" data-lc-dnext style="width:100%;margin-top:10px">'+T('Next','Siguiente')+' →</button>'}
+    return h+'</div>';
+  }
+  function dictCheck(v){
+    const it=dic.it,a=norm(v),b=norm(it[0]),pyN=cfg.pinyin?norm(it[1]):'';
+    let sc=Math.max(sim(a,b),pyN?sim(a,pyN):0);
+    dic.res={score:sc};render();
+  }
+
   /* ---------- juego de roles ---------- */
   function rolesView(){
     if(!role){
@@ -242,6 +272,14 @@ function make(cfg){
       if(g('[data-lc-vexit]')){vs=null;render();return}
       if(g('[data-lc-vsay]')){say(vs.q[vs.i][0]);return}
       if(g('[data-lc-vslow]')){say(vs.q[vs.i][0],-35);return}
+      if(x=g('[data-lc-snd]')){snd=cfg.sounds.find(z=>z.id===x.dataset.lcSnd);render();return}
+      if(g('[data-lc-sback]')){snd=null;render();return}
+      if(x=g('[data-lc-ssay]')){say(snd.words[+x.dataset.lcSsay][0]);return}
+      if(x=g('[data-lc-sslow]')){say(snd.words[+x.dataset.lcSslow][0],-35);return}
+      if(x=g('[data-lc-smic]')){speakItem(snd.words[+x.dataset.lcSmic],root().querySelector('#lc-fb-s'+x.dataset.lcSmic),x);return}
+      if(g('[data-lc-dsay2]')){say(dic.it[0]);return}
+      if(g('[data-lc-dslow]')){say(dic.it[0],-35);return}
+      if(g('[data-lc-dnext]')){pickDic();render();say(dic.it[0]);return}
       if(x=g('[data-lc-role]')){startRole(cfg.roles.find(r=>r.id===x.dataset.lcRole));return}
       if(g('[data-lc-rback]')){role=null;render();return}
       if(x=g('[data-lc-chatmic]')){chatMic(x);return}
@@ -262,9 +300,10 @@ function make(cfg){
       if(g('[data-lc-next]')){quiz.i++;quiz.answered=false;if(quiz.i>=quiz.qs.length){unit=quiz.u}render();const q=quiz.qs[quiz.i];if(q&&q.type==='listen')say(q.it[0]);return}
       if(x=g('[data-lc-tsay]')){say(x.dataset.lcTsay);return}
     });
-    r.addEventListener('submit',e=>{if(e.target.id!=='lc-form')return;e.preventDefault();const i=root().querySelector('#lc-in'),v=i.value.trim();if(v){i.value='';send(v)}});
+    r.addEventListener('submit',e=>{if(e.target.id==='lc-dform'){e.preventDefault();const v=root().querySelector('#lc-din').value.trim();if(v&&dic&&!dic.res)dictCheck(v);return}
+    if(e.target.id!=='lc-form')return;e.preventDefault();const i=root().querySelector('#lc-in'),v=i.value.trim();if(v){i.value='';send(v)}});
   }
-  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;if(v!=='roles')role=null;if(v!=='vocab')vs=null;render()},get(){return view}};
+  const api={open(){bind();render()},view(v){bind();view=v;unit=null;quiz=null;if(v!=='roles')role=null;if(v!=='sounds')snd=null;if(v==='dictado')dic=null;if(v!=='vocab')vs=null;render()},get(){return view}};
   return api;
 }
 
@@ -280,7 +319,7 @@ css.textContent='.lc-intro{color:var(--muted,#9aa3b2);margin:0 0 12px}.lc-tabs{d
 +'.lc-q{font-weight:600;margin:10px 0}.lc-prompt{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}.lc-opts{display:grid;gap:8px;margin-top:14px}.lc-opt{min-height:50px;padding:8px 12px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center}.lc-opt.right{border-color:#5ee6a8;background:rgba(94,230,168,.15)}.lc-opt.wrong{border-color:#ff5c5c;background:rgba(255,92,92,.15)}'
 +'.lc-qf{margin-top:12px;padding:10px;border-radius:6px}.lc-qf.ok{background:rgba(94,230,168,.12)}.lc-qf.no{background:rgba(255,92,92,.12)}.lc-end{text-align:center;padding:20px 0}.lc-big{font-size:40px;color:#ffd166;letter-spacing:6px}'
 +'.lc-chat{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0}.lc-b{max-width:88%;padding:10px 12px;border-radius:10px}.lc-b.me{align-self:flex-end;background:rgba(56,225,255,.15)}.lc-b.tu{align-self:flex-start;background:rgba(255,255,255,.07)}.lc-corr{margin-top:6px;font-size:13px;color:#ffd166}.lc-form{display:flex;gap:8px;margin-top:10px}.lc-form input{flex:1;min-height:44px;padding:0 12px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.7);color:inherit;font-size:16px}';
-css.textContent+='.lc-grade{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.lc-grade button{min-height:48px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.6);color:inherit;font-weight:600}.lc-grade button:nth-child(1){border-color:#ff5c5c}.lc-grade button:nth-child(2){border-color:#ffd166}.lc-grade button:nth-child(3){border-color:#5ee6a8}.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;font-size:22px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
+css.textContent+='.lc-sym{font-weight:700;font-size:18px;min-width:44px;text-align:center}.lc-grade{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.lc-grade button{min-height:48px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.6);color:inherit;font-weight:600}.lc-grade button:nth-child(1){border-color:#ff5c5c}.lc-grade button:nth-child(2){border-color:#ffd166}.lc-grade button:nth-child(3){border-color:#5ee6a8}.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;font-size:22px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
 
 const courses={};
 function init(){
