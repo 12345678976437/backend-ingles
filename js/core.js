@@ -1079,6 +1079,8 @@ $('writing-new-challenge').addEventListener('click',loadWritingChallenge);
 $('writing-skip-challenge').addEventListener('click',()=>{$('writing-challenge-card').style.display='none';updateWritingWordcount()});
 $('login-btn').addEventListener('click',showAuth);
 $('welcome-start').addEventListener('click',()=>openAuthAs(true));
+$$('[data-lp-course]').forEach(b=>b.addEventListener('click',()=>{try{localStorage.setItem('talvo_course',b.dataset.lpCourse)}catch(e){}openAuthAs(true)}));
+const _hb=$('lp-how-btn');if(_hb)_hb.addEventListener('click',e=>{e.preventDefault();const t=$('lp-how');if(t)t.scrollIntoView({behavior:'smooth',block:'start'})});
 $('welcome-login').addEventListener('click',()=>openAuthAs(false));
 $$('#ob-goal-options .ob-option').forEach(b=>b.addEventListener('click',()=>selectObOption('ob-goal-options','learning_goal',b.dataset.val,b)));
 $$('#ob-time-options .ob-option').forEach(b=>b.addEventListener('click',()=>selectObOption('ob-time-options','daily_goal_minutes',parseInt(b.dataset.val,10),b)));
