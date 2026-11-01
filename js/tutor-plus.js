@@ -25,16 +25,16 @@ async function check(div,btn){
     card.innerHTML=d.correcta
       ?'<b>✅ '+T('Looks great!','¡Se ve muy bien!')+'</b>'+(d.mejor?'<div class="tp-l">'+T('Another way to say it','Otra forma de decirlo')+'</div><div class="tp-g">'+esc(d.mejor)+'</div>':'')
       :'<b>✏️ '+T('Tutor correction','Corrección del tutor')+'</b><div class="tp-l">'+T('Your sentence','Tu frase')+'</div><div class="tp-b">'+esc(text)+'</div><div class="tp-l">'+T('Correct form','Forma correcta')+'</div><div class="tp-g">'+esc(d.corregida)+'</div>'+(d.explicacion?'<p>'+esc(d.explicacion)+'</p>':'')+'<button type="button" class="tp-say" data-say="'+esc(d.corregida)+'">🔊 '+T('Listen','Escuchar')+'</button>';
-    div.parentNode.insertBefore(card,div.nextSibling);btn.parentNode.remove();
+    div.parentNode.insertBefore(card,div.nextSibling);btn.parentNode.remove();try{window.PQ&&PQ.react(d.correcta?'celebrando':'motivando')}catch(e){}
     const w=document.getElementById('tutor-messages');if(w)w.scrollTop=w.scrollHeight;
-  }catch(e){btn.disabled=false;btn.textContent='✏️ '+T('Check my English','Revisar mi inglés');C().toast&&C().toast(e.message)}
+  }catch(e){btn.disabled=false;btn.textContent='✏️ '+T('Check my English','Revisar mi inglés');C().toast&&C().toast(e.message);try{window.PQ&&PQ.react('confundida')}catch(x){}}
 }
 async function translate(div,btn){
   btn.disabled=true;btn.textContent='…';
   try{
     const d=await post('/api/traducir',{texto:own(div).trim(),de:'en'});
     const t=document.createElement('div');t.className='tp-tr';t.setAttribute('data-i18n-skip','1');t.textContent=d.translation;
-    btn.parentNode.replaceWith(t);
+    btn.parentNode.replaceWith(t);try{window.PQ&&PQ.react('ensenando')}catch(e){}
   }catch(e){btn.disabled=false;btn.textContent='🌐 '+T('Translate','Traducir');C().toast&&C().toast(e.message)}
 }
 function init(){
