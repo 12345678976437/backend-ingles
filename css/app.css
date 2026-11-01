@@ -1726,3 +1726,27 @@ body:has(#sec-home.active) .mascot-widget{display:none}
   .nav button .nv-d{display:block;flex-basis:100%;padding-left:29px;margin-top:-2px;font-size:11.5px;font-weight:400;color:var(--dim,#7e8aa3);line-height:1.3;white-space:normal}
   .nav button.active .nv-d{color:var(--muted)}
 }
+
+/* ===== Tutor IA renovado ===== */
+#sec-tutor #tutor-category-bar{display:flex!important;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+#sec-tutor #tutor-category-bar::-webkit-scrollbar{display:none}
+#sec-tutor #tutor-category-bar .mode{flex:none;border-radius:999px;padding:0 16px;min-height:38px;white-space:nowrap}
+#sec-tutor .tutor{border-radius:22px;overflow:hidden}
+#sec-tutor .msg{border-radius:18px 18px 18px 6px;padding:12px 15px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#sec-tutor .msg.ai{background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.03));border-color:rgba(255,255,255,.1)}
+#sec-tutor .msg.user{border-radius:18px 18px 6px 18px;background:linear-gradient(135deg,rgba(56,225,255,.2),rgba(113,133,255,.22));border-color:rgba(94,200,255,.35)}
+#sec-tutor .chatinput{gap:8px;padding:8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+#sec-tutor .chatinput .input{border:0;background:transparent;box-shadow:none;min-width:0}
+#sec-tutor .chatinput .btn{border-radius:999px;min-height:40px}
+.tp-bar{margin-top:8px}
+.tp-bar button{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:var(--muted);border-radius:999px;font-size:12px;font-weight:600;padding:6px 12px;min-height:30px}
+.tp-bar button:hover{color:#fff;border-color:var(--cyan)}
+.tp-tr{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.15);color:#9fe9ff;font-size:13.5px}
+.tp-card{max-width:92%;margin:0 0 12px auto;padding:12px 14px;border-radius:16px;border:1px solid rgba(255,209,102,.4);background:linear-gradient(160deg,rgba(255,209,102,.1),rgba(255,255,255,.03));font-size:13.5px}
+.tp-card.ok{border-color:rgba(94,230,168,.45);background:linear-gradient(160deg,rgba(94,230,168,.12),rgba(255,255,255,.03))}
+.tp-l{margin-top:8px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.tp-b{color:#ff9fb0;text-decoration:line-through;text-decoration-color:rgba(255,92,122,.6)}.tp-g{color:#5ee6a8;font-weight:700}
+.tp-card p{margin:8px 0 0;color:var(--muted)}
+.tp-say{margin-top:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600}
+.tp-sug{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+.tp-sug button{border:1px solid rgba(56,225,255,.35);background:rgba(56,225,255,.08);color:#bff3ff;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600}

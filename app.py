@@ -200,6 +200,7 @@ RATE_RULES = {
     "/api/llamada/pistas": (40, 3600),
     "/api/vocabulario/lote": (20, 3600),
     "/api/ajedrez/entrenador": (12, 3600),
+    "/api/tutor/correccion": (60, 3600),
     "/api/idioma/voz": (150, 3600),
     "/api/idioma/pronunciacion": (80, 3600),
     "/api/idioma/tutor": (60, 3600),
@@ -264,7 +265,7 @@ CREDIT_COST = {
     "/api/vocabulario/diario": 1,
     # Funciones nuevas (la voz del escenario y del traductor usa el navegador: costo de audio 0)
     "/api/traducir": 0.3, "/api/rutas/crear": 4, "/api/reto21/crear": 3, "/api/reto21/dia": 1.5, "/api/escenario/nuevo": 1,
-    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3, "/api/idioma/voz": 0.1, "/api/idioma/pronunciacion": 1, "/api/idioma/tutor": 1, "/api/idioma/escuchar": 0.5,
+    "/api/escenario/turno": 1, "/api/escenario/feedback": 3, "/api/llamada/pistas": 0.5, "/api/vocabulario/lote": 0.5, "/api/ajedrez/entrenador": 3, "/api/tutor/correccion": 0.3, "/api/idioma/voz": 0.1, "/api/idioma/pronunciacion": 1, "/api/idioma/tutor": 1, "/api/idioma/escuchar": 0.5,
     "/api/diccionario": 0.3, "/api/clips/tema": 1, "/api/presentacion/guion": 2, "/api/shadowing/tema": 0.5, "/api/reunion/analizar": 6,
 }
 # Interruptor de emergencia: si entre todos los alumnos se gastan estos créditos en un día,
@@ -3795,13 +3796,13 @@ ACTIVITY_TABLES = [
 # Funciones de IA nuevas que no dejan historial propio: se leen de uso_ia (columna ruta)
 _USO_TIPOS = {
     "/api/traducir": "traductor", "/api/diccionario": "diccionario", "/api/escenario/nuevo": "escenario",
-    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/idioma/voz": "idioma_voz", "/api/idioma/pronunciacion": "idioma_pron", "/api/idioma/tutor": "idioma_tutor", "/api/idioma/escuchar": "idioma_stt", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
+    "/api/escenario/turno": "escenario", "/api/escenario/feedback": "escenario", "/api/llamada/pistas": "pistas", "/api/vocabulario/lote": "vocab_lote", "/api/ajedrez/entrenador": "ajedrez", "/api/tutor/correccion": "tutor_corr", "/api/idioma/voz": "idioma_voz", "/api/idioma/pronunciacion": "idioma_pron", "/api/idioma/tutor": "idioma_tutor", "/api/idioma/escuchar": "idioma_stt", "/api/rutas/crear": "ruta_nueva", "/api/reto21/crear": "reto_nuevo", "/api/reto21/dia": "reto_dia",
     "/api/reunion/analizar": "reunion", "/api/shadowing/tema": "shadowing_tema",
     "/api/clips/tema": "clip", "/api/presentacion/guion": "presentacion",
 }
 _USO_LABEL = {
     "/api/chat": "Tutor", "/api/traducir": "Traductor", "/api/diccionario": "Diccionario", "/api/escenario/nuevo": "Rol (nuevo)",
-    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/idioma/voz": "Idiomas (voz)", "/api/idioma/pronunciacion": "Idiomas (pronunciación)", "/api/idioma/tutor": "Idiomas (tutor)", "/api/idioma/escuchar": "Idiomas (micrófono)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
+    "/api/escenario/turno": "Rol (turno)", "/api/llamada/pistas": "Llamada (pistas)", "/api/vocabulario/lote": "Vocabulario (lote)", "/api/ajedrez/entrenador": "Ajedrez (entrenador)", "/api/tutor/correccion": "Tutor (corrección)", "/api/idioma/voz": "Idiomas (voz)", "/api/idioma/pronunciacion": "Idiomas (pronunciación)", "/api/idioma/tutor": "Idiomas (tutor)", "/api/idioma/escuchar": "Idiomas (micrófono)", "/api/llamada/turno": "Llamada (turno)", "/api/escenario/feedback": "Rol (feedback)", "/api/rutas/crear": "Crear ruta", "/api/reto21/crear": "Crear reto 21", "/api/reto21/dia": "Día del reto",
     "/api/reunion/analizar": "Reunión", "/api/shadowing/tema": "Shadowing (tema)", "/api/clips/tema": "Clip (tema)", "/api/presentacion/guion": "Presentación", "/analizar-audio-real": "Análisis de voz",
 }
 CALL_MARK = "[Resumen de llamada]"
@@ -5292,6 +5293,29 @@ def tutor():
         return jsonify({"ok": True, "respuesta": reply})
     except Exception as exc:
         return json_error(_err_log("El tutor no pudo responder", exc), 500)
+
+
+@app.post("/api/tutor/correccion")
+def tutor_correccion():
+    """Revisa UNA frase del alumno en inglés y devuelve la forma correcta con una explicación breve en español."""
+    user, error = authenticated_user()
+    if error:
+        return json_error(error[0], error[1])
+    text = _short((request.get_json(silent=True) or {}).get("texto"), 400)
+    if len(text.split()) < 2:
+        return json_error("Escribe una frase un poco más larga para revisarla.")
+    try:
+        d = ai_json(
+            "You are a kind English teacher for Spanish speakers. Check ONE sentence written by a learner. Ignore capitalization and missing final punctuation unless they matter. "
+            "Return JSON only: {\"correcta\": true if the sentence is natural and correct, \"corregida\": the corrected sentence (same as input if correct), "
+            "\"explicacion\": one or two short sentences IN SPANISH explaining the main mistake (empty string if correct), "
+            "\"mejor\": optionally one more natural way to say it in English (empty string if not needed)}.",
+            text, temperature=0.2)
+    except Exception as exc:
+        print(f"[TUTOR CORR] {exc}")
+        return json_error("No se pudo revisar ahora. Inténtalo de nuevo.", 500)
+    return jsonify({"ok": True, "correcta": bool(d.get("correcta")), "corregida": _short(d.get("corregida"), 400),
+                    "explicacion": _short(d.get("explicacion"), 300), "mejor": _short(d.get("mejor"), 300)})
 
 
 @app.get("/api/maestro/temario")
