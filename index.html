@@ -114,24 +114,17 @@ window.TalvoTheme.apply(window.TalvoTheme.current());</script>
 <div id="locked-view" class="lock" style="display:none"><h2>Tu prueba gratis terminó</h2><p>Sigue practicando por solo <b>$79 MXN/mes</b>. Así puedes activarte:</p><div class="notice" style="text-align:left;line-height:1.7"><b>1. Transfiere $79 MXN</b><br>Banco: <b>Banco Azteca</b><br>Tarjeta: <b>4027 6658 8177 6406</b><br>Titular: <b>MARIA</b><br><br><b>2. Manda tu comprobante por WhatsApp</b><br>Te activamos el acceso en menos de 24 horas.</div><a class="btn primary" style="display:inline-block;margin-top:12px;text-decoration:none;text-align:center" href="https://wa.me/529911093870?text=Hola%2C%20ya%20hice%20mi%20pago%20de%20%2479%20MXN%2C%20aqui%20esta%20mi%20comprobante%3A" target="_blank" rel="noopener">📲 Enviar comprobante por WhatsApp</a><button type="button" class="btn" id="locked-login" style="margin-top:8px">Sign in again</button></div>
 <div id="app-content" class="page" style="display:none">
 <section class="section active" id="sec-home"><div class="home-grid">
-<div class="home-head">
-<div class="eyebrow">Home</div>
-<h1 class="page-title" id="home-greeting">Good day! 👋</h1>
-<p class="page-desc">Ready to practice today?</p><button type="button" class="btn" data-tour="1" style="margin-top:6px">🎓 Tutorial with Palanqueta</button>
-</div>
+<div class="home-head hh2"><div class="hh-t"><h1 class="page-title" id="home-greeting">Good day! 👋</h1><p class="page-desc">What will we learn today?</p><button type="button" class="hh-tour" data-tour="1">🎓 Tutorial with Palanqueta</button></div><img class="hh-pq" src="palanqueta-mascota.webp" alt="" draggable="false"></div>
 <button type="button" class="next-step" id="home-next"><span class="ns-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span><span class="ns-text"><small id="home-next-label">Next step</small><b id="home-next-title"><span data-pq="sm" style="display:block"></span></b></span><span class="ns-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><div class="card home-review" id="home-review" style="display:none"></div>
-<div class="card home-console">
-  <div class="console-stats">
-    <div class="badges">
-      <span class="badge" id="home-streak" style="font-size:13px;padding:8px 12px;color:#ffb58f;border-color:rgba(255,122,69,.4)">🔥 0 day streak</span>
-      <span class="badge" id="home-xp" style="font-size:13px;padding:8px 12px">⭐ 0 XP · Level 1</span>
-    </div>
-    <div class="badges" id="home-week" style="justify-content:flex-start;gap:8px;margin-top:0"></div>
+<div class="hstats"><div class="hs"><b id="hs-xp">0</b><small>XP</small></div><div class="hs"><b id="hs-lv">1</b><small>Level</small></div><div class="hs hot"><b id="hs-st">0</b><small>Day streak</small></div></div>
+<div class="card home-console hc2">
+  <div class="hc-ring" id="home-ring" style="--p:0"><b id="home-goal-pct">0%</b></div>
+  <div class="hc-r">
+    <div class="hc-t">Today's goal</div>
+    <div class="badges" id="home-week" style="justify-content:flex-start;gap:6px;margin:8px 0 0"></div>
   </div>
-  <div class="console-goal">
-    <div class="metric-head"><span>Today's goal</span><span id="home-goal-pct">0%</span></div>
-    <div class="bar" style="height:12px"><div class="fill" id="home-goal-fill" style="width:0%"></div></div>
-  </div>
+  <div class="console-stats" style="display:none"><span class="badge" id="home-streak"></span><span class="badge" id="home-xp"></span></div>
+  <div class="bar" style="display:none"><div class="fill" id="home-goal-fill" style="width:0%"></div></div>
 </div>
 <div id="home-reto"></div><div id="home-maestra" class="home-maestra"><button type="button" class="hm-card" data-m="teacher"><span class="hm-ic">🎓</span><span><b>Aprende con tu maestra</b><small>Te explica en español y practicas por voz</small></span></button><button type="button" class="hm-card" data-m="exam"><span class="hm-ic">📝</span><span><b>Examen de nivel</b><small>8 preguntas por llamada · te dice tu nivel</small></span></button></div>
 <div class="home-tiles">

@@ -107,7 +107,7 @@ var PAIRS=[
 /* inicio */
 ['Good day! 👋','¡Buen día! 👋'],['Ready to improve your English today?','¿Listo para mejorar tu inglés hoy?'],
 ['Next step','Siguiente paso'],['Loading your next lesson…','Cargando tu siguiente lección…'],['Start with a free practice','Empieza con una práctica libre'],
-["Today's goal","Meta de hoy"],['Continue learning','Sigue aprendiendo'],
+["Today's goal","Meta de hoy"],['Day streak','Racha'],['Level','Nivel'],['What will we learn today?','¿Qué aprenderemos hoy?'],['🎓 Tutorial with Palanqueta','🎓 Tutorial con Palanqueta'],['Continue learning','Sigue aprendiendo'],
 ['Practice speaking','Practica hablar'],['Write with feedback','Escribe con retroalimentación'],['Read & explain','Lee y explica'],['Listen & transcribe','Escucha y transcribe'],['Talk out loud','Habla en voz alta'],['Build your word bank','Arma tu banco de palabras'],
 ['Your skills','Tus habilidades'],['Recent achievements','Logros recientes'],["Today's vocabulary",'Vocabulario de hoy'],['Loading...','Cargando...'],['No words yet.','Aún no hay palabras.'],['Review words →','Repasar palabras →'],['Your vocabulary','Tu vocabulario'],
 ['🗣️ Speaking','🗣️ Hablar'],

@@ -1690,3 +1690,27 @@ body.is-offline .nav-needs-net{opacity:.45}
 body[data-course="chess"] .mascot-widget{display:none}
 @media (max-width:899px){.mascot-widget{width:72px;right:10px;bottom:calc(var(--tab-h,64px) + var(--safe-b,0px) + 8px);opacity:.92}}
 #sec-ajedrez>.eyebrow,#sec-ajedrez>.page-title,#sec-ajedrez>.page-desc{display:none}
+
+/* ===== Inicio renovado ===== */
+.hh2{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-bottom:4px}
+.hh-t{flex:1;min-width:0}.hh2 .page-title{margin:0;font-size:26px;line-height:1.15}.hh2 .page-desc{margin:4px 0 8px}
+.hh-tour{border:0;background:none;color:var(--cyan);font-size:12.5px;font-weight:600;padding:4px 0}
+.hh-pq{width:92px;height:auto;flex:none;margin-bottom:-6px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}
+.next-step{border-radius:20px!important;background:radial-gradient(120% 160% at 100% 0,rgba(113,133,255,.38),transparent 60%),linear-gradient(135deg,#123760,#0d1c3a)!important;border:1px solid rgba(94,200,255,.4)!important;box-shadow:0 10px 30px rgba(0,0,0,.35),0 0 30px rgba(56,225,255,.1)}
+.hstats{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.hs{padding:12px 6px;text-align:center;border-radius:16px;background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.09)}
+.hs b{display:block;font-family:var(--display);font-size:24px;line-height:1.1;background:linear-gradient(135deg,#38e1ff,#a08bff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hs.hot b{background:linear-gradient(135deg,#ffb347,#ff6b4a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hs small{color:var(--muted);font-size:11.5px}
+.hc2{display:flex!important;align-items:center;gap:16px;border-radius:20px;padding:16px!important}
+.hc2::before,.hc2::after{display:none!important}
+.hc-ring{--p:0;position:relative;flex:none;width:84px;height:84px;border-radius:50%;background:conic-gradient(#38e1ff calc(var(--p)*1%),rgba(255,255,255,.1) 0);display:grid;place-items:center}
+.hc-ring::before{content:"";position:absolute;inset:9px;border-radius:50%;background:#0c1426}
+.hc-ring b{position:relative;font-family:var(--display);font-size:18px}
+.hc-r{flex:1;min-width:0}.hc-t{font-weight:700;font-size:14px}
+.tile{border-radius:16px!important}.tile svg{width:38px;height:38px;padding:8px;border-radius:12px;background:rgba(56,225,255,.1);border:1px solid rgba(56,225,255,.2)}
+.home-maestra .hm-card{border-radius:18px}
+.hh-pq{width:68px}
+.hc2 #home-week{gap:2px!important;flex-wrap:nowrap}.hc2 .day-chip{width:27px}.hc2 .day-chip .dot{width:24px;height:24px}
+.hc-ring{width:78px;height:78px}
+body:has(#sec-home.active) .mascot-widget{display:none}
