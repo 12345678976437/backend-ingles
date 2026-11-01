@@ -1750,3 +1750,5 @@ body:has(#sec-home.active) .mascot-widget{display:none}
 .tp-say{margin-top:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600}
 .tp-sug{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
 .tp-sug button{border:1px solid rgba(56,225,255,.35);background:rgba(56,225,255,.08);color:#bff3ff;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600}
+
+.hh-pq{width:104px!important;margin-bottom:-4px}
