@@ -44,9 +44,9 @@ function askLocal(msg,prog){
 
 /* ---------- tablero ---------- */
 function boardHTML(){
-  let h='<div class="cb" data-i18n-skip>';
+  let h='<div class="cb-frame" data-i18n-skip><div class="cb">';
   for(let i=0;i<64;i++)h+='<div class="cb-sq" data-i="'+i+'"></div>';
-  return h+'</div>';
+  return h+'</div></div>';
 }
 class Board{
   constructor(el,onClick){this.el=el;this.flip=false;this.onClick=onClick;this.st={};el.innerHTML=boardHTML();
@@ -64,7 +64,7 @@ class Board{
       if(st.check===name)cls.push('chk');
       if(st.bad===name)cls.push('bad');
       c.className=cls.join(' ');c.dataset.sq=name;
-      let inner=p?'<span class="cb-p '+(p.color==='w'?'w':'b')+'">'+GLYPH[p.type]+'︎</span>':'';
+      let inner=p?'<span class="cb-p'+(st.last&&st.last[1]===name?' mv':'')+'">'+(window.ChessArt?ChessArt.piece(p.type,p.color):GLYPH[p.type])+'</span>':'';
       if(f===0)inner+='<i class="cb-r">'+(rank+1)+'</i>';
       if(r===7)inner+='<i class="cb-f">'+'abcdefgh'[file]+'</i>';
       c.innerHTML=inner;
@@ -101,14 +101,18 @@ function render(){
 }
 
 /* =================== JUGAR =================== */
+const AVATAR=[null,'🐣','🐥','🐔','🦊','🦅','🐉','👑'];
+const stats=()=>lsGet('talvo_chess_stats',{w:0,d:0,l:0});
+const ELO=[0,400,700,1000,1300,1600,1900,2200];
 function playSetup(){
-  const body=$('ch-body');
-  body.innerHTML='<div class="card ch-setup" data-i18n-skip><h3>'+T('Play against the computer','Juega contra la computadora')+'</h3>'
-   +'<p class="ch-sub">'+T('Pick a level. Level 1 makes mistakes on purpose; level 7 does not forgive them.','Elige un nivel. El 1 se equivoca a propósito; el 7 no perdona errores.')+'</p>'
-   +'<div class="ch-levels">'+LEVELS.slice(1).map((n,i)=>'<button type="button" class="mode'+(S.level===i+1?' active':'')+'" data-lv="'+(i+1)+'"><b>'+(i+1)+'</b><small>'+esc(L2(n))+'</small></button>').join('')+'</div>'
-   +'<div class="ch-sub" style="margin-top:12px">'+T('Your color','Tu color')+'</div>'
-   +'<div class="modebar" style="grid-template-columns:repeat(3,1fr)">'+[['w',T('⚪ White','⚪ Blancas')],['b',T('⚫ Black','⚫ Negras')],['r',T('🎲 Random','🎲 Al azar')]].map(x=>'<button type="button" class="mode'+(S.color===x[0]?' active':'')+'" data-col="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'
-   +'<button type="button" class="btn primary" id="ch-start" style="margin-top:14px;width:100%">'+T('Start game','Empezar partida')+'</button></div>';
+  const body=$('ch-body'),st=stats(),n=st.w+st.d+st.l;
+  const col=[['w',T('White','Blancas'),'w'],['b',T('Black','Negras'),'b'],['r',T('Random','Al azar'),'r']];
+  body.innerHTML='<div class="ch-hero" data-i18n-skip><div class="ch-hero-t"><span class="ch-kick">'+T('Play','Jugar')+'</span><h2>'+T('Challenge the computer','Reta a la computadora')+'</h2><p>'+T('7 levels, from “makes mistakes on purpose” to “does not forgive”.','7 niveles: del que se equivoca a propósito al que no perdona.')+'</p></div>'
+   +'<div class="ch-hero-p">'+ChessArt.piece('n','w')+'</div></div>'
+   +'<div class="ch-stats" data-i18n-skip><div><b>'+st.w+'</b><small>'+T('Wins','Victorias')+'</small></div><div><b>'+st.d+'</b><small>'+T('Draws','Tablas')+'</small></div><div><b>'+st.l+'</b><small>'+T('Losses','Derrotas')+'</small></div><div><b>'+(n?Math.round(st.w/n*100):0)+'%</b><small>'+T('Win rate','Victorias')+'</small></div></div>'
+   +'<div class="ch-sec" data-i18n-skip><h3>'+T('Choose your opponent','Elige a tu rival')+'</h3><div class="ch-lvs">'+LEVELS.slice(1).map((nm,i)=>{const l=i+1;return '<button type="button" class="ch-lv-c'+(S.level===l?' on':'')+'" data-lv="'+l+'"><span class="ch-av">'+AVATAR[l]+'</span><span class="ch-lt"><b>'+esc(L2(nm))+'</b><small>~'+ELO[l]+' · '+T('Level','Nivel')+' '+l+'</small></span><span class="ch-pips">'+Array.from({length:7},(_,k)=>'<i'+(k<l?' class="on"':'')+'></i>').join('')+'</span></button>'}).join('')+'</div></div>'
+   +'<div class="ch-sec" data-i18n-skip><h3>'+T('Your side','Tu bando')+'</h3><div class="ch-cols">'+col.map(x=>'<button type="button" class="ch-col'+(S.color===x[0]?' on':'')+'" data-col="'+x[0]+'"><span class="ch-cp">'+(x[2]==='r'?'<b>🎲</b>':ChessArt.piece('k',x[2]))+'</span><small>'+x[1]+'</small></button>').join('')+'</div></div>'
+   +'<button type="button" class="btn primary ch-go" id="ch-start" data-i18n-skip>♟ '+T('Start game','Empezar partida')+'</button>';
   body.querySelectorAll('[data-lv]').forEach(b=>b.onclick=()=>{S.level=+b.dataset.lv;lsSet('talvo_chess_level',S.level);playSetup()});
   body.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>{S.color=b.dataset.col;lsSet('talvo_chess_color',S.color);playSetup()});
   $('ch-start').onclick=newGame;
@@ -119,17 +123,29 @@ function newGame(){
   playView();
   if(S.g.turn()!==S.mine)engineTurn();
 }
+function playerCard(top){
+  const me=top?S.mine==='w'?'b':'w':S.mine;      /* color de quien se muestra en esta tarjeta */
+  const isMe=me===S.mine;
+  return '<div class="ch-pl'+(isMe?' me':'')+'" id="ch-pl-'+(top?'t':'b')+'" data-col="'+me+'"><span class="ch-av">'+(isMe?'🙂':AVATAR[S.level])+'</span><span class="ch-pn"><b>'+(isMe?T('You','Tú'):esc(L2(LEVELS[S.level])))+'</b><small id="ch-cap-'+(top?'t':'b')+'"></small></span><span class="ch-turn" id="ch-turn-'+(top?'t':'b')+'"></span></div>';
+}
 function playView(){
   const body=$('ch-body');
-  body.innerHTML='<div class="ch-game" data-i18n-skip><div class="ch-top"><b id="ch-status"></b><span class="ch-lv">'+T('Level','Nivel')+' '+S.level+' · '+esc(L2(LEVELS[S.level]))+'</span></div>'
-   +'<div id="ch-board"></div><div class="ch-msg" id="ch-msg"></div>'
-   +'<div class="ch-ctl"><button type="button" class="btn" id="ch-undo">↩ '+T('Undo','Deshacer')+'</button><button type="button" class="btn" id="ch-hint">💡 '+T('Hint','Pista')+'</button><button type="button" class="btn" id="ch-flip">🔄 '+T('Flip','Girar')+'</button><button type="button" class="btn" id="ch-resign">🏳️ '+T('Resign','Rendirse')+'</button></div>'
+  body.innerHTML='<div class="ch-game" data-i18n-skip>'+playerCard(true)+'<div id="ch-board"></div>'+playerCard(false)
+   +'<div class="ch-msg" id="ch-msg"></div>'
+   +'<div class="ch-ctl ch-ctl2"><button type="button" class="btn" id="ch-undo"><i>↩</i><span>'+T('Undo','Deshacer')+'</span></button><button type="button" class="btn" id="ch-hint"><i>💡</i><span>'+T('Hint','Pista')+'</span></button><button type="button" class="btn" id="ch-flip"><i>🔄</i><span>'+T('Flip','Girar')+'</span></button><button type="button" class="btn" id="ch-resign"><i>🏳</i><span>'+T('Resign','Rendirse')+'</span></button></div>'
    +'<div class="ch-moves" id="ch-moves"></div><div id="ch-end"></div></div>';
   S.bd=new Board($('ch-board'),playClick);S.bd.flip=S.mine==='b';
   $('ch-undo').onclick=undo;$('ch-hint').onclick=hint;$('ch-flip').onclick=()=>{S.bd.flip=!S.bd.flip;refresh()};
   $('ch-resign').onclick=()=>{if(S.over)return;if(confirm(T('Resign this game?','¿Rendirte en esta partida?')))finish('resign')};
   refresh();if(S.over)showEnd();
 }
+const VAL={p:1,n:3,b:3,r:5,q:9};
+function capturedHTML(color){   /* piezas que "color" ha capturado */
+  const cap=S.g.history({verbose:true}).filter(m=>m.captured&&m.color===color).map(m=>m.captured).sort((a,b)=>VAL[b]-VAL[a]);
+  const enemy=color==='w'?'b':'w';
+  return cap.map(t=>'<span class="ch-capp">'+ChessArt.piece(t,enemy)+'</span>').join('');
+}
+function matDiff(){let d=0;S.g.history({verbose:true}).forEach(m=>{if(m.captured)d+=(m.color==='w'?1:-1)*VAL[m.captured]});return d}
 function statusText(){
   const g=S.g;if(S.over)return S.result;
   if(S.busy)return T('Computer is thinking…','La computadora está pensando…');
@@ -138,7 +154,9 @@ function statusText(){
 function refresh(){
   if(!S.bd)return;
   S.bd.draw(S.g,{sel:S.sel,last:S.last,tgt:S.tgt,hint:S.hint,check:kingSq(S.g)});
-  const st=$('ch-status');if(st)st.textContent=statusText();
+  const d=matDiff();
+  [['t',S.mine==='w'?'b':'w'],['b',S.mine]].forEach(([k,col])=>{const el=$('ch-cap-'+k);if(el){const adv=col==='w'?d:-d;el.innerHTML=capturedHTML(col)+(adv>0?'<em>+'+adv+'</em>':'')||''}const t=$('ch-turn-'+k);if(t){const act=!S.over&&S.g.turn()===col;t.className='ch-turn'+(act?' on':'');t.textContent=act?(S.busy&&col!==S.mine?T('thinking…','pensando…'):T('to move','mueve')):''}});
+  const pls=document.querySelectorAll('.ch-pl');pls.forEach(p=>p.classList.toggle('act',!S.over&&S.g.turn()===p.dataset.col));
   const mv=S.g.history();let h='';for(let i=0;i<mv.length;i+=2)h+='<span class="n">'+(i/2+1)+'.</span><span>'+esc(mv[i])+'</span><span>'+esc(mv[i+1]||'')+'</span>';
   const m=$('ch-moves');if(m){m.innerHTML=h||'<small>'+T('Moves will appear here.','Aquí aparecerán las jugadas.')+'</small>';m.scrollTop=m.scrollHeight}
 }
@@ -158,7 +176,7 @@ function tryMove(from,to){
 }
 function promoChoose(cb){
   const el=document.createElement('div');el.className='ch-promo';
-  el.innerHTML='<div class="ch-promo-in"><b>'+T('Promote to…','Corona a…')+'</b><div>'+['q','r','b','n'].map(p=>'<button type="button" data-p="'+p+'"><span class="cb-p '+(S.mine==='w'||S.tab!=='play'?'w':'b')+'">'+GLYPH[p]+'︎</span></button>').join('')+'</div></div>';
+  el.innerHTML='<div class="ch-promo-in"><b>'+T('Promote to…','Corona a…')+'</b><div>'+['q','r','b','n'].map(p=>'<button type="button" data-p="'+p+'"><span class="cb-p" style="display:block;width:52px;height:52px">'+ChessArt.piece(p,S.mine==='w'||S.tab!=='play'?'w':'b')+'</span></button>').join('')+'</div></div>';
   document.body.appendChild(el);
   el.addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b)return;el.remove();cb(b.dataset.p)});
 }
@@ -213,14 +231,18 @@ function finish(why){
   else if(g.isThreefoldRepetition())txt=T('Draw by repetition.','Tablas por repetición.');
   else if(g.isInsufficientMaterial())txt=T('Draw: not enough pieces to mate.','Tablas: no hay material para dar mate.');
   else txt=T('Draw.','Tablas.');
-  S.result=txt;refresh();showEnd();
+  S.result=txt;const _w=g.isCheckmate()?(g.turn()!==S.mine):null;const _s=stats();if(why==='resign'||_w===false)_s.l++;else if(_w===true)_s.w++;else _s.d++;lsSet('talvo_chess_stats',_s);S.won=_w===true;S.draw=_w===null&&why!=='resign';refresh();showEnd();
   try{window.track&&window.track('ajedrez_fin','ajedrez',{nivel:S.level,res:g.isCheckmate()?(g.turn()===S.mine?'perdio':'gano'):(why||'tablas')})}catch(e){}
 }
 function showEnd(){
   const el=$('ch-end');if(!el)return;
-  el.innerHTML='<div class="card ch-endcard"><h3>'+esc(S.result)+'</h3><div class="ch-ctl"><button type="button" class="btn primary" id="ch-review">'+T('🔍 Review my game','🔍 Revisar mi partida')+'</button><button type="button" class="btn" id="ch-again">'+T('Play again','Jugar otra vez')+'</button></div></div>';
+  const win=S.won,draw=!!S.draw;
+  el.innerHTML='<div class="ch-endcard '+(win?'win':draw?'draw':'loss')+'"><div class="ch-trophy">'+(win?'🏆':draw?'🤝':'💪')+'</div><h3>'+esc(S.result)+'</h3><p>'+(win?T('Great game! Review it to see your best moments.','¡Gran partida! Revísala para ver tus mejores momentos.'):draw?T('A fair result. See what could have been better.','Resultado justo. Mira qué se pudo mejorar.'):T('Every loss teaches something. Review it with the coach.','Cada derrota enseña algo. Revísala con el entrenador.'))+'</p>'
+   +'<div class="ch-ctl"><button type="button" class="btn primary" id="ch-review">🔍 '+T('Review my game','Revisar mi partida')+'</button><button type="button" class="btn" id="ch-rematch">♟ '+T('Rematch','Revancha')+'</button><button type="button" class="btn" id="ch-again">'+T('New game','Nueva partida')+'</button></div></div>';
   $('ch-again').onclick=()=>{S.g=null;S.over=false;playSetup()};
+  $('ch-rematch').onclick=newGame;
   $('ch-review').onclick=startReview;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 /* =================== REVISAR PARTIDA =================== */
@@ -283,13 +305,15 @@ async function askCoach(bad){
 }
 
 /* =================== APRENDER =================== */
+function ring(p,label){const r=26,L=2*Math.PI*r;return '<div class="ch-ring"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="'+r+'" class="bg"/><circle cx="32" cy="32" r="'+r+'" class="fg" stroke-dasharray="'+(L*p).toFixed(1)+' '+L.toFixed(1)+'" transform="rotate(-90 32 32)"/></svg><b>'+label+'</b></div>'}
 function learnList(){
   const body=$('ch-body'),dn=done(),cats=window.CHESS_CATS||{},ls=window.CHESS_LESSONS||[];
-  const total=ls.length,n=ls.filter(l=>dn[l.id]).length;
-  let h='<div class="card" data-i18n-skip><div class="eyebrow">'+T('Chess school','Escuela de ajedrez')+'</div><h3>'+T('From zero to your first checkmate','De cero a tu primer jaque mate')+'</h3><div class="bar"><div class="fill" style="width:'+Math.round(n/Math.max(1,total)*100)+'%"></div></div><p class="ch-sub">'+n+' / '+total+' '+T('lessons done','lecciones hechas')+'</p></div>';
+  const total=ls.length,n=ls.filter(l=>dn[l.id]).length,nextL=ls.find(l=>!dn[l.id]);
+  let h='<div class="ch-hero" data-i18n-skip><div class="ch-hero-t"><span class="ch-kick">'+T('Chess school','Escuela de ajedrez')+'</span><h2>'+T('From zero to your first checkmate','De cero a tu primer jaque mate')+'</h2><p>'+n+'/'+total+' '+T('lessons completed','lecciones completadas')+'</p></div>'+ring(total?n/total:0,Math.round(total?n/total*100:0)+'%')+'</div>'
+   +(nextL?'<button type="button" class="ch-cont" data-les="'+nextL.id+'" data-i18n-skip><span class="ch-cont-i">'+ChessArt.piece('p','w')+'</span><span><small>'+(n?T('Continue','Continuar'):T('Start here','Empieza aquí'))+'</small><b>'+esc(L2(nextL.t))+'</b></span><i>→</i></button>':'<div class="ch-endcard win" data-i18n-skip><div class="ch-trophy">🏆</div><h3>'+T('You finished the school!','¡Terminaste la escuela!')+'</h3></div>');
   Object.keys(cats).forEach(k=>{
-    const group=ls.filter(l=>l.cat===k);if(!group.length)return;
-    h+='<div class="card" data-i18n-skip><h4>'+esc(L2(cats[k]))+'</h4>'+group.map(l=>'<button type="button" class="ch-les'+(dn[l.id]?' ok':'')+'" data-les="'+l.id+'"><span>'+(dn[l.id]?'✓':'♟')+'</span><b>'+esc(L2(l.t))+'</b></button>').join('')+'</div>';
+    const group=ls.filter(l=>l.cat===k);if(!group.length)return;const dc=group.filter(l=>dn[l.id]).length;
+    h+='<div class="ch-sec" data-i18n-skip><h3>'+esc(L2(cats[k]))+' <small>'+dc+'/'+group.length+'</small></h3><div class="ch-nodes">'+group.map((l,i)=>'<button type="button" class="ch-node'+(dn[l.id]?' ok':'')+(nextL&&nextL.id===l.id?' now':'')+'" data-les="'+l.id+'"><span class="ch-nb">'+(dn[l.id]?'✓':i+1)+'</span><b>'+esc(L2(l.t))+'</b></button>').join('')+'</div></div>';
   });
   body.innerHTML=h;
   body.querySelectorAll('[data-les]').forEach(b=>b.onclick=()=>openLesson(b.dataset.les));
@@ -344,8 +368,8 @@ function lessonMove(from,to,promo){
 /* =================== PROBLEMAS =================== */
 function puzzlesView(){
   const body=$('ch-body'),P=window.CHESS_PUZZLES||{m1:[],m2:[]},pr=pzProg();
-  const modes=[['m1',T('Mate in 1','Mate en 1')],['m2',T('Mate in 2','Mate en 2')]];
-  body.innerHTML='<div class="modebar ch-tabs" style="margin-bottom:10px">'+modes.map(m=>'<button type="button" class="mode'+(S.pzMode===m[0]?' active':'')+'" data-pzm="'+m[0]+'">'+m[1]+' <small>'+Math.min(pr[m[0]]||0,P[m[0]].length)+'/'+P[m[0]].length+'</small></button>').join('')+'</div><div id="pz-body"></div>';
+  const modes=[['m1',T('Mate in 1','Mate en 1'),'♚'],['m2',T('Mate in 2','Mate en 2'),'♛']];
+  body.innerHTML='<div class="ch-pzs" data-i18n-skip>'+modes.map(m=>{const d=Math.min(pr[m[0]]||0,P[m[0]].length),t=P[m[0]].length;return '<button type="button" class="ch-pzm'+(S.pzMode===m[0]?' on':'')+'" data-pzm="'+m[0]+'">'+ring(t?d/t:0,m[2])+'<span><b>'+m[1]+'</b><small>'+d+'/'+t+'</small></span></button>'}).join('')+'</div><div id="pz-body"></div>';
   body.querySelectorAll('[data-pzm]').forEach(b=>b.onclick=()=>{S.pzMode=b.dataset.pzm;lsSet('talvo_chess_pzmode',S.pzMode);S.pz=null;puzzlesView()});
   openPuzzle();
 }
