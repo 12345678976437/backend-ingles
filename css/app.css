@@ -1855,3 +1855,16 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .lc-pq.big{width:180px}.lc-pq.mid{width:136px}
 .lp-c img{width:70%;max-width:190px}
 @media(max-width:700px){.mascot-widget.pq-poses{width:116px}.hh-pq{width:112px!important}.lc-hero-art,.lc-hero .lc-pq.hero{width:128px}.lp-c img{width:66%}.lc-mark{font-size:68px}}
+
+/* ===== Mis aprendizajes (Inicio) ===== */
+.home-courses{margin:6px 0 4px}
+.hc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hc-c{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:inherit;text-align:left;cursor:pointer;min-width:0;transition:border-color .2s,background .2s}
+.hc-c:hover{border-color:var(--line-strong);background:rgba(255,255,255,.05)}
+.hc-c[aria-current="true"]{border-color:var(--line-strong)}
+.hc-b{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:8px;color:#fff}
+.hc-b svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.hc-c[data-cc="en"] .hc-b{background:linear-gradient(135deg,#38a8ff,#6a7bff)}.hc-c[data-cc="es"] .hc-b{background:linear-gradient(135deg,#f0a35e,#d65c3c)}.hc-c[data-cc="zh"] .hc-b{background:linear-gradient(135deg,#d6322e,#a8231f)}.hc-c[data-cc="chess"] .hc-b{background:linear-gradient(135deg,#3fbf8a,#2a7d64)}
+.hc-x{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.hc-x b{font-size:14px}.hc-x small{font-size:11px;color:var(--muted,#9aa3b2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hc-p{display:block;height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}.hc-p u{display:block;height:100%;background:var(--signal);text-decoration:none}
+@media(min-width:900px){.hc-grid{grid-template-columns:repeat(4,1fr)}}
