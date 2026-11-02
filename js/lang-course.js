@@ -162,6 +162,8 @@ function make(cfg){
   function answer(i,btn){
     const q=quiz.qs[quiz.i];if(quiz.answered)return;quiz.answered=true;
     const right=q.opts[i]===q.it;if(right)quiz.ok++;
+    quiz.st=right?Math.max(1,(quiz.st||0)+1):Math.min(-1,(quiz.st||0)-1);
+    try{if(window.PQ&&quiz.st===-2)window.PQ.moment('confundida',T('Two in a row missed. Listen again, slowly.','Van dos seguidas falladas. Escucha otra vez, despacio.'));else if(window.PQ&&quiz.st===4)window.PQ.moment('sorprendida',T('4 in a row! You’re on fire.','¡4 seguidas! Vas muy bien.'))}catch(e){}
     root().querySelectorAll('.lc-opt').forEach((b,k)=>{b.disabled=true;if(q.opts[k]===q.it)b.classList.add('right')});
     if(!right)btn.classList.add('wrong');
     const fb=root().querySelector('#lc-qfb');
@@ -187,7 +189,7 @@ function make(cfg){
         if(!d.heard){fb.innerHTML='<span class="lc-bad">'+T('I could not hear you. Try again closer to the mic.','No te oí. Inténtalo más cerca del micrófono.')+'</span>';return}
         const cls=d.score>=80?'good':d.score>=60?'mid':'bad';
         fb.innerHTML='<span class="lc-score '+cls+'">'+d.score+'</span> '+(d.words||[]).map(w=>'<span class="lc-w '+(w.accuracy>=80?'good':w.accuracy>=60?'mid':'bad')+'">'+esc(w.word)+'</span>').join(' ')
-          +'<div class="lc-muted">'+(d.score>=80?T('Excellent!','¡Excelente!'):d.score>=60?T('Good. Listen again and repeat.','Bien. Escucha otra vez y repite.'):T('Listen with 🐢 and try again.','Escucha con 🐢 e inténtalo otra vez.'))+'</div>';
+          +'<div class="lc-muted">'+(d.score>=80?T('Excellent!','¡Excelente!'):d.score>=60?T('Good. Listen again and repeat.','Bien. Escucha otra vez y repite.'):T('Use the 0.7× button and try again.','Usa el botón 0.7× e inténtalo otra vez.'))+'</div>';
         track('pronunciacion',String(d.score));
       }catch(e){fb.textContent=e.message||T('Could not score now.','No se pudo evaluar ahora.')}};
     mr.start();
