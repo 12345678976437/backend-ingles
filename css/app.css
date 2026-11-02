@@ -1868,3 +1868,14 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .hc-x{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.hc-x b{font-size:14px}.hc-x small{font-size:11px;color:var(--muted,#9aa3b2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hc-p{display:block;height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}.hc-p u{display:block;height:100%;background:var(--signal);text-decoration:none}
 @media(min-width:900px){.hc-grid{grid-template-columns:repeat(4,1fr)}}
+
+/* ===== Menos ruido, más serio: sin marcos HUD ni esquinas cortadas ===== */
+.card::before,.card::after,.result::before,.result::after{display:none}
+.card,.result{border-radius:8px;background:rgba(255,255,255,.03);border-color:var(--line)}
+.btn,.btn.primary{border-radius:6px}
+.btn.primary,.lp2-stat,.lp2-plan,.record{clip-path:none!important;border-radius:6px}
+.ns-icon{clip-path:none;width:48px;height:48px;border-radius:10px}
+#tabbar .tab-main .tab-hex{clip-path:none;width:50px;height:50px;border-radius:14px}
+.rt-ls .n,.swatch i{clip-path:none;border-radius:10px}
+.page-title{letter-spacing:-.01em}
+#tabbar .tab-main .tab-hex{filter:none}
