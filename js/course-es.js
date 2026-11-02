@@ -2,6 +2,7 @@
 window.TALVO_COURSE_ES={
  id:'es',locale:'es-MX',root:'lc-es-root',
  title:['Spanish for English speakers','Español para angloparlantes'],
+ hero:['Spanish, spoken for real.','Español, hablado de verdad.'],mark:'¡Hola!',
  voices:['es-MX-DaliaNeural','es-MX-JorgeNeural'],
  intro:['Learn real, spoken Mexican-neutral Spanish: listen, repeat and get scored on your pronunciation.','Aprende español hablado real: escucha, repite y recibe una nota de pronunciación.'],
 

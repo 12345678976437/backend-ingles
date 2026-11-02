@@ -35,28 +35,40 @@ function make(cfg){
   const track=(n,m)=>{try{window.track&&window.track(n,'curso_'+cfg.id,m)}catch(e){}};
 
   /* ---------- pantallas del curso: Inicio, Lecciones, Hablar, Tutor (cada curso tiene su propia interfaz) ---------- */
+  const SVG=p=>'<svg viewBox="0 0 24 24" aria-hidden="true" class="lc-i">'+p+'</svg>';
+  const SPK=SVG('<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8.500a5 5 0 0 1 0 7"/>'),MIC=SVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>'),SLOW='<span class="lc-x">0.7×</span>',BOOK=SVG('<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h5"/>'),CHAT=SVG('<path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>'),ARW=SVG('<path d="M5 12h14M13 6l6 6-6 6"/>');
   const pq=(n,c)=>'<img class="lc-pq '+(c||'')+'" src="img/pq/pq-'+n+'.webp" alt="" draggable="false">';
+
+  const TONE_N={ā:1,ē:1,ī:1,ō:1,ū:1,ǖ:1,á:2,é:2,í:2,ó:2,ú:2,ǘ:2,ǎ:3,ě:3,ǐ:3,ǒ:3,ǔ:3,ǚ:3,à:4,è:4,ì:4,ò:4,ù:4,ǜ:4};
+  const CONTOUR={1:'M2 4h16',2:'M2 12L18 3',3:'M2 6L8 13L18 3',4:'M2 3L18 13'};
+  function toneMap(py){
+    const t=[];for(const ch of py)if(TONE_N[ch])t.push(TONE_N[ch]);
+    if(!t.length)return '';
+    return '<span class="lc-tm" aria-hidden="true">'+t.map(n=>'<svg viewBox="0 0 20 16" width="20" height="16"><path d="'+CONTOUR[n]+'" stroke="'+TONE_C[n]+'" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>').join('')+'</span>';
+  }
   const head=(eb,title,desc)=>'<div class="eyebrow">'+esc(eb)+'</div><h1 class="page-title">'+esc(title)+'</h1>'+(desc?'<p class="page-desc">'+esc(desc)+'</p>':'');
   const allItems=()=>cfg.units.flatMap(u=>u.items);
   function dayPhrase(){const a=allItems(),d=new Date();return a[(d.getFullYear()*372+d.getMonth()*31+d.getDate())%a.length]}
   function itemBig(it){return '<div class="lc-t'+(cfg.pinyin?' zh':'')+'">'+esc(it[0])+'</div>'+(cfg.pinyin?'<div class="lc-py">'+pyHtml(it[1])+'</div>':'')+'<div class="lc-m">'+esc(meaning(it))+'</div>'}
+  const mk=(u,i,big)=>cfg.pinyin?'<span class="lc-mk seal'+(big?' big':'')+'">'+esc(u.seal||'中')+'</span>':'<span class="lc-mk tile'+(big?' big':'')+'">'+String(i+1).padStart(2,'0')+'</span>';
+  const sample=u=>u.items.slice(0,3).map(i=>i[0].replace(/[？！。，¿?¡!.]/g,'')).join(' · ');
   function homeView(){
     const p=prog(),done=cfg.units.filter(u=>p[u.id]).length,learned=cfg.units.filter(u=>p[u.id]).reduce((n,u)=>n+u.items.length,0);
-    const next=cfg.units.find(u=>!p[u.id])||cfg.units[0],dp=dayPhrase();
-    return '<div class="lc-hh"><div>'+head(T('Today','Hoy'),L2(cfg.title),L2(cfg.intro))+'</div>'+pq('feliz','hero')+'</div>'
-     +'<div class="lc-stats"><div><b>'+done+'/'+cfg.units.length+'</b><small>'+T('units','unidades')+'</small></div><div><b>'+learned+'</b><small>'+T('phrases learned','frases aprendidas')+'</small></div></div>'
-     +'<div class="lc-prog"><i style="width:'+Math.round(done/cfg.units.length*100)+'%"></i></div>'
-     +'<button type="button" class="lc-next" data-lc-unit="'+next.id+'"><span class="lc-ic">'+next.icon+'</span><span class="lc-ut"><small>'+(done?T('Continue','Continuar'):T('Start here','Empieza aquí'))+'</small><b>'+esc(L2(next.name))+'</b></span><span>→</span></button>'
-     +(()=>{const c=vcounts();return c.due?'<button type="button" class="lc-next" data-lc-go="vocab" style="background:#ffd166"><span class="lc-ic">🧠</span><span class="lc-ut"><small>'+T('Review','Repaso')+'</small><b>'+c.due+' '+T('cards due today','tarjetas para hoy')+'</b></span><span>→</span></button>':''})()
-     +'<div class="lc-acts"><button type="button" data-lc-go="learn">📚<span>'+T('Lessons','Lecciones')+'</span></button><button type="button" data-lc-go="speak">🎤<span>'+T('Speak','Hablar')+'</span></button><button type="button" data-lc-go="tutor">💬<span>'+T('Tutor','Tutor')+'</span></button></div>'
-     +'<div class="lc-card"><small class="lc-muted">'+T('Phrase of the day','Frase del día')+'</small><div class="lc-day"><button type="button" class="lc-play" data-lc-dsay>🔊</button><div>'+itemBig(dp)+'</div></div></div>';
+    const ni=Math.max(0,cfg.units.findIndex(u=>!p[u.id])),next=cfg.units[ni],dp=dayPhrase(),vc=vcounts();
+    return '<div class="lc-hero"><div class="lc-hero-t"><span class="lc-k">'+esc(L2(cfg.title))+'</span><h1>'+esc(L2(cfg.hero))+'</h1><p>'+esc(L2(cfg.intro))+'</p></div><div class="lc-hero-art"><span class="lc-mark" aria-hidden="true">'+esc(cfg.mark)+'</span>'+pq('feliz','hero')+'</div></div>'
+     +'<div class="lc-meta"><div><b>'+done+'<i>/'+cfg.units.length+'</i></b><small>'+T('units','unidades')+'</small></div><div><b>'+learned+'</b><small>'+T('phrases learned','frases aprendidas')+'</small></div><div><b>'+vc.due+'</b><small>'+T('cards due','tarjetas hoy')+'</small></div></div>'
+     +'<button type="button" class="lc-cont" data-lc-unit="'+next.id+'">'+mk(next,ni,true)+'<span class="lc-ut"><small>'+(done?T('Continue','Continuar'):T('Start here','Empieza aquí'))+'</small><b>'+esc(L2(next.name))+'</b><em>'+esc(sample(next))+'</em></span>'+ARW+'</button>'
+     +(vc.due?'<button type="button" class="lc-rev" data-lc-go="vocab"><span><b>'+vc.due+'</b> '+T('cards ready to review','tarjetas listas para repasar')+'</span>'+ARW+'</button>':'')
+     +'<div class="lc-acts"><button type="button" data-lc-go="learn">'+BOOK+'<span>'+T('Lessons','Lecciones')+'</span></button><button type="button" data-lc-go="speak">'+MIC+'<span>'+T('Speak','Hablar')+'</span></button><button type="button" data-lc-go="tutor">'+CHAT+'<span>'+T('Tutor','Tutor')+'</span></button></div>'
+     +'<div class="lc-quote"><small>'+T('Phrase of the day','Frase del día')+'</small><div class="lc-qb"><div>'+itemBig(dp)+'</div><button type="button" class="lc-play" data-lc-dsay>'+SPK+'</button></div></div>';
   }
   function learnView(){
-    const p=prog();
-    let h=head(T('Lessons','Lecciones'),T('Pick a unit','Elige una unidad'))+'<div class="lc-units">';
-    cfg.units.forEach(u=>{const s=p[u.id]||0;h+='<button type="button" class="lc-unit'+(s?' done':'')+'" data-lc-unit="'+u.id+'"><span class="lc-ic">'+u.icon+'</span><span class="lc-ut"><b>'+esc(L2(u.name))+'</b><small>'+u.items.length+' '+T('phrases','frases')+'</small></span><span class="lc-st">'+(s?'★'.repeat(s)+'☆'.repeat(3-s):'')+'</span></button>'});
-    return h+'</div>';
+    const p=prog(),first=cfg.units.findIndex(u=>!p[u.id]);
+    let h=head(T('Lessons','Lecciones'),T('Your path','Tu camino'),done0(p)+'/'+cfg.units.length+' '+T('units completed','unidades completadas'))+'<ol class="lc-road">';
+    cfg.units.forEach((u,i)=>{const s=p[u.id]||0,st=s?'done':(i===first?'now':'todo');h+='<li class="'+st+'"><button type="button" data-lc-unit="'+u.id+'">'+mk(u,i)+'<span class="lc-ut"><b>'+esc(L2(u.name))+'</b><small>'+esc(sample(u))+'</small></span><span class="lc-st">'+(s?'★'.repeat(s)+'<s>'+'★'.repeat(3-s)+'</s>':(i===first?T('Next','Sigue'):''))+'</span></button></li>'});
+    return h+'</ol>';
   }
+  const done0=p=>cfg.units.filter(u=>p[u.id]).length;
 
   /* ---------- vocabulario con repaso espaciado (cajas 0-5; intervalos en días) ---------- */
   const VK='talvo_lcv_'+cfg.id,GAP=[0,1,3,7,14,30];
@@ -81,7 +93,7 @@ function make(cfg){
     if(vs.i>=vs.q.length){const n=vs.q.length;vs=null;return head(T('Vocabulary','Vocabulario'),T('Session complete!','¡Sesión completa!'))+'<div class="lc-end">'+pq('celebrando','big')+'<div class="lc-big">✓</div><h2>'+n+' '+T('cards','tarjetas')+'</h2><button type="button" class="btn primary" data-lc-vexit style="width:100%">'+T('Done','Listo')+'</button></div>'}
     const it=vs.q[vs.i];
     return '<div class="lc-prog"><i style="width:'+Math.round(vs.i/vs.q.length*100)+'%"></i></div>'
-      +'<div class="lc-card lc-sp"><div class="lc-day" style="justify-content:center"><button type="button" class="lc-play" data-lc-vsay>🔊</button><button type="button" class="lc-slow" data-lc-vslow>🐢</button></div>'
+      +'<div class="lc-card lc-sp"><div class="lc-day" style="justify-content:center"><button type="button" class="lc-play" data-lc-vsay>'+SPK+'</button><button type="button" class="lc-slow" data-lc-vslow>'+SLOW+'</button></div>'
       +(vs.flip?itemBig(it):'<div class="lc-t'+(cfg.pinyin?' zh':'')+'" style="margin:18px 0">'+esc(it[0])+'</div><div class="lc-muted">'+T('Do you remember what it means?','¿Recuerdas qué significa?')+'</div>')+'</div>'
       +(vs.flip?'<div class="lc-grade"><button type="button" data-lc-vg="0">'+T('Again','Otra vez')+'</button><button type="button" data-lc-vg="1">'+T('Good','Bien')+'</button><button type="button" data-lc-vg="2">'+T('Easy','Fácil')+'</button></div>':'<button type="button" class="btn primary" data-lc-vflip style="width:100%;margin-top:12px">'+T('Show answer','Ver respuesta')+'</button>');
   }
@@ -98,31 +110,30 @@ function make(cfg){
   function speakView(){
     if(!sp)pickSpeak();
     return head(T('Speak','Hablar'),T('Say it out loud','Dilo en voz alta'),T('Listen, repeat and get a score. Tip: tap 🐢 to hear it slower.','Escucha, repite y recibe una nota. Consejo: toca 🐢 para oírla más lenta.'))
-     +'<div class="lc-card lc-sp">'+itemBig(sp.it)+'<div class="lc-row"><button type="button" class="lc-play" data-lc-spsay>🔊</button><button type="button" class="lc-slow" data-lc-spslow>🐢</button><button type="button" class="lc-mic big" data-lc-spmic>🎤</button></div><div class="lc-fb" id="lc-fb-sp"></div></div>'
+     +'<div class="lc-card lc-sp">'+itemBig(sp.it)+'<div class="lc-row"><button type="button" class="lc-play" data-lc-spsay>'+SPK+'</button><button type="button" class="lc-slow" data-lc-spslow>'+SLOW+'</button><button type="button" class="lc-mic big" data-lc-spmic>'+MIC+'</button></div><div class="lc-fb" id="lc-fb-sp"></div></div>'
      +'<button type="button" class="btn" data-lc-spnext style="width:100%;margin-top:12px">'+T('Next phrase','Siguiente frase')+' →</button>';
   }
   function render(){const r=root();if(!r)return;
     if(quiz)r.innerHTML=quizHtml();
     else if(unit)r.innerHTML=unitHtml();
     else r.innerHTML=view==='learn'?learnView():view==='speak'?speakView():view==='vocab'?vocabView():view==='roles'?rolesView():view==='sounds'?soundsView():view==='dictado'?dictView():view==='tutor'?head(T('Tutor','Tutor'),T('Talk with your tutor','Habla con tu tutor'))+tutorHtml():homeView();
-    r.dataset.i18nSkip='1';
+    r.dataset.i18nSkip='1';r.dataset.lc=cfg.id;
     try{window.TalvoCourses&&TalvoCourses.setView(cfg.id,quiz||unit?'learn':view)}catch(e){}
   }
 
   /* ---------- unidad: aprender ---------- */
   function itemHtml(it,i){
-    return '<div class="lc-item"><button type="button" class="lc-play" data-lc-say="'+i+'" aria-label="'+T('Listen','Escuchar')+'">🔊</button>'
-      +'<div class="lc-tx"><div class="lc-t'+(cfg.pinyin?' zh':'')+'">'+esc(it[0])+'</div>'+(cfg.pinyin?'<div class="lc-py">'+pyHtml(it[1])+'</div>':'')+'<div class="lc-m">'+esc(meaning(it))+'</div></div>'
-      +'<button type="button" class="lc-slow" data-lc-slow="'+i+'" aria-label="'+T('Slower','Más lento')+'">🐢</button>'
-      +'<button type="button" class="lc-mic" data-lc-speak="'+i+'" aria-label="'+T('Say it','Dilo tú')+'">🎤</button><div class="lc-fb" id="lc-fb-'+i+'"></div></div>';
+    return '<div class="lc-item"><button type="button" class="lc-play" data-lc-say="'+i+'" aria-label="'+T('Listen','Escuchar')+'">'+SPK+'</button>'
+      +'<div class="lc-tx"><div class="lc-t'+(cfg.pinyin?' zh':'')+'">'+esc(it[0])+'</div>'+(cfg.pinyin?'<div class="lc-py">'+pyHtml(it[1])+toneMap(it[1])+'</div>':'')+'<div class="lc-m">'+esc(meaning(it))+'</div></div>'
+      +'<button type="button" class="lc-slow" data-lc-slow="'+i+'" aria-label="'+T('Slower','Más lento')+'">'+SLOW+'</button>'
+      +'<button type="button" class="lc-mic" data-lc-speak="'+i+'" aria-label="'+T('Say it','Dilo tú')+'">'+MIC+'</button><div class="lc-fb" id="lc-fb-'+i+'"></div></div>';
   }
   function unitHtml(){
-    const u=unit;
-    return '<button type="button" class="btn" data-lc-back>← '+T('All units','Todas las unidades')+'</button><h2 class="lc-h">'+u.icon+' '+esc(L2(u.name))+'</h2>'
-      +'<div class="lc-tip">💡 '+esc(L2(u.tip))+'</div><div class="lc-list">'+u.items.map(itemHtml).join('')+'</div>'
+    const u=unit,i=cfg.units.indexOf(u);
+    return '<button type="button" class="lc-back" data-lc-back>← '+T('All units','Todas las unidades')+'</button><div class="lc-uh">'+mk(u,i,true)+'<div><small class="lc-k">'+T('Unit','Unidad')+' '+(i+1)+'</small><h2 class="lc-h">'+esc(L2(u.name))+'</h2></div></div>'
+      +'<div class="lc-tip">'+esc(L2(u.tip))+'</div><div class="lc-list">'+u.items.map(itemHtml).join('')+'</div>'
       +'<button type="button" class="btn primary" data-lc-quiz style="width:100%;margin-top:14px">'+T('Practice this unit','Practicar esta unidad')+'</button>';
   }
-
   /* ---------- quiz ---------- */
   function buildQuiz(u){
     const items=u.items,qs=[];
@@ -142,8 +153,8 @@ function make(cfg){
       return '<div class="lc-end">'+pq(stars>=2?'celebrando':'motivando','big')+'<div class="lc-big">'+'★'.repeat(Math.max(stars,1))+'☆'.repeat(3-Math.max(stars,1))+'</div><h2>'+quiz.ok+'/'+quiz.qs.length+'</h2><p>'+(stars>=2?T('Great work! Now say the phrases out loud with 🎤.','¡Buen trabajo! Ahora di las frases en voz alta con 🎤.'):T('Good start. Review the unit and try again.','Buen comienzo. Repasa la unidad e inténtalo otra vez.'))+'</p>'
         +'<button type="button" class="btn primary" data-lc-unit="'+quiz.u.id+'" style="width:100%">'+T('Back to the unit','Volver a la unidad')+'</button></div>'}
     let h='<div class="lc-prog"><i style="width:'+Math.round(quiz.i/quiz.qs.length*100)+'%"></i></div>';
-    if(q.type==='listen')h+='<p class="lc-q">'+T('What do you hear?','¿Qué escuchas?')+'</p><div style="text-align:center"><button type="button" class="lc-play big" data-lc-qsay>🔊</button><button type="button" class="lc-slow" data-lc-qslow>🐢</button></div>';
-    else if(q.type==='mean')h+='<p class="lc-q">'+T('What does this mean?','¿Qué significa?')+'</p><div class="lc-prompt"><button type="button" class="lc-play" data-lc-qsay>🔊</button><span class="lc-t'+(cfg.pinyin?' zh':'')+'">'+esc(q.it[0])+'</span></div>'+(cfg.pinyin?'<div class="lc-py" style="text-align:center">'+pyHtml(q.it[1])+'</div>':'');
+    if(q.type==='listen')h+='<p class="lc-q">'+T('What do you hear?','¿Qué escuchas?')+'</p><div style="text-align:center"><button type="button" class="lc-play big" data-lc-qsay>'+SPK+'</button><button type="button" class="lc-slow" data-lc-qslow>'+SLOW+'</button></div>';
+    else if(q.type==='mean')h+='<p class="lc-q">'+T('What does this mean?','¿Qué significa?')+'</p><div class="lc-prompt"><button type="button" class="lc-play" data-lc-qsay>'+SPK+'</button><span class="lc-t'+(cfg.pinyin?' zh':'')+'">'+esc(q.it[0])+'</span></div>'+(cfg.pinyin?'<div class="lc-py" style="text-align:center">'+pyHtml(q.it[1])+'</div>':'');
     else h+='<p class="lc-q">'+T('How do you say it?','¿Cómo se dice?')+'</p><div class="lc-prompt"><span class="lc-m big">'+esc(meaning(q.it))+'</span></div>';
     h+='<div class="lc-opts">'+q.opts.map((o,i)=>'<button type="button" class="lc-opt" data-lc-opt="'+i+'">'+(q.type==='mean'?esc(meaning(o)):'<span class="'+(cfg.pinyin?'zh':'')+'">'+esc(o[0])+'</span>'+(cfg.pinyin&&q.type!=='listen'?'<small>'+pyHtml(o[1])+'</small>':''))+'</button>').join('')+'</div><div id="lc-qfb"></div>';
     return h;
@@ -187,8 +198,8 @@ function make(cfg){
   function tutorHtml(){
     const chat=curChat();
     return '<div class="lc-chat" id="lc-chat">'+(chat.length?chat.map(m=>m.rol==='yo'?'<div class="lc-b me">'+esc(m.texto)+'</div>':'<div class="lc-b tu"><div class="'+(cfg.pinyin?'zh ':'')+'lc-t">'+esc(m.texto)+'</div>'+(m.pinyin?'<div class="lc-py">'+pyHtml(m.pinyin)+'</div>':'')+(m.sig?'<div class="lc-m">'+esc(m.sig)+'</div>':'')
-      +(m.corr?'<div class="lc-corr">✏️ '+esc(m.corr)+(m.exp?' — '+esc(m.exp):'')+'</div>':'')+'<button type="button" class="lc-play" data-lc-tsay="'+esc(m.texto)+'">🔊</button></div>').join(''):'<div class="lc-muted" style="padding:14px 0;text-align:center">'+pq('ensenando','mid')+'<br>'+T('Say hello to your tutor in '+(cfg.id==='es'?'Spanish':'Chinese')+' — or in English, they will help you.','Saluda a tu tutor en '+(cfg.id==='es'?'español':'chino')+' o en tu idioma; te ayudará.')+'</div>')
-      +'</div><form class="lc-form" id="lc-form"><input id="lc-in" autocomplete="off" maxlength="300" placeholder="'+T('Type your message…','Escribe tu mensaje…')+'"><button type="button" class="lc-mic" data-lc-chatmic aria-label="Mic">🎤</button><button class="btn primary" type="submit">'+T('Send','Enviar')+'</button></form>';
+      +(m.corr?'<div class="lc-corr">✏️ '+esc(m.corr)+(m.exp?' — '+esc(m.exp):'')+'</div>':'')+'<button type="button" class="lc-play" data-lc-tsay="'+esc(m.texto)+'">'+SPK+'</button></div>').join(''):'<div class="lc-muted" style="padding:14px 0;text-align:center">'+pq('ensenando','mid')+'<br>'+T('Say hello to your tutor in '+(cfg.id==='es'?'Spanish':'Chinese')+' — or in English, they will help you.','Saluda a tu tutor en '+(cfg.id==='es'?'español':'chino')+' o en tu idioma; te ayudará.')+'</div>')
+      +'</div><form class="lc-form" id="lc-form"><input id="lc-in" autocomplete="off" maxlength="300" placeholder="'+T('Type your message…','Escribe tu mensaje…')+'"><button type="button" class="lc-mic" data-lc-chatmic aria-label="Mic">'+MIC+'</button><button class="btn primary" type="submit">'+T('Send','Enviar')+'</button></form>';
   }
   async function send(text){
     const chat=curChat();chat.push({rol:'yo',texto:text});render();scrollChat();
@@ -210,7 +221,7 @@ function make(cfg){
     const x=snd;
     return '<button type="button" class="btn" data-lc-sback>← '+T('All sounds','Todos los sonidos')+'</button><h2 class="lc-h">'+esc(L2(x.name))+'</h2><div class="lc-tip">👄 '+esc(L2(x.how))+'</div><div class="lc-list">'+x.words.map((w,i)=>sitem(w,i)).join('')+'</div>';
   }
-  function sitem(it,i){return '<div class="lc-item"><button type="button" class="lc-play" data-lc-ssay="'+i+'">🔊</button><div class="lc-tx">'+itemBig(it)+'</div><button type="button" class="lc-slow" data-lc-sslow="'+i+'">🐢</button><button type="button" class="lc-mic" data-lc-smic="'+i+'">🎤</button><div class="lc-fb" id="lc-fb-s'+i+'"></div></div>'}
+  function sitem(it,i){return '<div class="lc-item"><button type="button" class="lc-play" data-lc-ssay="'+i+'">'+SPK+'</button><div class="lc-tx">'+itemBig(it)+'</div><button type="button" class="lc-slow" data-lc-sslow="'+i+'">'+SLOW+'</button><button type="button" class="lc-mic" data-lc-smic="'+i+'">'+MIC+'</button><div class="lc-fb" id="lc-fb-s'+i+'"></div></div>'}
 
   /* ---------- dictado ---------- */
   let dic=null;
@@ -220,7 +231,7 @@ function make(cfg){
   function dictView(){
     if(!dic)pickDic();
     let h=head(T('Dictation','Dictado'),T('Write what you hear','Escribe lo que oyes'),T('Listen, then type it'+(cfg.pinyin?' in Chinese characters (or pinyin).':'. Accents count as a small mistake.'),'Escucha y escríbelo'+(cfg.pinyin?' en caracteres (o pinyin).':'. Los acentos cuentan como error pequeño.')))
-     +'<div class="lc-card lc-sp"><div class="lc-row"><button type="button" class="lc-play big" data-lc-dsay2>🔊</button><button type="button" class="lc-slow" data-lc-dslow>🐢</button></div>'
+     +'<div class="lc-card lc-sp"><div class="lc-row"><button type="button" class="lc-play big" data-lc-dsay2>'+SPK+'</button><button type="button" class="lc-slow" data-lc-dslow>'+SLOW+'</button></div>'
      +'<form class="lc-form" id="lc-dform"><input id="lc-din" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="'+T('Type here…','Escribe aquí…')+'"'+(dic.res?' disabled':'')+'><button class="btn primary" type="submit"'+(dic.res?' disabled':'')+'>'+T('Check','Revisar')+'</button></form>';
     if(dic.res){const r=dic.res;h+='<div class="lc-qf '+(r.score>=0.9?'ok':'no')+'" style="text-align:left"><b>'+Math.round(r.score*100)+'%</b> · '+(r.score>=0.9?T('Great listening!','¡Muy buen oído!'):T('Almost. Listen again.','Casi. Escucha otra vez.'))+'<div style="margin-top:6px">'+itemBig(dic.it)+'</div></div><button type="button" class="btn primary" data-lc-dnext style="width:100%;margin-top:10px">'+T('Next','Siguiente')+' →</button>'}
     return h+'</div>';
@@ -320,7 +331,7 @@ css.textContent='.lc-intro{color:var(--muted,#9aa3b2);margin:0 0 12px}.lc-tabs{d
 +'.lc-q{font-weight:600;margin:10px 0}.lc-prompt{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}.lc-opts{display:grid;gap:8px;margin-top:14px}.lc-opt{min-height:50px;padding:8px 12px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center}.lc-opt.right{border-color:#5ee6a8;background:rgba(94,230,168,.15)}.lc-opt.wrong{border-color:#ff5c5c;background:rgba(255,92,92,.15)}'
 +'.lc-qf{margin-top:12px;padding:10px;border-radius:6px}.lc-qf.ok{background:rgba(94,230,168,.12)}.lc-qf.no{background:rgba(255,92,92,.12)}.lc-end{text-align:center;padding:20px 0}.lc-big{font-size:40px;color:#ffd166;letter-spacing:6px}'
 +'.lc-chat{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:6px 0}.lc-b{max-width:88%;padding:10px 12px;border-radius:10px}.lc-b.me{align-self:flex-end;background:rgba(56,225,255,.15)}.lc-b.tu{align-self:flex-start;background:rgba(255,255,255,.07)}.lc-corr{margin-top:6px;font-size:13px;color:#ffd166}.lc-form{display:flex;gap:8px;margin-top:10px}.lc-form input{flex:1;min-height:44px;padding:0 12px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.7);color:inherit;font-size:16px}';
-css.textContent+='.lc-hh{display:flex;align-items:flex-end;gap:8px}.lc-hh>div{flex:1;min-width:0}.lc-pq.hero{width:96px;flex:none;margin-bottom:-4px;filter:drop-shadow(0 6px 12px rgba(0,0,0,.45))}.lc-pq.big{width:140px;display:block;margin:0 auto 4px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.lc-pq.mid{width:110px}.lc-sym{font-weight:700;font-size:18px;min-width:44px;text-align:center}.lc-grade{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.lc-grade button{min-height:48px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.6);color:inherit;font-weight:600}.lc-grade button:nth-child(1){border-color:#ff5c5c}.lc-grade button:nth-child(2){border-color:#ffd166}.lc-grade button:nth-child(3){border-color:#5ee6a8}.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;font-size:22px;border:1px solid var(--line-strong,#2b3550);border-radius:6px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
+css.textContent+='.lc-hh{display:flex;align-items:flex-end;gap:8px}.lc-hh>div{flex:1;min-width:0}.lc-pq.hero{flex:none;filter:drop-shadow(0 6px 12px rgba(0,0,0,.45))}.lc-pq.big{display:block;margin:0 auto 4px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.lc-sym{font-weight:700;font-size:18px;min-width:44px;text-align:center}.lc-grade{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.lc-grade button{min-height:48px;border-radius:6px;border:1px solid var(--line-strong,#2b3550);background:rgba(18,26,48,.6);color:inherit;font-weight:600}.lc-grade button:nth-child(1){border-color:#ff5c5c}.lc-grade button:nth-child(2){border-color:#ffd166}.lc-grade button:nth-child(3){border-color:#5ee6a8}.lc-stats{display:flex;gap:10px;margin:12px 0}.lc-stats div{flex:1;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);text-align:center}.lc-stats b{display:block;font-size:22px}.lc-stats small{color:var(--muted,#9aa3b2)}.lc-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px;border:0;border-radius:6px;background:var(--signal,#38e1ff);color:#04101a}.lc-next small{display:block;opacity:.75}.lc-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lc-acts button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 6px;border:1px solid var(--line-strong,#2b3550);border-radius:4px;background:rgba(18,26,48,.6);color:inherit}.lc-acts span{font-size:12px;font-weight:600}.lc-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(18,26,48,.5)}.lc-day{display:flex;gap:12px;align-items:center;margin-top:6px}.lc-sp{text-align:center}.lc-row{display:flex;gap:12px;justify-content:center;margin-top:14px}.lc-mic.big{width:64px;height:64px;font-size:26px}';document.head.appendChild(css);
 
 const courses={};
 function init(){

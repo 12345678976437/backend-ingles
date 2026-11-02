@@ -6,9 +6,9 @@ await p.evaluate(()=>{window.TalvoCore={esc:s=>s,toast:m=>window.__t=m,authFetch
 for(const f of ['course-es','course-zh','lang-course'])await p.addScriptTag({path:'js/'+f+'.js'});
 for(const [sec,root] of [['espanol','lc-es-root'],['chino','lc-zh-root']]){
  await p.evaluate(s=>TalvoLang.onSection(s),sec);const id=sec==='espanol'?'es':'zh';
- const home=await p.locator('#'+root+' .lc-next').count();await p.evaluate(i=>TalvoLang.view(i,'learn'),id);
+ const home=await p.locator('#'+root+' .lc-cont').count();await p.evaluate(i=>TalvoLang.view(i,'learn'),id);
  const n=await p.locator('#'+root+' [data-lc-unit]').count();
- await p.click('#'+root+' [data-lc-unit]:nth-child(2)');
+ await p.click('#'+root+' .lc-road li:nth-child(2) [data-lc-unit]');
  const items=await p.locator('#'+root+' .lc-item').count();
  await p.click('#'+root+' [data-lc-quiz]');
  for(let i=0;i<8;i++){await p.click('#'+root+' [data-lc-opt]:nth-child(1)');await p.click('#'+root+' [data-lc-next]')}
