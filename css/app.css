@@ -1881,3 +1881,21 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 #tabbar .tab-main .tab-hex{filter:none}
 
 .lc-qf{display:flex;align-items:center;gap:12px}.lc-pq.fb{width:84px;flex:none;margin:-14px 0 -10px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
+
+/* ===== Inicio: jerarquía clara, menos ruido ===== */
+.hh2 .page-title{font-size:24px}.hh-pq{width:84px!important}
+@media(min-width:700px){.hh-pq{width:104px!important}}
+.next-step{margin-top:14px!important;padding:20px 20px!important;border-radius:14px!important;box-shadow:none!important}
+.next-step:hover{box-shadow:none!important;transform:none}
+.next-step b{font-size:19px}
+.home-courses{margin-top:22px}
+.hstats{margin-top:18px!important;gap:0!important;border:1px solid var(--line);border-radius:12px;background:transparent}
+.hs{padding:12px 6px!important;border:0!important;border-radius:0!important;background:transparent!important}
+.hs+.hs{border-left:1px solid var(--line)!important}
+.hs b{font-size:21px!important;background:none!important;-webkit-text-fill-color:currentColor;color:var(--text)!important}
+.hs.hot b{color:#ffb347!important}
+.hc2{border-radius:12px!important;padding:14px!important;margin-top:10px;background:transparent!important;box-shadow:none!important}
+.hc2 .hc-ring{width:56px!important;height:56px!important}.hc2 .hc-ring::before{inset:6px}.hc2 .hc-ring b{font-size:13px}
+.hc-c{border-radius:12px!important;box-shadow:none!important}
+.hm-ic{display:grid;place-items:center}.hm-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.card,.tile,.hm-card{box-shadow:none!important}
