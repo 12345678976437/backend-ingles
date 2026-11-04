@@ -7890,7 +7890,7 @@ def push_prefs():
     return jsonify({"ok": True})
 
 
-def _push_send(row, title, body, url="./", tag="talvo", touch=True, mood="cheer"):
+def _push_send(row, title, body, url="./", tag="talvo", touch=True, mood="cheer", image=""):
     """Envía una notificación a una suscripción. Devuelve True/False y limpia las caducadas."""
     if not _push_ready():
         return False
@@ -7898,7 +7898,7 @@ def _push_send(row, title, body, url="./", tag="talvo", touch=True, mood="cheer"
         from pywebpush import webpush, WebPushException
     except Exception:
         return False
-    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag, "mood": mood, "lang": row.get("lang") or "es"}, ensure_ascii=False)
+    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag, "mood": mood, "image": image, "lang": row.get("lang") or "es"}, ensure_ascii=False)
     try:
         webpush(subscription_info={"endpoint": row["endpoint"], "keys": {"p256dh": row["p256dh"], "auth": row["auth"]}},
                 data=payload, vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
@@ -7991,6 +7991,69 @@ _PUSH_MSGS = {
         ],
     },
 }
+
+
+# ---------------------------------------------------------------------------
+#  TIPS CORTOS: cada uno explica UN apartado de la app. Se usan en notificaciones push y en correos.
+#  (id, sección a abrir, pose de Palanqueta, (título es, intro es), (título en, intro en), [cosas que puedes hacer])
+# ---------------------------------------------------------------------------
+_TIPS = [
+    ("t_tutor", "tutor", "ensenando", ("Tu tutor te corrige sin juzgar", "Escríbele o háblale en inglés: te responde y te explica tus errores al instante."),
+     ("Your tutor corrects without judging", "Write or speak in English: you get an answer and a clear explanation of your mistakes."),
+     ["Pulsa «Check my English» para revisar una frase tuya.", "Usa «Translate» cuando no sepas cómo decir algo.", "Elige un tema que te guste: viajes, trabajo, comida."]),
+    ("t_pron", "pronunciacion", "motivando", ("Mide tu pronunciación", "Lee una frase en voz alta y recibe una calificación palabra por palabra."),
+     ("Measure your pronunciation", "Read a sentence aloud and get a score for every word."),
+     ["Escucha primero la frase con la bocina.", "Repite las palabras en rojo hasta que pasen a verde.", "Mira tu avance: cada intento suma."]),
+    ("t_call", "llamada", "sorprendida", ("Practica como en una llamada real", "Habla en voz alta con la IA, sin escribir nada, y gana soltura."),
+     ("Practice like a real phone call", "Talk out loud with the AI, no typing, and gain fluency."),
+     ["Elige un tema y habla 2 o 3 minutos.", "No pasa nada si te equivocas: al final recibes correcciones.", "Úsala en el camino al trabajo o a la escuela."]),
+    ("t_vocab", "vocabulario", "pensando", ("Repasa justo antes de olvidar", "Las tarjetas vuelven en el momento ideal, así lo que aprendes se queda."),
+     ("Review right before you forget", "Cards come back at the ideal moment, so what you learn sticks."),
+     ["Guarda las palabras nuevas que encuentres.", "Califica cada tarjeta: otra vez, bien o fácil.", "Con 5 minutos al día basta."]),
+    ("t_roles", "escenarios", "ensenando", ("Ensaya antes de la vida real", "Pedir comida, una entrevista, el aeropuerto: practica el diálogo antes de vivirlo."),
+     ("Rehearse before real life", "Ordering food, an interview, the airport: practice the dialogue before you live it."),
+     ["Elige una situación y tu papel.", "Responde con la voz o escribiendo.", "Repítela hasta sentirte tranquilo."]),
+    ("t_trad", "traductor", "feliz", ("Traduce en vivo", "Habla en tu idioma y escucha la traducción al instante."),
+     ("Translate live", "Speak in your language and hear the translation instantly."),
+     ["Úsalo para conversar con alguien que habla otro idioma.", "Guarda frases útiles para repasarlas.", "Escucha cómo suena para imitar la pronunciación."]),
+    ("t_voz", "voz", "pensando", ("Voice Lab: shadowing y diccionario", "Repite lo que oyes a la par de una voz nativa y mejora tu ritmo."),
+     ("Voice Lab: shadowing and dictionary", "Repeat along with a native voice and improve your rhythm."),
+     ["Prueba el shadowing con frases cortas.", "Consulta una palabra y escucha su pronunciación.", "Practica antes de una reunión importante."]),
+    ("t_escr", "escritura", "ensenando", ("Escribe y recibe correcciones", "Redacta unas líneas y te muestro qué mejorar y por qué."),
+     ("Write and get feedback", "Write a few lines and see what to improve and why."),
+     ["Cuenta tu día en 3 frases.", "Revisa las correcciones una por una.", "Reescribe el texto con lo aprendido."]),
+    ("t_lect", "lectura", "pensando", ("Lee un texto y explícalo", "Lecturas a tu nivel, con ayuda cuando algo no se entiende."),
+     ("Read a text and explain it", "Readings at your level, with help whenever something is unclear."),
+     ["Toca una palabra para ver su significado.", "Resume lo que leíste con tus palabras.", "Sube de nivel cuando se vuelva fácil."]),
+    ("t_esc", "escucha", "sorprendida", ("Entrena tu oído", "Escucha una frase y escribe lo que entiendes."),
+     ("Train your ear", "Listen to a sentence and write what you understand."),
+     ["Usa la velocidad lenta si hace falta.", "Compara con la respuesta correcta.", "Repite hasta entender sin ayuda."]),
+    ("t_chess", "ajedrez", "motivando", ("Aprende ajedrez jugando", "Partidas contra la computadora, lecciones y problemas para ir mejorando."),
+     ("Learn chess by playing", "Games against the computer, lessons and puzzles to keep improving."),
+     ["Empieza en un nivel fácil.", "Resuelve un problema al día.", "Revisa tus partidas en «Aprender»."]),
+    ("t_zh", "chino", "sorprendida", ("Mandarín desde cero", "Tonos, caracteres y frases con audio y calificación de tu pronunciación."),
+     ("Mandarin from zero", "Tones, characters and phrases with audio and a pronunciation score."),
+     ["Empieza por la unidad de los 4 tonos.", "Practica con el laboratorio de sonidos.", "Conversa con tu tutor de chino."]),
+    ("t_logros", "logros", "celebrando", ("Colecciona logros", "Cada paso real que das desbloquea una medalla."),
+     ("Collect achievements", "Every real step you take unlocks a badge."),
+     ["Revisa cuáles te faltan.", "Elige uno y ve por él esta semana.", "Compártelo con alguien."]),
+    ("t_ruta", "learning-path", "motivando", ("Tu ruta, paso a paso", "Lecciones cortas que se adaptan a tu nivel, una tras otra."),
+     ("Your path, step by step", "Short lessons that adapt to your level, one after another."),
+     ["Haz solo el siguiente paso.", "Termina una lección por día.", "Repite las que te costaron."]),
+    ("t_clips", "clips", "feliz", ("Mini escenas con subtítulos", "Videos cortos para entender inglés real con subtítulos."),
+     ("Mini scenes with subtitles", "Short videos to understand real English with subtitles."),
+     ["Mira una escena con subtítulos.", "Vuélvela a ver sin ellos.", "Repite las frases que te gusten."]),
+]
+_TIP_IDX = {t[0]: i for i, t in enumerate(_TIPS)}
+
+
+def _tip_next_for_push(last_kind, seed):
+    """Rota los tips en orden para no repetirlos; si es la primera vez, empieza en un punto distinto por persona."""
+    import zlib
+    if last_kind in _TIP_IDX:
+        return _TIPS[(_TIP_IDX[last_kind] + 1) % len(_TIPS)]
+    return _TIPS[zlib.crc32(str(seed).encode()) % len(_TIPS)]
+
 
 
 def _push_practiced_today(uid, ln, trust_local):
@@ -8087,13 +8150,20 @@ def push_cron():
         # Constante: un aviso al día a su hora, mientras tenga el permiso activo (se quita desde Mi cuenta).
         yesterday = {(ln.date() - timedelta(days=1)).isoformat(), (now_utc.date() - timedelta(days=1)).isoformat()}
         at_risk = last in yesterday
-        key, title, body = _push_pick(r.get("lang") or "es", at_risk, int(prof.get("streak_days") or 0), r.get("last_kind"))
-        mood = "streak" if key.startswith("s") else ("miss" if (idle or 0) >= 2 else "cheer")
-        jobs.append((r, key, title, body, mood))
+        lang_r = r.get("lang") or "es"
+        if at_risk and int(prof.get("streak_days") or 0) >= 2 or (idle or 0) >= 2:
+            key, title, body = _push_pick(lang_r, at_risk, int(prof.get("streak_days") or 0), r.get("last_kind"))
+            mood = "streak" if key.startswith("s") else "miss"
+            jobs.append((r, key, title, body, mood, "", "./?pq=" + mood))
+        else:
+            # Día normal: un tip corto que explica un apartado de la app (con la pose de Palanqueta).
+            tp = _tip_next_for_push(r.get("last_kind"), r.get("endpoint"))
+            ttl, intro = (tp[4] if lang_r == "en" else tp[3])
+            jobs.append((r, tp[0], "Tip: " + ttl, intro, "cheer", "tip-" + tp[2], "./?go=" + tp[1]))
 
     def _go(job):
-        r, key, title, body, mood = job
-        if _push_send(r, title, body, "./?pq=" + mood, "talvo-recordatorio", mood=mood):
+        r, key, title, body, mood, image, url = job
+        if _push_send(r, title, body, url, "talvo-recordatorio", mood=mood, image=image):
             try:
                 supabase_admin.table("push_subscriptions").update(
                     {"last_kind": key, "sent_count": int(r.get("sent_count") or 0) + 1}).eq("endpoint", r["endpoint"]).execute()
@@ -8174,41 +8244,61 @@ _EMAIL_KINDS = {
 }
 
 
-def _email_gif(kind):
+_EMAIL_KINDS["tip"] = {"subject": "Tip de Palanqueta: {tt}", "pre": "{intro}", "title": "{tt}", "body": "{intro}",
+                       "steps": [], "cta": "Probarlo ahora", "path": "/?go={sec}"}
+
+
+def _email_gif(kind, tip=None):
+    if kind == "tip":
+        t = _TIPS[(tip or 0) % len(_TIPS)]
+        return f"{BACKEND_PUBLIC_URL}/email/pq-tip-{t[2]}.png"
     return f"{BACKEND_PUBLIC_URL}/email/pq-{kind}.gif"
 
 
-def _email_render(kind, name, email, idle=0, streak=0):
+def _email_render(kind, name, email, idle=0, streak=0, tip=0):
     """Devuelve (asunto, html, texto)."""
     from html import escape
     from urllib.parse import quote
-    k = _EMAIL_KINDS[kind]
+    k = dict(_EMAIL_KINDS[kind])
     nm = escape((name or "").strip().split(" ")[0].capitalize() or "amigo")
-    fmt = {"name": nm, "idle": int(idle or 0), "email_q": quote(email or ""),
+    tp = _TIPS[(tip or 0) % len(_TIPS)]
+    if kind == "tip":
+        k["steps"] = [escape(x) for x in tp[5]]
+    fmt = {"tt": escape(tp[3][0]), "intro": escape(tp[3][1]), "sec": tp[1],
+           "name": nm, "idle": int(idle or 0), "email_q": quote(email or ""),
            "streak": (f"Llevas <b>{int(streak)} días</b> de racha: ¡cuídala!" if streak and int(streak) >= 2 else "")}
     subject = k["subject"].format(**fmt)
     title = k["title"].format(**fmt)
     body = k["body"].format(**fmt)
     link = APP_URL + k["path"].format(**fmt)
-    gif = _email_gif(kind)
+    gif = _email_gif(kind, tip)
     steps = "".join(
         f'<tr><td width="34" valign="top" style="padding:7px 0"><div style="width:26px;height:26px;border-radius:13px;background:#3ee8ff;color:#04101a;'
         f'font:700 13px/26px Arial,sans-serif;text-align:center">{i}</div></td>'
         f'<td style="padding:8px 0 8px 8px;font:15px/1.5 Arial,sans-serif;color:#d6e0f5">{s}</td></tr>' for i, s in enumerate(k["steps"], 1))
     unsub = _unsub_url(email)
+    if kind == "tip":
+        head_img = (f'<tr><td align="center" style="padding:26px 0 0;background:#0a1022"><img src="{gif}" width="200" alt="Palanqueta" '
+                    f'style="display:block;width:200px;height:auto;border:0"></td></tr>')
+        eyebrow, foot = "Tip de Palanqueta", "Recibes este correo porque tienes una cuenta en Talvo English. Te mandamos un tip corto cada pocos días."
+        steps_title = '<div style="font:700 12px Arial,sans-serif;letter-spacing:.1em;color:#93a3bd;text-transform:uppercase;margin:6px 0 2px">Cosas que puedes hacer</div>'
+    else:
+        head_img = f'<tr><td style="padding:0"><img src="{gif}" width="600" alt="Palanqueta" style="display:block;width:100%;max-width:600px;height:auto;border:0"></td></tr>'
+        eyebrow, foot = "Talvo English", "Recibes este correo porque creaste una cuenta en Talvo English. Te escribimos cada par de días hasta que actives tus recordatorios."
+        steps_title = ""
     html = f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(subject)}</title></head>
 <body style="margin:0;padding:0;background:#04060d">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#04060d">{escape(k['pre'])}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#04060d" style="background:#04060d"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#0a1022;border:1px solid #1e2b4f;border-radius:18px;overflow:hidden">
-<tr><td style="padding:0"><img src="{gif}" width="600" alt="Palanqueta" style="display:block;width:100%;max-width:600px;height:auto;border:0"></td></tr>
-<tr><td style="padding:26px 30px 8px"><div style="font:700 12px Arial,sans-serif;letter-spacing:.14em;color:#3ee8ff;text-transform:uppercase">Talvo English</div>
+{head_img}
+<tr><td style="padding:26px 30px 8px"><div style="font:700 12px Arial,sans-serif;letter-spacing:.14em;color:#3ee8ff;text-transform:uppercase">{eyebrow}</div>
 <h1 style="margin:8px 0 12px;font:700 26px/1.2 Arial,sans-serif;color:#ffffff">{title}</h1>
 <p style="margin:0;font:16px/1.6 Arial,sans-serif;color:#b8c5de">{body}</p></td></tr>
-<tr><td style="padding:10px 30px 4px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">{steps}</table></td></tr>
+<tr><td style="padding:10px 30px 4px">{steps_title}<table role="presentation" cellpadding="0" cellspacing="0" width="100%">{steps}</table></td></tr>
 <tr><td align="center" style="padding:18px 30px 30px"><a href="{link}" style="display:inline-block;background:#3ee8ff;background-image:linear-gradient(90deg,#3ee8ff,#7c78ff);color:#04101a;text-decoration:none;font:700 16px Arial,sans-serif;padding:15px 34px;border-radius:12px">{k['cta']} &rarr;</a>
 <div style="margin-top:14px;font:13px/1.5 Arial,sans-serif;color:#93a3bd">¿Dudas? Solo responde este correo y te leemos.</div></td></tr>
-<tr><td style="padding:16px 30px 24px;border-top:1px solid #1e2b4f;font:12px/1.6 Arial,sans-serif;color:#6f7f9c">Recibes este correo porque creaste una cuenta en Talvo English. Te escribimos cada par de días hasta que actives tus recordatorios.<br>¿Ya no quieres recordatorios? <a href="{unsub}" style="color:#93a3bd">Darme de baja</a>.</td></tr>
+<tr><td style="padding:16px 30px 24px;border-top:1px solid #1e2b4f;font:12px/1.6 Arial,sans-serif;color:#6f7f9c">{foot}<br>¿Ya no quieres recordatorios? <a href="{unsub}" style="color:#93a3bd">Darme de baja</a>.</td></tr>
 </table></td></tr></table></body></html>"""
     text = f"{title}\n\n{re.sub('<[^>]+>', '', body)}\n\n{k['cta']}: {link}\n\nResponde este correo si tienes dudas.\n\nDarme de baja: {unsub}"
     return subject, html, text
@@ -8222,7 +8312,7 @@ def _email_inline(url):
     try:
         import base64
         name = url.rsplit("/", 1)[-1]
-        if re.match(r"^pq-[a-z]+\.gif$", name):
+        if re.match(r"^pq-[a-z-]+\.(gif|png)$", name):
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "email", name), "rb") as fh:
                 out["b64"] = base64.b64encode(fh.read()).decode()
     except Exception:
@@ -8273,12 +8363,15 @@ def _email_pick(created, confirmed, prof, has_push, logs, now_mx):
     except Exception:
         return None
     streak = int(prof.get("streak_days") or 0) if idle <= 1 else 0
-    if has_push:
-        return None  # ya recibe notificaciones diarias
-    if idle >= 3:
+    tip_due = since("tip") >= 3.5
+    if has_push:  # ya recibe notificaciones diarias: solo un tip corto por correo cada pocos días
+        return ("tip", idle, streak) if tip_due else None
+    if idle >= 3 and since("comeback") >= 4:
         return ("comeback", idle, 0)
-    if idle >= 1 or since("nopush") >= 4:
+    if idle >= 1 and since("nopush") >= 4:
         return ("nopush", idle, streak)
+    if tip_due:
+        return ("tip", idle, streak)
     return None
 
 
@@ -8330,15 +8423,17 @@ def email_cron():
         pick = _email_pick(created, confirmed, profs.get(str(u.id)), str(u.id) in push_users, logs.get(email, []), now_mx)
         if pick:
             prof = profs.get(str(u.id)) or {}
+            import zlib
+            ntip = len([1 for k_, _d in logs.get(email, []) if k_ == "tip"])
             plan.append({"uid": str(u.id), "email": email, "name": prof.get("username") or email.split("@")[0],
-                         "kind": pick[0], "idle": pick[1], "streak": pick[2]})
+                         "kind": pick[0], "idle": pick[1], "streak": pick[2], "tip": ntip + zlib.crc32(email.encode())})
     plan = plan[:EMAIL_MAX_PER_RUN]
     if dry:
         return jsonify({"ok": True, "dry": True, "usuarios": len(users), "se_enviarian": [{"email": p["email"][:3] + "…", "kind": p["kind"]} for p in plan]})
     sent, failed = 0, 0
     for p in plan:
-        subject, html, text = _email_render(p["kind"], p["name"], p["email"], p["idle"], p["streak"])
-        ok, detail = _send_email(p["email"], subject, html, text, _email_gif(p["kind"]))
+        subject, html, text = _email_render(p["kind"], p["name"], p["email"], p["idle"], p["streak"], p.get("tip", 0))
+        ok, detail = _send_email(p["email"], subject, html, text, _email_gif(p["kind"], p.get("tip", 0)))
         if ok:
             sent += 1
             try:
@@ -8373,8 +8468,9 @@ def email_test():
         return json_error("Falta configurar el envío de correos (EMAIL_WEBHOOK_URL o BREVO_API_KEY).", 503)
     sent = 0
     for k in kinds:
-        subject, html, text = _email_render(k, dest.split("@")[0], dest, idle=5, streak=4)
-        ok2, _d = _send_email(dest, subject, html, text, _email_gif(k))
+        tn = int(body.get("tip") or 0)
+        subject, html, text = _email_render(k, dest.split("@")[0], dest, idle=5, streak=4, tip=tn)
+        ok2, _d = _send_email(dest, subject, html, text, _email_gif(k, tn))
         sent += 1 if ok2 else 0
         time.sleep(8) if len(kinds) > 1 and k != kinds[-1] else None  # no mandar 4 seguidos en segundos: parece spam
     return jsonify({"ok": True, "enviados": sent, "de": len(kinds)})
@@ -8383,9 +8479,9 @@ def email_test():
 @app.get("/email/<path:name>")
 def email_asset(name):
     """Imágenes animadas de los correos (públicas, para que se vean en cualquier bandeja)."""
-    if not re.match(r"^pq-[a-z]+\.gif$", name):
+    if not re.match(r"^pq-[a-z-]+\.(gif|png)$", name):
         return json_error("No encontrado.", 404)
-    resp = send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "email"), name, mimetype="image/gif")
+    resp = send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "email"), name, mimetype="image/png" if name.endswith(".png") else "image/gif")
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
 

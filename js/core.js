@@ -1036,7 +1036,7 @@ $('push-hour')?.addEventListener('change',async e=>{
   /* al tocar la notificación con la app cerrada: Palanqueta saluda con animación */
   try{const q=new URLSearchParams(location.search).get('pq');if(q){history.replaceState(null,'',location.pathname);const L=LAND[q]||LAND.cheer;setTimeout(()=>show({mood:q,title:T(L[0]),body:T(L[1])}),1800)}}catch(e){}
   /* enlaces de los correos: ?verify=<correo> abre la pantalla de confirmación; ?go=cuenta lleva a Mi cuenta */
-  try{const u=new URLSearchParams(location.search),v=u.get('verify'),g=u.get('go');if(v||g){history.replaceState(null,'',location.pathname);setTimeout(async()=>{try{const ss=await getSession();if(ss&&ss.access_token){if(g==='cuenta')section('cuenta')}else if(v&&/^[^@\s]+@[^@\s]+$/.test(v))vfShow(v.toLowerCase())}catch(e){}},1500)}}catch(e){}
+  try{const u=new URLSearchParams(location.search),v=u.get('verify'),g=u.get('go');if(v||g){history.replaceState(null,'',location.pathname);setTimeout(async()=>{try{const ss=await getSession();if(ss&&ss.access_token){if(g==='cuenta')section('cuenta');else if(g&&/^[a-z-]{3,20}$/.test(g)){const C=window.TalvoCourses,cm={espanol:'es',chino:'zh',ajedrez:'chess'};if(cm[g]&&C)C.set(cm[g],true);else if(document.getElementById('sec-'+g)&&g!=='admin')section(g)}}else if(v&&/^[^@\s]+@[^@\s]+$/.test(v))vfShow(v.toLowerCase())}catch(e){}},1500)}}catch(e){}
 })();
 setInterval(()=>{const n=$('nav-admin'),b=$('email-test');if(b&&n)b.style.display=(n.style.display&&n.style.display!=='none')?'':'none'},3000);
 $('email-test')?.addEventListener('click',async()=>{

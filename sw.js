@@ -83,7 +83,7 @@ self.addEventListener('push',e=>{
     const list=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     list.forEach(c=>{try{c.postMessage({type:'talvo-push',title:d.title||'Talvo English',body:d.body||'',mood})}catch(_){}});
     await self.registration.showNotification(d.title||'Talvo English',{
-      body:d.body||'',icon:'icons/pq-icon.png',badge:'icons/pq-badge.png',image:'icons/notif-'+mood+'.png',
+      body:d.body||'',icon:'icons/pq-icon.png',badge:'icons/pq-badge.png',image:(/^tip-[a-z]+$/.test(d.image||'')?'icons/notif-'+d.image+'.png':'icons/notif-'+mood+'.png'),
       tag:d.tag||'talvo',renotify:true,vibrate:[120,60,120,60,220],
       actions:[{action:'open',title:en?'Practice now':'Practicar ahora'}],
       data:{url:d.url||'./?pq='+mood},lang:en?'en':'es'
