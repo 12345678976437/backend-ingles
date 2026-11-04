@@ -60,6 +60,14 @@ function init(){
   document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('.js-lang-toggle'))setTimeout(()=>{ph();describe()},120)});
   new MutationObserver(()=>{describe();filter(i.value)}).observe(nav,{childList:true});
   describe();
+  /* grupo "Studio" plegable: menos opciones a la vista */
+  const tr=nav.querySelector('button[data-section="traductor"]'),g=tr&&tr.closest('nav.nav'),lab=g&&g.previousElementSibling;
+  if(g&&lab&&lab.classList.contains('label')){
+    g.classList.add('fold');lab.classList.add('fold-l');lab.setAttribute('role','button');lab.tabIndex=0;
+    const tg=()=>{const o=g.classList.toggle('open');lab.classList.toggle('open',o)};
+    lab.addEventListener('click',tg);lab.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tg()}});
+    i.addEventListener('input',()=>{const o=!!i.value.trim();g.classList.toggle('srch',o)});
+  }
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 window.TalvoMenu={describe,filter};

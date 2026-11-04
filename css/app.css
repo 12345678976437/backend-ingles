@@ -1899,3 +1899,11 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .hc-c{border-radius:12px!important;box-shadow:none!important}
 .hm-ic{display:grid;place-items:center}.hm-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .card,.tile,.hm-card{box-shadow:none!important}
+
+/* ===== menú: grupo plegable y sin etiquetas NEW ===== */
+.st-new{display:none!important}
+.nav.fold:not(.open):not(.srch){display:none}
+.label.fold-l{cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.label.fold-l::after{content:"";width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-right:6px;transition:transform .2s;opacity:.7}
+.label.fold-l.open::after{transform:rotate(225deg)}
+@media(min-width:900px){#main-nav .nav button:not(.active) .nv-d{display:none}#main-nav .nav button{min-height:38px}}
