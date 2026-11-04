@@ -167,7 +167,7 @@ function make(cfg){
     root().querySelectorAll('.lc-opt').forEach((b,k)=>{b.disabled=true;if(q.opts[k]===q.it)b.classList.add('right')});
     if(!right)btn.classList.add('wrong');
     const fb=root().querySelector('#lc-qfb');
-    fb.innerHTML='<div class="lc-qf '+(right?'ok':'no')+'">'+(right?T('Correct!','¡Correcto!'):T('Not quite: ','Casi: ')+'<b>'+esc(q.it[0])+'</b>'+(cfg.pinyin?' · '+pyHtml(q.it[1]):'')+' = '+esc(meaning(q.it)))+'</div><button type="button" class="btn primary" data-lc-next style="width:100%;margin-top:10px">'+T('Continue','Continuar')+'</button>';
+    fb.innerHTML='<div class="lc-qf '+(right?'ok':'no')+'">'+pq(right?(quiz.st>=3?'celebrando':(quiz.st===1&&quiz.i>0?'motivando':'feliz')):(quiz.st<=-2?'triste':'confundida'),'fb')+'<div>'+(right?T('Correct!','¡Correcto!'):T('Not quite: ','Casi: ')+'<b>'+esc(q.it[0])+'</b>'+(cfg.pinyin?' · '+pyHtml(q.it[1]):'')+' = '+esc(meaning(q.it)))+'</div></div><button type="button" class="btn primary" data-lc-next style="width:100%;margin-top:10px">'+T('Continue','Continuar')+'</button>';
     if(q.type!=='listen')say(q.it[0]);
   }
 

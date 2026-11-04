@@ -71,6 +71,26 @@ setTimeout(()=>{try{const C=window.TalvoCore;if(!C||!C.state||!C.state.user)retu
   if(d>=3)moment('sorprendida',TT('You’re back! I missed you. Let’s pick up where you left off.','¡Volviste! Te extrañé. Sigamos donde te quedaste.'),5000);
   else if(d>=0.5)moment('motivando',TT('Ready for a quick session today?','¿Listo para una sesión rápida hoy?'),4200)}catch(e){}},4500);
 window.PQ.moment=moment;window.PQ.score=scoreMoment;
+/* ---------- más momentos: toasts, cambio de sección, inactividad ---------- */
+(function(){
+  const C=window.TalvoCore;
+  if(C&&C.toast&&!C._pqToast){const t0=C.toast;C._pqToast=1;C.toast=function(msg,type){try{const s=String(msg||'');
+    if(type==='error'||/error|no se pudo|couldn.t|failed|fall[oó]/i.test(s))react('confundida',2600);
+    else if(/guardad|saved|copiad|copied|listo|done/i.test(s))react('feliz',2200)}catch(e){}return t0.apply(this,arguments)}}
+  let cur='',idleT=null;
+  const LEARN=/^sec-(pronunciacion|escritura|lectura|escucha|vocabulario|learning-path|escenarios|rutas|espanol|chino)$/;
+  function onSec(id){
+    if(!id||id===cur)return;cur=id;clearTimeout(idleT);
+    if(LEARN.test(id))react('ensenando',3200);
+    else if(/logros|shop/.test(id))react('sorprendida',3000);
+    else if(/historial/.test(id))react('motivando',3000);
+    if(/escritura|lectura|escucha|vocabulario|espanol|chino/.test(id))
+      idleT=setTimeout(()=>moment('confundida',TT('Stuck? Tap the speaker to hear it again, or ask the tutor.','¿Atorado? Toca la bocina para oírlo otra vez o pregunta al tutor.'),5200),45000);
+  }
+  setInterval(()=>{const a=document.querySelector('.section.active');onSec(a&&a.id)},900);
+  document.addEventListener('pointerdown',()=>{clearTimeout(idleT)},{passive:true});
+})();
+
 const css=document.createElement('style');
 css.textContent='#sec-tutor .coach .face{overflow:hidden;border-radius:50%}#sec-tutor .coach .face img{width:100%!important;height:100%!important;object-fit:cover;object-position:50% 12%;transform:scale(1.9) translateY(8%);transform-origin:50% 22%}'
 +'.mascot-widget.pq-poses{width:112px}.mascot-widget.pq-poses .layer>img:not(#mascot-pose),.mascot-widget.pq-poses .eye,.mascot-widget.pq-poses .mouth{display:none!important}#mascot-pose{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 12px rgba(0,0,0,.45));pointer-events:none}@media (max-width:899px){.mascot-widget.pq-poses{width:86px!important}}'

@@ -1879,3 +1879,5 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .rt-ls .n,.swatch i{clip-path:none;border-radius:10px}
 .page-title{letter-spacing:-.01em}
 #tabbar .tab-main .tab-hex{filter:none}
+
+.lc-qf{display:flex;align-items:center;gap:12px}.lc-pq.fb{width:84px;flex:none;margin:-14px 0 -10px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
