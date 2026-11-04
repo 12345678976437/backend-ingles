@@ -89,17 +89,19 @@ const show=(id,on)=>{const e=$(id);if(e)e.hidden=!on};
 function body(h){$('lp-pbody').innerHTML=h;$('lp-pbody').scrollTop=0}
 function setMain(label,cls,enabled){const b=$('lp-pmain');b.textContent=label;b.className='btn primary'+(cls?' '+cls:'');b.disabled=!enabled;b.style.display=''}
 function hideMain(){$('lp-pmain').style.display='none'}
-function feedback(ok,msg,sub,ans){const f=$('lp-fb');f.className='lp-fb show '+(ok?'good':'bad');f.innerHTML='<b>'+esc(msg)+'</b>'+(sub||ans?'<span>'+esc(sub||'')+(ans?' <em data-i18n-skip>'+esc(ans)+'</em>':'')+'</span>':'')}
+function feedback(ok,msg,sub,ans){const f=$('lp-fb');f.className='lp-fb show '+(ok?'good':'bad');f.innerHTML='<img class="lp-fbpq" src="img/pq/pq-'+poseFor(ok?'good':'bad')+'.webp" alt="" draggable="false"><b>'+esc(msg)+'</b>'+(sub||ans?'<span>'+esc(sub||'')+(ans?' <em data-i18n-skip>'+esc(ans)+'</em>':'')+'</span>':'')}
 function clearFb(){const f=$('lp-fb');f.className='lp-fb';f.innerHTML=''}
 const REAL_TIPS=["Real English: people say “gonna”, “wanna” and “gotta” all the time. “I'm gonna go” = “I am going to go”.","Real English: natives blend words. “What do you want?” often sounds like “Whaddya want?”. Listen to the rhythm, not word by word.","Real English: “I don't know” usually sounds like “I dunno”. You'll hear it everywhere.","Real English: if you don't catch something, say “Sorry, could you say that again?” or “Come again?”. Nobody minds.","Real English: “How's it going?” and “What's up?” are greetings, not real questions. A quick “Good, you?” is enough.","Real English: in the US a T between vowels sounds almost like a D. “Water” ≈ “wader”, “better” ≈ “bedder”.","Real English: at a restaurant people say “Can I get a…?” more than “I would like…”.","Real English: “Yeah, no worries” and “No problem” are the everyday answers to “thank you”.","Real English: “Let me know” and “Sounds good” are the glue of daily conversation. Use them.","Real English: native speakers talk fast because they link sounds: “check it out” ≈ “che-ki-dout”. Slow audio helps; then try normal speed.","Real English: “Kind of” and “sort of” (“kinda”, “sorta”) soften almost everything: “It's kinda expensive”."];
 const COACH_OK=["Nice! That's exactly how people say it.","You got it. Keep that rhythm!","Clean. That one's yours now.","Perfect — that's real, everyday English.","Yes! Your ear is getting sharper."];
 const COACH_NO=["No worries — mistakes are how it sticks. I'll bring it back.","Close! Read the correct one below and say it out loud once.","That one trips everyone. It will come back in a moment.","Good try. Listen again, then keep going."];
 const KIND_LABEL={pick_meaning:'Meaning',pick_word:'Vocabulary',listen_pick:'Listening',dialog:'Conversation',fill:'Grammar in context',build:'Build the sentence',type_listen:'Dictation',type_translate:'Writing',match:'Match',speak:'Speaking'};
 let tipI=0;document.addEventListener('click',e=>{if(e.target&&e.target.id==='lp-explain')explainNow()});
+function poseFor(mood){return mood==='good'?((P.streak||0)>=3?'celebrando':'feliz'):mood==='bad'?((P.streak||0)===0&&(P.answeredN||0)>=2&&P.okN/P.answeredN<.5?'motivando':'confundida'):'ensenando'}
 function coach(msg,mood){
   const b=$('lp-cbub'),pq=$('lp-cpq');if(!b)return;
   b.innerHTML='<span>'+msg+'</span>';b.className='lp-cbub '+(mood||'');
   pq.className='lp-coach-pq '+(mood||'');void pq.offsetWidth;
+  const im=pq.querySelector('img');if(im)im.src='img/pq/pq-'+poseFor(mood)+'.webp';
 }
 let explainBusy=false;
 async function explainNow(){

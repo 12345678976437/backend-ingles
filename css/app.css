@@ -1907,3 +1907,19 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .label.fold-l::after{content:"";width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-right:6px;transition:transform .2s;opacity:.7}
 .label.fold-l.open::after{transform:rotate(225deg)}
 @media(min-width:900px){#main-nav .nav button:not(.active) .nv-d{display:none}#main-nav .nav button{min-height:38px}}
+
+/* ===== Lecciones más limpias: el ejercicio es el protagonista ===== */
+.lp-fb{flex-direction:row!important;flex-wrap:wrap;align-items:center!important;column-gap:10px}
+.lp-fb .lp-fbpq{width:52px;height:52px;object-fit:contain;flex:none;margin:-6px 0 -6px -2px}
+.lp-fb b,.lp-fb span{flex:1 1 60%}
+.lp-fb b::before{display:none!important}
+@media(min-width:960px){
+  .lp-fb .lp-fbpq{display:none}
+  .lp-pbody::before,.lp-pbody::after{display:none}
+  .lp-pbody{box-shadow:none!important;border-radius:16px;background:rgba(14,20,38,.55)}
+  .lp-coach-pq{width:190px;height:auto;overflow:visible;animation:none}
+  .lp-coach-pq img{width:100%;height:auto}
+  .lp-coach-pq.good{animation:lphop .6s}.lp-coach-pq.bad{animation:lpshake .4s}
+  .lp-cbub.good,.lp-cbub.bad{box-shadow:none}
+  .lp-cstats,.lp-cw{display:none}
+}
