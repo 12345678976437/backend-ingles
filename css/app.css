@@ -1938,6 +1938,3 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .hc-x{gap:5px}.hc-x small{min-height:14px}
 .hc-c:not(:has(.hc-p)) .hc-x::after{content:"";display:block;height:3px}
 /* ===== Palanqueta solo en momentos importantes: oculta en reposo, aparece al reaccionar ===== */
-.mascot-widget.pq-poses{transition:opacity .35s,transform .35s}
-.mascot-widget.pq-poses.state-idle{opacity:0;transform:translateY(24px);pointer-events:none}
-.mascot-widget.pq-poses.state-idle:has(.mouth.talk){opacity:1;transform:none}
