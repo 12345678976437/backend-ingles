@@ -1923,3 +1923,9 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
   .lp-cbub.good,.lp-cbub.bad{box-shadow:none}
   .lp-cstats,.lp-cw{display:none}
 }
+/* arreglos: raya del menú y tarjetas de cursos cortadas en escritorio */
+.label.fold-l::after{flex:none!important;background:none!important;height:7px!important}
+.label.fold-l{gap:0}
+.home-grid>.home-courses{grid-column:1/-1}
+.hc-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))!important}
+.hc-c{min-width:0}.hc-x b,.hc-x small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
