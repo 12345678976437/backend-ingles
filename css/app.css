@@ -1927,5 +1927,17 @@ body[data-course="zh"]{--cyan:#e8c46a;--c1-rgb:214,50,46;--c2-rgb:232,196,106;--
 .label.fold-l::after{flex:none!important;background:none!important;height:7px!important}
 .label.fold-l{gap:0}
 .home-grid>.home-courses{grid-column:1/-1}
-.hc-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))!important}
+.hc-grid{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))!important}
 .hc-c{min-width:0}.hc-x b,.hc-x small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== Tarjetas de cursos unificadas: mismo molde, acento propio ===== */
+.hc-c{position:relative;overflow:hidden;min-height:68px}
+.hc-c::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--cc,var(--cyan))}
+.hc-c[data-cc="en"]{--cc:#5b8cff}.hc-c[data-cc="es"]{--cc:#f0a35e}.hc-c[data-cc="zh"]{--cc:#e8564f}.hc-c[data-cc="chess"]{--cc:#3dcf9a}
+.hc-p u{background:var(--cc,var(--cyan))!important}
+.hc-x{gap:5px}.hc-x small{min-height:14px}
+.hc-c:not(:has(.hc-p)) .hc-x::after{content:"";display:block;height:3px}
+/* ===== Palanqueta solo en momentos importantes: oculta en reposo, aparece al reaccionar ===== */
+.mascot-widget.pq-poses{transition:opacity .35s,transform .35s}
+.mascot-widget.pq-poses.state-idle{opacity:0;transform:translateY(24px);pointer-events:none}
+.mascot-widget.pq-poses.state-idle:has(.mouth.talk){opacity:1;transform:none}

@@ -15,7 +15,7 @@ function stat(c){
   if(c.id==='es'||c.id==='zh'){const u=(UNITS[c.id]()||[]),p=ls('talvo_lc_'+c.id,{});const d=u.filter(x=>p[x.id]).length;return{pct:u.length?Math.round(d/u.length*100):0,txt:d+'/'+u.length+' '+T('units','unidades')}}
   if(c.id==='chess'){const s=ls('talvo_chess_stats',{w:0,d:0,l:0}),n=s.w+s.d+s.l;return{pct:null,txt:n?n+' '+T('games · '+s.w+' won','partidas · '+s.w+' ganadas'):T('Play now','Juega ahora')}}
   const lv=(document.getElementById('hs-lv')||{}).textContent||'1',xp=(document.getElementById('hs-xp')||{}).textContent||'0';
-  return{pct:null,txt:T('Level ','Nivel ')+lv+' · '+xp+' XP'}
+  const g=parseInt((document.getElementById('home-goal-pct')||{}).textContent,10)||0;return{pct:g,txt:T('Lv ','Nv ')+lv+' · '+g+'% '+T('today','hoy')}
 }
 function render(){
   const box=document.getElementById('home-courses');if(!box||!window.TalvoCourses)return;
